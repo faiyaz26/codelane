@@ -207,6 +207,7 @@ function App() {
           open={dialogOpen()}
           onOpenChange={setDialogOpen}
           onLaneCreated={handleLaneCreated}
+          existingLanes={lanes()}
         />
       </div>
     </ThemeProvider>

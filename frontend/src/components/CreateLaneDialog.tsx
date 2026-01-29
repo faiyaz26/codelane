@@ -8,6 +8,7 @@ interface CreateLaneDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLaneCreated: (lane: Lane) => void;
+  existingLanes: Lane[];
 }
 
 export function CreateLaneDialog(props: CreateLaneDialogProps) {
@@ -15,6 +16,28 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   const [workingDir, setWorkingDir] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [isCreating, setIsCreating] = createSignal(false);
+
+  // Generate a unique lane name from folder path
+  const generateUniqueName = (folderPath: string): string => {
+    // Extract folder name from path
+    const parts = folderPath.split(/[/\\]/);
+    const baseName = parts[parts.length - 1] || 'New Lane';
+
+    // Check if name exists
+    const existingNames = new Set(props.existingLanes.map(l => l.name.toLowerCase()));
+
+    if (!existingNames.has(baseName.toLowerCase())) {
+      return baseName;
+    }
+
+    // Find a unique name with number suffix
+    let counter = 2;
+    while (existingNames.has(`${baseName} ${counter}`.toLowerCase())) {
+      counter++;
+    }
+
+    return `${baseName} ${counter}`;
+  };
 
   const handleCreate = async () => {
     const laneName = name().trim();
@@ -72,6 +95,11 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
 
       if (selected && typeof selected === 'string') {
         setWorkingDir(selected);
+
+        // Auto-populate lane name from folder name
+        const uniqueName = generateUniqueName(selected);
+        setName(uniqueName);
+
         setError(null);
       }
     } catch (err) {
