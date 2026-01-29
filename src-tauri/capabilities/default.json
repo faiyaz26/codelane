@@ -40,6 +40,12 @@
     "process:allow-restart",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "pty:default",
+    "pty:allow-spawn",
+    "pty:allow-write",
+    "pty:allow-read",
+    "pty:allow-resize",
+    "pty:allow-kill"
   ]
 }
