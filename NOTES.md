@@ -4,16 +4,23 @@ This file contains temporary implementation notes, testing checklists, and work-
 
 ## Current Work
 
+### SQLite Migration (🚧 In Progress)
+- Added tauri-plugin-sql dependency
+- Created database schema (lanes, lane_configs tables)
+- Database initialization on app startup
+- Storage: `~/.codelane/codelane.db`
+
+**Next Steps:**
+- [ ] Migrate lane API from JSON to SQLite
+- [ ] Add data migration from JSON files to SQLite
+- [ ] Test database CRUD operations
+- [ ] Update TerminalView to use agent configs from DB
+
 ### Agent Settings System (✅ Complete)
 - Backend: Agent configuration types, settings persistence, Tauri commands
 - Frontend: SettingsDialog, AgentSelector components, store integration
-- Storage: `~/.codelane/settings.json`
+- Storage: `~/.codelane/settings.json` (kept as JSON - hybrid approach)
 - UI: Settings button in title bar (gear icon)
-
-**Next Steps:**
-- [ ] Test the settings UI in dev mode
-- [ ] Update TerminalView to use agent configs
-- [ ] Add per-lane agent override UI
 
 ## Quick Notes
 

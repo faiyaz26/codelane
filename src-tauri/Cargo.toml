@@ -46,6 +46,7 @@ codelane-terminal = { path = "../crates/codelane-terminal" }
 codelane-git = { path = "../crates/codelane-git" }
 codelane-core = { path = "../crates/codelane-core" }
 tauri-plugin-pty = "0.2.1"
+tauri-plugin-sql = { version = "2.3.1", features = ["sqlite"] }
 
 [features]
 default = ["custom-protocol"]

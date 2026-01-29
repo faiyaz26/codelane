@@ -10,6 +10,7 @@ import { GitStatus } from './components/GitStatus';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings } from './lib/settings-api';
+import { initDatabase } from './lib/db';
 import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
 
@@ -26,6 +27,16 @@ function App() {
 
   // Load lanes and settings on mount
   onMount(async () => {
+    // Initialize database
+    try {
+      await initDatabase();
+      console.log('Database ready');
+    } catch (err) {
+      console.error('Failed to initialize database:', err);
+      setError('Failed to initialize database. Please restart the app.');
+      return;
+    }
+
     // Load agent settings
     try {
       const settings = await getAgentSettings();
