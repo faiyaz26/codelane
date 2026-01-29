@@ -95,7 +95,7 @@ export function TerminalView(props: TerminalViewProps) {
         cwd: props.cwd,
       });
 
-      console.log('PTY spawned with PID:', pty.pid);
+      console.log('PTY spawned successfully');
 
       // Bidirectional data flow
       pty.onData((data) => {
@@ -119,8 +119,8 @@ export function TerminalView(props: TerminalViewProps) {
         props.onTerminalExit?.();
       });
 
-      // Call ready callback
-      props.onTerminalReady?.(pty.pid);
+      // Call ready callback (PID not exposed by plugin)
+      props.onTerminalReady?.(0);
 
       // Handle resize events
       const resizeObserver = new ResizeObserver(() => {
