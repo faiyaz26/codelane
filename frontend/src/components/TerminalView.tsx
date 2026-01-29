@@ -94,6 +94,9 @@ export function TerminalView(props: TerminalViewProps) {
     // Fit terminal to container
     fitAddon.fit();
 
+    // Focus the terminal to ensure it can receive input
+    terminal.focus();
+
     // Create or use existing terminal ID
     const existingId = terminalId();
     if (!existingId) {
@@ -158,13 +161,18 @@ export function TerminalView(props: TerminalViewProps) {
 
     // Handle keyboard input from xterm.js
     const disposable = terminal.onData(async (data) => {
-      if (!id) return;
+      console.log('Terminal onData called, id:', id, 'data:', data);
+      if (!id) {
+        console.error('No terminal ID, cannot write data');
+        return;
+      }
 
       try {
         await invoke('write_terminal', {
           id,
           data,
         });
+        console.log('Successfully wrote to terminal:', id);
       } catch (error) {
         console.error('Failed to write to terminal:', error);
       }
