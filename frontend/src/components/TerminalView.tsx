@@ -81,9 +81,11 @@ export function TerminalView(props: TerminalViewProps) {
     terminal.focus();
 
     try {
-      // Spawn PTY with shell
-      const shell = process.platform === 'win32' ? 'powershell.exe' : 'zsh';
-      const args = process.platform === 'win32' ? [] : ['-l', '-i'];
+      // Get default shell from environment or use zsh as fallback
+      // On Windows: powershell.exe, on Unix: $SHELL or zsh
+      const defaultShell = import.meta.env.VITE_SHELL || 'zsh';
+      const shell = defaultShell;
+      const args = ['-l', '-i'];  // Login, interactive shell
 
       console.log('Spawning shell:', shell, 'in directory:', props.cwd);
 
