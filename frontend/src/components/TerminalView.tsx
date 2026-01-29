@@ -180,12 +180,18 @@ export function TerminalView(props: TerminalViewProps) {
       // Call ready callback with actual PID
       props.onTerminalReady?.(pty.pid);
 
-      // Handle resize events
+      // Handle resize events with debouncing to prevent ResizeObserver warnings
+      let resizeTimeout: number | undefined;
       const resizeObserver = new ResizeObserver(() => {
-        if (fitAddon && terminal && pty) {
-          fitAddon.fit();
-          pty.resize(terminal.cols, terminal.rows);
+        if (resizeTimeout) {
+          clearTimeout(resizeTimeout);
         }
+        resizeTimeout = setTimeout(() => {
+          if (fitAddon && terminal && pty) {
+            fitAddon.fit();
+            pty.resize(terminal.cols, terminal.rows);
+          }
+        }, 10) as unknown as number;
       });
 
       if (containerRef) {

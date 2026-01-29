@@ -1,5 +1,6 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Button } from './components/ui';
 import { LaneList } from './components/LaneList';
@@ -178,13 +179,27 @@ function App() {
     }
   };
 
+  const handleTitleBarDoubleClick = async () => {
+    const window = getCurrentWindow();
+    await window.toggleMaximize();
+  };
+
   return (
     <ThemeProvider>
       <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
         {/* Title Bar */}
-        <div class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center px-4">
+        <div
+          class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center justify-between px-4"
+          onDblClick={handleTitleBarDoubleClick}
+        >
+          {/* Left spacer */}
+          <div class="flex-1" />
+
+          {/* Centered title */}
           <h1 class="text-lg font-semibold">Codelane</h1>
-          <div class="ml-auto flex items-center gap-3">
+
+          {/* Right side items */}
+          <div class="flex-1 flex items-center justify-end gap-3">
             <span class="text-xs text-zed-text-tertiary">AI Orchestrator for Local Development</span>
             <button
               onClick={() => setSettingsOpen(true)}
