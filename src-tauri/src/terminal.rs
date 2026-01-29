@@ -158,9 +158,18 @@ pub async fn create_terminal(
         .openpty(pty_size)
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-    // Build the command
+    // Build the command with login shell flags
     let mut cmd = CommandBuilder::new(&shell_cmd);
+
+    // For zsh/bash, use login shell mode
+    if shell_cmd.contains("zsh") || shell_cmd.contains("bash") {
+        cmd.arg("-l");  // Login shell
+        cmd.arg("-i");  // Interactive
+    }
+
     cmd.cwd(&working_dir);
+
+    tracing::info!("Spawning shell: {} with args in {:?}", shell_cmd, working_dir);
 
     // Inherit important environment variables
     for (key, value) in std::env::vars() {
@@ -321,11 +330,11 @@ pub async fn write_terminal(
         .get_mut(&id)
         .ok_or_else(|| format!("Terminal not found: {}", id))?;
 
-    // Get a writer for the master PTY
+    // Clone a writer for the master PTY (can be called multiple times)
     let mut writer = instance
         .master
-        .take_writer()
-        .map_err(|e| format!("Failed to get PTY writer: {}", e))?;
+        .try_clone_writer()
+        .map_err(|e| format!("Failed to clone PTY writer: {}", e))?;
 
     // Write the data
     writer
