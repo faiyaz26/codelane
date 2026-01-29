@@ -52,6 +52,9 @@ impl Default for TerminalState {
 struct TerminalInstance {
     /// The master side of the PTY
     master: Box<dyn MasterPty + Send>,
+    /// The child process handle (must be kept alive)
+    #[allow(dead_code)]
+    child: Box<dyn portable_pty::Child + Send + Sync>,
     /// Current terminal columns
     cols: u16,
     /// Current terminal rows
@@ -184,8 +187,8 @@ pub async fn create_terminal(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
 
-    // Spawn the child process
-    let _child = pair
+    // Spawn the child process (must keep handle alive!)
+    let child = pair
         .slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {}", e))?;
@@ -207,6 +210,7 @@ pub async fn create_terminal(
     // Create the terminal instance
     let instance = TerminalInstance {
         master: pair.master,
+        child,
         cols: 80,
         rows: 24,
         output_buffer: Vec::new(),
