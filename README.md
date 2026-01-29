@@ -15,9 +15,43 @@ An AI orchestrator for local development. Manage multiple projects ("lanes") wit
 
 ### Prerequisites
 
+**Required:**
 - Rust 1.75+ (`rustup update stable`)
 - Node.js 22+ (use `.nvmrc` with `nvm use`)
 - pnpm 9+ (`npm install -g pnpm`)
+
+**Platform-specific:**
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+xcode-select --install
+```
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
+
+```bash
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+```
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+- Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+- Install [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+</details>
 
 ### Development
 
@@ -137,6 +171,24 @@ make install      # Install required tools
 - **Editor**: Monaco Editor with syntax highlighting for 50+ languages
 - **Git**: Visual git interface with staging, commits, diffs
 - **Cross-platform**: macOS, Windows, Linux via Tauri
+
+## Troubleshooting
+
+### Build fails with missing dependencies
+```bash
+pnpm install
+```
+
+### Hot reload not working
+- Check that port 1420 is not in use
+- Restart the dev server: `make dev`
+
+### Clean build from scratch
+```bash
+make clean
+pnpm install
+make build
+```
 
 ## License
 
