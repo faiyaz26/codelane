@@ -1,6 +1,11 @@
+import { createSignal } from 'solid-js';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { Button, Dialog, DialogTrigger, TextField } from './components/ui';
 
 function App() {
+  const [dialogOpen, setDialogOpen] = createSignal(false);
+  const [laneName, setLaneName] = createSignal('');
+
   return (
     <ThemeProvider>
       <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
@@ -8,7 +13,7 @@ function App() {
         <div class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center px-4">
           <h1 class="text-lg font-semibold">Codelane</h1>
           <div class="ml-auto flex items-center gap-2">
-            <span class="text-xs text-zed-text-tertiary">Zed-inspired theme</span>
+            <span class="text-xs text-zed-text-tertiary">Powered by Kobalte UI</span>
           </div>
         </div>
 
@@ -28,9 +33,9 @@ function App() {
               </div>
             </div>
             <div class="p-4 border-t border-zed-border-subtle">
-              <button class="btn-primary w-full">
+              <Button variant="primary" class="w-full" onClick={() => setDialogOpen(true)}>
                 + New Lane
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -45,14 +50,64 @@ function App() {
                     AI Orchestrator for Local Development - Manage multiple AI coding agents across projects
                   </p>
                   <div class="flex gap-2">
-                    <button class="btn-primary">Get Started</button>
-                    <button class="btn-secondary">Learn More</button>
+                    <Button variant="primary">Get Started</Button>
+                    <Button variant="secondary">Learn More</Button>
                   </div>
                 </div>
 
-                {/* Theme Demo */}
+                {/* Kobalte Components Demo */}
                 <div class="panel p-6">
-                  <h3 class="text-lg font-semibold mb-4">Theme Colors</h3>
+                  <h3 class="text-lg font-semibold mb-4">Kobalte UI Components</h3>
+                  <div class="space-y-6">
+                    {/* Buttons */}
+                    <div>
+                      <h4 class="text-sm font-medium text-zed-text-secondary mb-3">Buttons</h4>
+                      <div class="flex flex-wrap gap-2">
+                        <Button variant="primary" size="sm">Small Primary</Button>
+                        <Button variant="primary" size="md">Medium Primary</Button>
+                        <Button variant="primary" size="lg">Large Primary</Button>
+                        <Button variant="secondary">Secondary</Button>
+                        <Button variant="danger">Danger</Button>
+                        <Button variant="ghost">Ghost</Button>
+                        <Button variant="primary" disabled>Disabled</Button>
+                      </div>
+                    </div>
+
+                    {/* Text Fields */}
+                    <div>
+                      <h4 class="text-sm font-medium text-zed-text-secondary mb-3">Text Fields</h4>
+                      <div class="space-y-3 max-w-md">
+                        <TextField
+                          label="Project Name"
+                          placeholder="Enter project name..."
+                          description="This will be displayed in the sidebar"
+                        />
+                        <TextField
+                          label="Working Directory"
+                          placeholder="/path/to/project"
+                          description="Absolute path to your project"
+                        />
+                        <TextField
+                          label="Invalid Field"
+                          placeholder="This has an error"
+                          errorMessage="This field is required"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dialog */}
+                    <div>
+                      <h4 class="text-sm font-medium text-zed-text-secondary mb-3">Dialog (Modal)</h4>
+                      <Button variant="primary" onClick={() => setDialogOpen(true)}>
+                        Open Dialog
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Theme Colors */}
+                <div class="panel p-6">
+                  <h3 class="text-lg font-semibold mb-4">Zed Theme Colors</h3>
                   <div class="grid grid-cols-4 gap-4">
                     <div>
                       <div class="h-20 bg-zed-accent-blue rounded-md mb-2"></div>
@@ -72,26 +127,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-
-                {/* Components Demo */}
-                <div class="panel p-6">
-                  <h3 class="text-lg font-semibold mb-4">Components</h3>
-                  <div class="space-y-4">
-                    <div>
-                      <label class="block text-sm font-medium mb-2">Input Field</label>
-                      <input
-                        type="text"
-                        placeholder="Enter something..."
-                        class="input w-full"
-                      />
-                    </div>
-                    <div class="flex gap-2">
-                      <button class="btn-primary">Primary Button</button>
-                      <button class="btn-secondary">Secondary Button</button>
-                      <button class="btn-danger">Danger Button</button>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -105,6 +140,38 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* New Lane Dialog */}
+        <Dialog
+          open={dialogOpen()}
+          onOpenChange={setDialogOpen}
+          title="Create New Lane"
+          description="Set up a new project workspace with its own terminal and AI agents."
+        >
+          <div class="space-y-4">
+            <TextField
+              label="Lane Name"
+              placeholder="My Project"
+              value={laneName()}
+              onChange={setLaneName}
+            />
+            <TextField
+              label="Working Directory"
+              placeholder="/path/to/project"
+            />
+            <div class="flex justify-end gap-2 mt-6">
+              <Button variant="secondary" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => {
+                // TODO: Create lane
+                setDialogOpen(false);
+              }}>
+                Create Lane
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       </div>
     </ThemeProvider>
   );
