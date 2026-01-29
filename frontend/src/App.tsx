@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onMount, Show, For } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Button } from './components/ui';
@@ -189,27 +189,36 @@ function App() {
                       </div>
                     </div>
                     <div class="flex-1 overflow-hidden">
-                      {/* Using keyed Show to force terminal recreation on lane change */}
-                      <Show when={activeLane()} keyed>
-                        {(lane) => {
-                          console.log('Rendering terminal for lane:', lane.name, 'with workingDir:', lane.workingDir);
-                          return (
+                      {/* Render terminals for all lanes, but only show the active one */}
+                      <For each={lanes()}>
+                        {(lane) => (
+                          <div
+                            class="h-full"
+                            style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
+                          >
                             <TerminalView
                               cwd={lane.workingDir}
-                              onTerminalReady={(id) => console.log('Terminal ready:', id)}
-                              onTerminalExit={(id) => console.log('Terminal exited:', id)}
+                              onTerminalReady={(id) => console.log(`Terminal ready for ${lane.name}:`, id)}
+                              onTerminalExit={(id) => console.log(`Terminal exited for ${lane.name}:`, id)}
                             />
-                          );
-                        }}
-                      </Show>
+                          </div>
+                        )}
+                      </For>
                     </div>
                   </div>
 
                   {/* Git Status Panel */}
                   <div class="w-80 flex flex-col overflow-hidden">
-                    <Show when={activeLane()} keyed>
-                      {(lane) => <GitStatus workingDir={lane.workingDir} />}
-                    </Show>
+                    <For each={lanes()}>
+                      {(lane) => (
+                        <div
+                          class="h-full"
+                          style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
+                        >
+                          <GitStatus workingDir={lane.workingDir} />
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </div>
               </Show>
