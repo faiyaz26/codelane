@@ -50,7 +50,7 @@ impl Default for TerminalState {
 
 /// A single terminal instance with PTY handle
 struct TerminalInstance {
-    /// The master side of the PTY
+    /// The master side of the PTY (implements Write for input)
     master: Box<dyn MasterPty + Send>,
     /// The child process handle (must be kept alive)
     #[allow(dead_code)]
@@ -330,20 +330,16 @@ pub async fn write_terminal(
         .get_mut(&id)
         .ok_or_else(|| format!("Terminal not found: {}", id))?;
 
-    // Clone a writer for the master PTY (can be called multiple times)
-    let mut writer = instance
+    // Write directly to the master PTY (it implements Write)
+    instance
         .master
-        .try_clone_writer()
-        .map_err(|e| format!("Failed to clone PTY writer: {}", e))?;
-
-    // Write the data
-    writer
         .write_all(data.as_bytes())
         .map_err(|e| format!("Failed to write to PTY: {}", e))?;
 
-    writer
+    instance
+        .master
         .flush()
-        .map_err(|e| format!("Failed to flush PTY writer: {}", e))?;
+        .map_err(|e| format!("Failed to flush PTY: {}", e))?;
 
     tracing::trace!("Wrote {} bytes to terminal {}", data.len(), id);
 
