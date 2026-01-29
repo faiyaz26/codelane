@@ -1,39 +1,22 @@
-import { createEffect, onCleanup, onMount, createSignal } from 'solid-js';
+import { createEffect, onCleanup, onMount } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { spawn, type Pty } from 'tauri-pty';
 import { ZED_THEME } from '../theme';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
-  id?: string;
-  shell?: string;
   cwd?: string;
-  onTerminalReady?: (terminalId: string) => void;
-  onTerminalExit?: (terminalId: string, code?: number) => void;
-}
-
-interface TerminalOutputPayload {
-  id: string;
-  data: string;
-}
-
-interface TerminalExitPayload {
-  id: string;
-  code?: number;
+  onTerminalReady?: (pid: number) => void;
+  onTerminalExit?: () => void;
 }
 
 export function TerminalView(props: TerminalViewProps) {
   let containerRef: HTMLDivElement | undefined;
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
-  let unlistenOutput: (() => void) | undefined;
-  let unlistenExit: (() => void) | undefined;
-
-  const [terminalId, setTerminalId] = createSignal<string | null>(props.id || null);
-  const [isReady, setIsReady] = createSignal(false);
+  let pty: Pty | undefined;
 
   onMount(async () => {
     if (!containerRef) return;
@@ -94,147 +77,92 @@ export function TerminalView(props: TerminalViewProps) {
     // Fit terminal to container
     fitAddon.fit();
 
-    // Focus the terminal to ensure it can receive input
+    // Focus the terminal
     terminal.focus();
 
-    // Create or use existing terminal ID
-    const existingId = terminalId();
-    if (!existingId) {
-      try {
-        console.log('Creating terminal with cwd:', props.cwd);
-        const id = await invoke<string>('create_terminal', {
-          shell: props.shell,
-          cwd: props.cwd,
-        });
+    try {
+      // Spawn PTY with shell
+      const shell = process.platform === 'win32' ? 'powershell.exe' : 'zsh';
+      const args = process.platform === 'win32' ? [] : ['-l', '-i'];
 
-        setTerminalId(id);
-        setIsReady(true);
+      console.log('Spawning shell:', shell, 'in directory:', props.cwd);
 
-        // Call callback if provided
-        props.onTerminalReady?.(id);
-
-        console.log(`Terminal created with ID: ${id}, cwd: ${props.cwd}`);
-      } catch (error) {
-        console.error('Failed to create terminal:', error);
-        terminal.write('\r\n\x1b[1;31mFailed to create terminal:\x1b[0m ' + error + '\r\n');
-        return;
-      }
-    } else {
-      setIsReady(true);
-    }
-  });
-
-  // Listen to terminal output and handle keyboard input
-  createEffect(() => {
-    const id = terminalId();
-    if (!id || !terminal || !isReady()) return;
-
-    // Listen to terminal output events
-    const setupOutputListener = async () => {
-      unlistenOutput = await listen<TerminalOutputPayload>(
-        'terminal-output',
-        (event) => {
-          if (event.payload.id === id && terminal) {
-            terminal.write(event.payload.data);
-          }
-        }
-      );
-    };
-
-    // Listen to terminal exit events
-    const setupExitListener = async () => {
-      unlistenExit = await listen<TerminalExitPayload>(
-        'terminal-exit',
-        (event) => {
-          if (event.payload.id === id && terminal) {
-            terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
-
-            // Call callback if provided
-            props.onTerminalExit?.(event.payload.id, event.payload.code);
-          }
-        }
-      );
-    };
-
-    setupOutputListener();
-    setupExitListener();
-
-    // Handle keyboard input from xterm.js
-    const disposable = terminal.onData(async (data) => {
-      console.log('Terminal onData called, id:', id, 'data:', data);
-      if (!id) {
-        console.error('No terminal ID, cannot write data');
-        return;
-      }
-
-      try {
-        await invoke('write_terminal', {
-          id,
-          data,
-        });
-        console.log('Successfully wrote to terminal:', id);
-      } catch (error) {
-        console.error('Failed to write to terminal:', error);
-      }
-    });
-
-    // Handle resize events
-    const handleResize = () => {
-      if (!fitAddon || !terminal || !id) return;
-
-      fitAddon.fit();
-
-      // Notify backend of new size
-      invoke('resize_terminal', {
-        id,
+      pty = await spawn(shell, args, {
         cols: terminal.cols,
         rows: terminal.rows,
-      }).catch((error) => {
-        console.error('Failed to resize terminal:', error);
+        cwd: props.cwd,
       });
-    };
 
-    // Set up resize observer
-    const resizeObserver = new ResizeObserver(() => {
-      handleResize();
-    });
+      console.log('PTY spawned with PID:', pty.pid);
 
-    if (containerRef) {
-      resizeObserver.observe(containerRef);
+      // Bidirectional data flow
+      pty.onData((data) => {
+        if (terminal) {
+          terminal.write(data);
+        }
+      });
+
+      terminal.onData((data) => {
+        if (pty) {
+          pty.write(data);
+        }
+      });
+
+      // Handle PTY exit
+      pty.onExit(() => {
+        console.log('PTY exited');
+        if (terminal) {
+          terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
+        }
+        props.onTerminalExit?.();
+      });
+
+      // Call ready callback
+      props.onTerminalReady?.(pty.pid);
+
+      // Handle resize events
+      const resizeObserver = new ResizeObserver(() => {
+        if (fitAddon && terminal && pty) {
+          fitAddon.fit();
+          pty.resize(terminal.cols, terminal.rows);
+        }
+      });
+
+      if (containerRef) {
+        resizeObserver.observe(containerRef);
+      }
+
+      // Initial resize
+      setTimeout(() => {
+        if (fitAddon && terminal && pty) {
+          fitAddon.fit();
+          pty.resize(terminal.cols, terminal.rows);
+        }
+      }, 100);
+
+      // Cleanup
+      onCleanup(() => {
+        resizeObserver.disconnect();
+      });
+    } catch (error) {
+      console.error('Failed to create PTY:', error);
+      if (terminal) {
+        terminal.write('\r\n\x1b[1;31mFailed to create terminal:\x1b[0m ' + error + '\r\n');
+      }
     }
-
-    // Initial resize
-    setTimeout(handleResize, 100);
-
-    // Cleanup
-    onCleanup(() => {
-      disposable.dispose();
-      resizeObserver.disconnect();
-    });
   });
 
   // Cleanup on unmount
   onCleanup(async () => {
-    // Unlisten from events
-    if (unlistenOutput) {
-      unlistenOutput();
-    }
-    if (unlistenExit) {
-      unlistenExit();
-    }
-
-    // Close terminal on backend
-    const id = terminalId();
-    if (id) {
+    if (pty) {
       try {
-        await invoke('close_terminal', { id });
-        console.log(`Terminal ${id} closed`);
+        await pty.kill();
+        console.log('PTY killed');
       } catch (error) {
-        console.error('Failed to close terminal:', error);
+        console.error('Failed to kill PTY:', error);
       }
     }
 
-    // Dispose xterm.js instance
     if (terminal) {
       terminal.dispose();
     }

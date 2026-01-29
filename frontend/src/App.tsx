@@ -202,8 +202,8 @@ function App() {
                           >
                             <TerminalView
                               cwd={lane.workingDir}
-                              onTerminalReady={(id) => console.log(`Terminal ready for ${lane.name}:`, id)}
-                              onTerminalExit={(id) => console.log(`Terminal exited for ${lane.name}:`, id)}
+                              onTerminalReady={(pid) => console.log(`Terminal ready for ${lane.name}, PID:`, pid)}
+                              onTerminalExit={() => console.log(`Terminal exited for ${lane.name}`)}
                             />
                           </div>
                         )}

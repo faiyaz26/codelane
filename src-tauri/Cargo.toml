@@ -45,6 +45,7 @@ chrono = "0.4"
 codelane-terminal = { path = "../crates/codelane-terminal" }
 codelane-git = { path = "../crates/codelane-git" }
 codelane-core = { path = "../crates/codelane-core" }
+tauri-plugin-pty = "0.2.1"
 
 [features]
 default = ["custom-protocol"]

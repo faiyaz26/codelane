@@ -1,9 +1,8 @@
 //! Codelane Tauri Library
 //!
 //! This module contains all Tauri commands and plugin setup for the Codelane application.
-//! Commands are organized by domain: terminal, git, and filesystem operations.
+//! Commands are organized by domain: lane, git, and filesystem operations.
 
-pub mod terminal;
 pub mod lane;
 mod git;
 mod fs;
@@ -19,27 +18,18 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_clipboard_manager::init());
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_pty::init());  // PTY plugin for terminals
 
     // Add updater plugin on desktop platforms
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
-        // Manage terminal state
-        .manage(terminal::TerminalState::new())
         // Manage lane state
         .manage(lane::LaneState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
-            // Terminal commands
-            terminal::create_terminal,
-            terminal::write_terminal,
-            terminal::read_terminal,
-            terminal::resize_terminal,
-            terminal::close_terminal,
-            terminal::get_terminal_info,
-            terminal::list_terminals,
             // Lane commands
             lane::lane_create,
             lane::lane_list,
