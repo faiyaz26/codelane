@@ -4,6 +4,7 @@ import { Button } from './components/ui';
 import { LaneList } from './components/LaneList';
 import { CreateLaneDialog } from './components/CreateLaneDialog';
 import { TerminalView } from './components/TerminalView';
+import { GitStatus } from './components/GitStatus';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import type { Lane } from './types/lane';
@@ -160,25 +161,33 @@ function App() {
                   <p class="text-zed-text-tertiary text-xs mt-1">{activeLane()?.workingDir}</p>
                 </div>
 
-                {/* Terminal Section */}
-                <div class="flex-1 flex flex-col overflow-hidden">
-                  <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
-                    <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Terminal</h3>
-                    <div class="flex gap-2">
-                      <button
-                        class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover"
-                        title="Clear terminal"
-                      >
-                        Clear
-                      </button>
+                {/* Main Content Area: Terminal + Git Status */}
+                <div class="flex-1 flex overflow-hidden">
+                  {/* Terminal Section */}
+                  <div class="flex-1 flex flex-col overflow-hidden border-r border-zed-border-subtle">
+                    <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
+                      <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Terminal</h3>
+                      <div class="flex gap-2">
+                        <button
+                          class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover"
+                          title="Clear terminal"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                      <TerminalView
+                        cwd={activeLane()?.workingDir}
+                        onTerminalReady={(id) => console.log('Terminal ready:', id)}
+                        onTerminalExit={(id) => console.log('Terminal exited:', id)}
+                      />
                     </div>
                   </div>
-                  <div class="flex-1 overflow-hidden">
-                    <TerminalView
-                      cwd={activeLane()?.workingDir}
-                      onTerminalReady={(id) => console.log('Terminal ready:', id)}
-                      onTerminalExit={(id) => console.log('Terminal exited:', id)}
-                    />
+
+                  {/* Git Status Panel */}
+                  <div class="w-80 flex flex-col overflow-hidden">
+                    <GitStatus workingDir={activeLane()?.workingDir || ''} />
                   </div>
                 </div>
               </Show>
