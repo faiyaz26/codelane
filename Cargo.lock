@@ -468,6 +468,7 @@ name = "codelane-tauri"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "codelane-core",
  "codelane-git",
  "codelane-terminal",

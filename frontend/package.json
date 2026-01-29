@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@kobalte/core": "^0.13.11",
-    "solid-js": "^1.9.11"
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "solid-js": "^1.9.11",
+    "xterm": "^5.5.0"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.9.1",

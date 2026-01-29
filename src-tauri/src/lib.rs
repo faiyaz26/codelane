@@ -4,6 +4,7 @@
 //! Commands are organized by domain: terminal, git, and filesystem operations.
 
 pub mod terminal;
+pub mod lane;
 mod git;
 mod fs;
 
@@ -27,6 +28,8 @@ pub fn run() {
     builder
         // Manage terminal state
         .manage(terminal::TerminalState::new())
+        // Manage lane state
+        .manage(lane::LaneState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Terminal commands
@@ -37,6 +40,12 @@ pub fn run() {
             terminal::close_terminal,
             terminal::get_terminal_info,
             terminal::list_terminals,
+            // Lane commands
+            lane::lane_create,
+            lane::lane_list,
+            lane::lane_get,
+            lane::lane_update,
+            lane::lane_delete,
             // Git commands
             git::git_status,
             git::git_diff,
