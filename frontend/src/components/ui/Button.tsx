@@ -1,14 +1,13 @@
-import { Button as KobalteButton } from '@kobalte/core/button';
-import { splitProps } from 'solid-js';
-
-interface ButtonProps extends KobalteButton.ButtonRootProps {
+interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
+  class?: string;
+  children?: any;
+  onClick?: () => void;
+  disabled?: boolean;
 }
 
 export function Button(props: ButtonProps) {
-  const [local, others] = splitProps(props, ['variant', 'size', 'class', 'children']);
-
   const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zed-accent-blue focus-visible:ring-offset-2 focus-visible:ring-offset-zed-bg-app disabled:opacity-50 disabled:pointer-events-none';
 
   const variantClasses = {
@@ -26,14 +25,18 @@ export function Button(props: ButtonProps) {
 
   const classes = [
     baseClasses,
-    variantClasses[local.variant || 'primary'],
-    sizeClasses[local.size || 'md'],
-    local.class,
+    variantClasses[props.variant || 'primary'],
+    sizeClasses[props.size || 'md'],
+    props.class,
   ].filter(Boolean).join(' ');
 
   return (
-    <KobalteButton.Root class={classes} {...others}>
-      {local.children}
-    </KobalteButton.Root>
+    <button
+      class={classes}
+      onClick={props.onClick}
+      disabled={props.disabled}
+    >
+      {props.children}
+    </button>
   );
 }
