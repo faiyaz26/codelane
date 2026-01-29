@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { ZED_THEME } from '../theme';
 import '@xterm/xterm/css/xterm.css';
 
@@ -29,8 +29,8 @@ export function TerminalView(props: TerminalViewProps) {
   let containerRef: HTMLDivElement | undefined;
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
-  let unlistenOutput: UnlistenFn | undefined;
-  let unlistenExit: UnlistenFn | undefined;
+  let unlistenOutput: (() => void) | undefined;
+  let unlistenExit: (() => void) | undefined;
 
   const [terminalId, setTerminalId] = createSignal<string | null>(props.id || null);
   const [isReady, setIsReady] = createSignal(false);
