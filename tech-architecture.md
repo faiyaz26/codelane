@@ -1,6 +1,6 @@
 # Codelane Technical Architecture
 
-> A Rust-based AI orchestrator for local development, built with Dioxus and WebView
+> A Rust-based AI orchestrator for local development, built with SolidJS and Tauri
 
 ## Design Principles
 
@@ -16,19 +16,21 @@
 
 | Layer | Technology | Rationale |
 |-------|------------|-----------|
-| **Language** | Rust | Memory safety, zero-cost abstractions, no GC pauses |
-| **UI Framework** | Dioxus 0.7+ | Pure Rust, React-like DX, WebView rendering |
+| **Backend Language** | Rust | Memory safety, zero-cost abstractions, no GC pauses |
+| **Frontend Framework** | SolidJS 1.8+ | Fine-grained reactivity, no virtual DOM, TypeScript-first |
+| **Desktop Framework** | Tauri 2.x | Rust backend, system WebView, secure IPC, small bundles |
+| **Build Tool** | Vite 7+ | Fast HMR, optimized builds, ESM-native |
 | **Rendering** | System WebView | WKWebView (macOS), WebView2 (Windows), WebKitGTK (Linux) |
 | **Code Editor** | Monaco Editor | Full IDE features via JS interop |
-| **Terminal** | alacritty_terminal + portable-pty | Native Rust parsing, cross-platform PTY |
-| **Terminal Render** | Canvas/WebGL | Custom renderer for alacritty grid state |
-| **Git** | gitoxide | Pure Rust, no C dependencies |
+| **Terminal (Backend)** | portable-pty | Cross-platform PTY: ConPTY (Win), Unix PTY |
+| **Terminal (Frontend)** | xterm.js | Fast canvas renderer, full ANSI support |
+| **Git** | git CLI | Reliable, well-tested, universal availability |
 | **LSP** | tower-lsp | Async, tower-based, well-maintained |
-| **Syntax** | tree-sitter | Incremental parsing (for non-Monaco views) |
 | **Plugins** | wasmtime + wit-bindgen | Secure sandboxing, near-native speed |
-| **Styling** | Tailwind CSS | Integrated with Dioxus CLI |
+| **Styling** | Tailwind CSS | Utility-first, customizable, small bundles |
 | **Async Runtime** | tokio | Industry standard, excellent performance |
 | **Serialization** | serde + toml/json | Standard Rust ecosystem |
+| **Package Manager** | pnpm | Fast installs, efficient disk usage, workspace support |
 
 ---
 
@@ -40,18 +42,32 @@
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                     Dioxus Application                            │   │
+│  │                    Frontend (SolidJS + Vite)                      │   │
+│  │                      Runs in System WebView                       │   │
 │  │                                                                    │   │
 │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌───────────────┐  │   │
 │  │  │  Command   │ │   Theme    │ │  Keybind   │ │   Settings    │  │   │
-│  │  │  Palette   │ │   Engine   │ │  Manager   │ │   Manager     │  │   │
+│  │  │  Palette   │ │   System   │ │  Handler   │ │   Panel       │  │   │
 │  │  └────────────┘ └────────────┘ └────────────┘ └───────────────┘  │   │
 │  │                                                                    │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐   │   │
+│  │  │   Monaco    │  │  Terminal   │  │   SolidJS Components    │   │   │
+│  │  │   Editor    │  │  (xterm.js) │  │   (Sidebar, Panels,     │   │   │
+│  │  │             │  │             │  │    Diff View, etc.)     │   │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────────┘   │   │
+│  │                                                                    │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                 │                                        │
+│                                 │ Tauri IPC (invoke/listen)              │
+│                                 ▼                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     Backend (Tauri + Rust)                        │   │
+│  │                                                                    │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐  │   │
-│  │  │                    Core Services (Rust)                      │  │   │
+│  │  │                    Tauri Commands                            │  │   │
 │  │  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌──────────┐  │  │   │
 │  │  │  │   Lane    │  │ Terminal  │  │    Git    │  │   LSP    │  │  │   │
-│  │  │  │  Manager  │  │  Manager  │  │  Manager  │  │  Client  │  │  │   │
+│  │  │  │  Manager  │  │   (PTY)   │  │  (CLI)    │  │  Client  │  │  │   │
 │  │  │  └───────────┘  └───────────┘  └───────────┘  └──────────┘  │  │   │
 │  │  └─────────────────────────────────────────────────────────────┘  │   │
 │  │                                                                    │   │
@@ -61,50 +77,72 @@
 │  │  │  │ Plugin A │  │ Plugin B │  │ Plugin C │  │   ...    │    │  │   │
 │  │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │  │   │
 │  │  └─────────────────────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-│                                        │                                 │
-│  ┌─────────────────────────────────────▼────────────────────────────┐   │
-│  │                         WebView Layer                             │   │
-│  │                                                                    │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐   │   │
-│  │  │   Monaco    │  │  Terminal   │  │      Dioxus RSX         │   │   │
-│  │  │   Editor    │  │  Renderer   │  │   (Sidebar, Panels,     │   │   │
-│  │  │  (JS Interop)│  │ (Canvas)   │  │    Diff View, etc.)     │   │   │
-│  │  └─────────────┘  └─────────────┘  └─────────────────────────┘   │   │
 │  │                                                                    │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
-│                          Platform Layer (wry + tao)                      │
+│                          Tauri Core                                      │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │   Window    │  │  Clipboard  │  │ File System │  │   Process   │    │
-│  │   System    │  │   Manager   │  │   Watcher   │  │   Spawner   │    │
+│  │   Window    │  │  Clipboard  │  │ File System │  │   Shell     │    │
+│  │   Manager   │  │   Manager   │  │   Access    │  │  Executor   │    │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Crate Structure
+## Project Structure
 
 ```
 codelane/
-├── Cargo.toml                    # Workspace root
-├── Dioxus.toml                   # Dioxus CLI configuration
-├── Tailwind.config.js            # Tailwind configuration
+├── Cargo.toml                    # Rust workspace root
+├── pnpm-workspace.yaml           # pnpm workspace configuration
+├── package.json                  # Root package.json with scripts
+├── Makefile                      # Common build commands
 │
-├── crates/
-│   ├── codelane/                 # Main binary crate
-│   │   ├── src/
-│   │   │   ├── main.rs
-│   │   │   ├── app.rs            # Root Dioxus component
-│   │   │   └── routes.rs         # Application routes
-│   │   └── assets/
-│   │       ├── index.html        # HTML template
-│   │       ├── monaco.js         # Monaco loader
-│   │       ├── terminal.js       # Terminal renderer
-│   │       └── styles.css        # Tailwind output
-│   │
+├── frontend/                     # SolidJS frontend (TypeScript)
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts            # Vite + Tauri configuration
+│   ├── tailwind.config.js        # Tailwind configuration
+│   ├── index.html                # Entry HTML
+│   ├── public/                   # Static assets
+│   │   └── icons/
+│   └── src/
+│       ├── index.tsx             # Entry point
+│       ├── App.tsx               # Root component
+│       ├── index.css             # Tailwind directives
+│       ├── components/
+│       │   ├── Sidebar.tsx
+│       │   ├── LaneList.tsx
+│       │   ├── TerminalView.tsx
+│       │   ├── EditorView.tsx
+│       │   ├── DiffView.tsx
+│       │   ├── ReviewPanel.tsx
+│       │   ├── CommandPalette.tsx
+│       │   └── StatusBar.tsx
+│       ├── hooks/
+│       │   ├── useTerminal.ts
+│       │   ├── useMonaco.ts
+│       │   └── useGit.ts
+│       └── types/
+│           └── tauri.ts          # Tauri command types
+│
+├── src-tauri/                    # Tauri backend (Rust)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json           # Tauri configuration
+│   ├── build.rs
+│   ├── icons/                    # App icons
+│   ├── capabilities/             # Permission capabilities
+│   │   └── default.json
+│   └── src/
+│       ├── main.rs               # Tauri entry point
+│       ├── lib.rs                # Command registration
+│       ├── terminal.rs           # Terminal commands
+│       ├── git.rs                # Git commands
+│       └── fs.rs                 # Filesystem commands
+│
+├── crates/                       # Shared Rust libraries
 │   ├── codelane-core/            # Core types and traits
 │   │   └── src/
 │   │       ├── lib.rs
@@ -112,88 +150,36 @@ codelane/
 │   │       ├── project.rs        # Project abstraction
 │   │       └── config.rs         # Configuration types
 │   │
-│   ├── codelane-terminal/        # Terminal emulation
+│   ├── codelane-terminal/        # Terminal/PTY management
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── pty.rs            # PTY management (portable-pty)
-│   │       ├── term.rs           # Terminal state (alacritty_terminal)
-│   │       ├── event.rs          # Terminal events
-│   │       └── renderer.rs       # Grid to render data conversion
+│   │       ├── pty.rs            # PTY spawning (portable-pty)
+│   │       ├── manager.rs        # Terminal lifecycle
+│   │       └── tauri_bridge.rs   # Tauri command types
 │   │
-│   ├── codelane-editor/          # Editor integration
+│   ├── codelane-git/             # Git operations
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── monaco.rs         # Monaco JS bridge types
-│   │       ├── commands.rs       # Editor commands
-│   │       └── lsp_bridge.rs     # LSP to Monaco adapter
+│   │       ├── status.rs         # Git status (CLI)
+│   │       ├── commit.rs         # Git commit (CLI)
+│   │       └── diff.rs           # Git diff (CLI)
 │   │
-│   ├── codelane-git/             # Git integration
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── repository.rs     # Repo operations (gitoxide)
-│   │       ├── diff.rs           # Diff computation
-│   │       ├── status.rs         # Status tracking
-│   │       └── explain.rs        # AI-powered explanations
-│   │
-│   ├── codelane-review/          # Code review engine
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── review.rs         # Review model
-│   │       ├── comment.rs        # Inline comments
-│   │       └── checklist.rs      # Review checklist
-│   │
-│   ├── codelane-lsp/             # LSP client
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── client.rs         # LSP client impl
-│   │       ├── manager.rs        # Server lifecycle
-│   │       └── diagnostics.rs    # Diagnostic handling
-│   │
-│   ├── codelane-ui/              # Dioxus UI components
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── components/
-│   │       │   ├── mod.rs
-│   │       │   ├── sidebar.rs
-│   │       │   ├── lane_list.rs
-│   │       │   ├── pane.rs
-│   │       │   ├── terminal_view.rs
-│   │       │   ├── editor_view.rs
-│   │       │   ├── diff_view.rs
-│   │       │   ├── review_panel.rs
-│   │       │   ├── command_palette.rs
-│   │       │   └── status_bar.rs
-│   │       ├── hooks/
-│   │       │   ├── mod.rs
-│   │       │   ├── use_terminal.rs
-│   │       │   ├── use_monaco.rs
-│   │       │   └── use_git.rs
-│   │       └── theme.rs
-│   │
-│   ├── codelane-plugin/          # Plugin host
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── host.rs           # WASM host (wasmtime)
-│   │       ├── manifest.rs       # Plugin manifest
-│   │       └── api.rs            # Plugin API (WIT)
-│   │
-│   └── codelane-plugin-api/      # Plugin SDK (published)
+│   └── codelane-lsp/             # LSP client
 │       └── src/
-│           └── lib.rs
+│           ├── lib.rs
+│           ├── client.rs         # LSP client impl
+│           └── manager.rs        # Server lifecycle
 │
-├── assets/                        # Static assets
-│   ├── fonts/
-│   ├── icons/
-│   └── themes/
-│
-├── plugins/                       # Built-in plugins
+├── plugins/                      # Built-in plugins (future)
 │   ├── github/
 │   ├── gitlab/
 │   └── theme-default/
 │
-└── xtask/                         # Build tooling
-    └── src/
-        └── main.rs
+└── docs/                         # Documentation
+    ├── Agents.md
+    ├── claude.md
+    ├── TAURI_BEST_PRACTICES.md
+    └── tech-architecture.md
 ```
 
 ---
@@ -207,194 +193,160 @@ codelane/
 │                      Monaco Integration                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  Rust (Dioxus)                         WebView (JavaScript)         │
+│  SolidJS (Frontend)                    Monaco (JavaScript)          │
 │  ┌──────────────────────┐              ┌──────────────────────┐    │
 │  │                      │              │                      │    │
-│  │  MonacoEditor        │   document   │   Monaco Instance    │    │
-│  │  Component           │◄───eval()───►│                      │    │
+│  │  <MonacoEditor>      │   DOM ref    │   Monaco Instance    │    │
+│  │  Component           │◄─────────────│                      │    │
 │  │                      │              │   - Editor state     │    │
-│  │  - file_path         │   dioxus     │   - Language modes   │    │
-│  │  - language          │◄───.send()───│   - IntelliSense     │    │
-│  │  - on_change         │              │   - Diff editor      │    │
-│  │  - on_save           │              │                      │    │
+│  │  - file_path         │   callbacks  │   - Language modes   │    │
+│  │  - language          │◄─────────────│   - IntelliSense     │    │
+│  │  - onChange          │              │   - Diff editor      │    │
+│  │  - onSave            │              │                      │    │
 │  │                      │              └──────────────────────┘    │
 │  └──────────────────────┘                                           │
 │           │                                                          │
+│           │ Tauri invoke()                                           │
 │           ▼                                                          │
 │  ┌──────────────────────┐                                           │
-│  │   LSP Manager        │                                           │
-│  │   - Diagnostics      │                                           │
-│  │   - Completions      │                                           │
-│  │   - Hover info       │                                           │
+│  │  Rust Backend        │                                           │
+│  │  - LSP Manager       │                                           │
+│  │  - Diagnostics       │                                           │
+│  │  - Completions       │                                           │
 │  └──────────────────────┘                                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Dioxus Component
+### SolidJS Component
 
-```rust
-use dioxus::prelude::*;
+```typescript
+import { createSignal, onMount, onCleanup } from 'solid-js';
+import * as monaco from 'monaco-editor';
 
-#[derive(Props, Clone, PartialEq)]
-pub struct MonacoEditorProps {
-    pub file_path: String,
-    pub content: String,
-    pub language: String,
-    #[props(default)]
-    pub readonly: bool,
-    pub on_change: EventHandler<String>,
-    pub on_save: EventHandler<String>,
+interface MonacoEditorProps {
+  filePath: string;
+  content: string;
+  language: string;
+  readonly?: boolean;
+  onChange?: (content: string) => void;
+  onSave?: (content: string) => void;
 }
 
-#[component]
-pub fn MonacoEditor(props: MonacoEditorProps) -> Element {
-    let editor_id = use_signal(|| uuid::Uuid::new_v4().to_string());
+export function MonacoEditor(props: MonacoEditorProps) {
+  let containerRef: HTMLDivElement | undefined;
+  let editor: monaco.editor.IStandaloneCodeEditor | undefined;
 
-    // Initialize Monaco on mount
-    use_effect(move || {
-        let id = editor_id.read().clone();
-        let content = props.content.clone();
-        let language = props.language.clone();
-        let readonly = props.readonly;
+  onMount(() => {
+    if (!containerRef) return;
 
-        spawn(async move {
-            // Initialize Monaco editor
-            let init_script = format!(r#"
-                (function() {{
-                    const container = document.getElementById('{id}');
-                    if (!container || window.monacoEditors?.['{id}']) return;
-
-                    window.monacoEditors = window.monacoEditors || {{}};
-
-                    const editor = monaco.editor.create(container, {{
-                        value: {content},
-                        language: '{language}',
-                        theme: 'vs-dark',
-                        readOnly: {readonly},
-                        automaticLayout: true,
-                        minimap: {{ enabled: true }},
-                        fontSize: 14,
-                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                        fontLigatures: true,
-                        scrollBeyondLastLine: false,
-                        renderWhitespace: 'selection',
-                        bracketPairColorization: {{ enabled: true }},
-                    }});
-
-                    window.monacoEditors['{id}'] = editor;
-
-                    // Content change handler
-                    editor.onDidChangeModelContent(() => {{
-                        dioxus.send(JSON.stringify({{
-                            type: 'change',
-                            editorId: '{id}',
-                            content: editor.getValue()
-                        }}));
-                    }});
-
-                    // Save handler (Ctrl+S / Cmd+S)
-                    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {{
-                        dioxus.send(JSON.stringify({{
-                            type: 'save',
-                            editorId: '{id}',
-                            content: editor.getValue()
-                        }}));
-                    }});
-                }})();
-            "#,
-                content = serde_json::to_string(&content).unwrap(),
-                readonly = if readonly { "true" } else { "false" },
-            );
-
-            let eval = document::eval(&init_script);
-
-            // Listen for events from Monaco
-            while let Ok(msg) = eval.recv::<String>().await {
-                if let Ok(event) = serde_json::from_str::<MonacoEvent>(&msg) {
-                    match event.event_type.as_str() {
-                        "change" => props.on_change.call(event.content),
-                        "save" => props.on_save.call(event.content),
-                        _ => {}
-                    }
-                }
-            }
-        });
+    // Initialize Monaco editor
+    editor = monaco.editor.create(containerRef, {
+      value: props.content,
+      language: props.language,
+      theme: 'vs-dark',
+      readOnly: props.readonly ?? false,
+      automaticLayout: true,
+      minimap: { enabled: true },
+      fontSize: 14,
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      fontLigatures: true,
+      scrollBeyondLastLine: false,
+      renderWhitespace: 'selection',
+      bracketPairColorization: { enabled: true },
     });
 
-    rsx! {
-        div {
-            id: "{editor_id}",
-            class: "w-full h-full min-h-[400px]",
-        }
-    }
-}
+    // Content change handler
+    const changeDisposable = editor.onDidChangeModelContent(() => {
+      const content = editor?.getValue() ?? '';
+      props.onChange?.(content);
+    });
 
-#[derive(Deserialize)]
-struct MonacoEvent {
-    #[serde(rename = "type")]
-    event_type: String,
-    #[serde(rename = "editorId")]
-    editor_id: String,
-    content: String,
+    // Save handler (Ctrl+S / Cmd+S)
+    const saveAction = editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+      () => {
+        const content = editor?.getValue() ?? '';
+        props.onSave?.(content);
+      }
+    );
+
+    // Cleanup on unmount
+    onCleanup(() => {
+      changeDisposable?.dispose();
+      editor?.dispose();
+    });
+  });
+
+  // Update content when prop changes
+  createEffect(() => {
+    if (editor && props.content !== editor.getValue()) {
+      editor.setValue(props.content);
+    }
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      class="w-full h-full min-h-[400px]"
+    />
+  );
 }
 ```
 
 ### Monaco Diff Editor
 
-```rust
-#[component]
-pub fn MonacoDiffEditor(
-    original: String,
-    modified: String,
-    language: String,
-    on_accept: EventHandler<String>,
-) -> Element {
-    let editor_id = use_signal(|| uuid::Uuid::new_v4().to_string());
+```typescript
+interface MonacoDiffEditorProps {
+  original: string;
+  modified: string;
+  language: string;
+  onAccept?: (modified: string) => void;
+}
 
-    use_effect(move || {
-        let id = editor_id.read().clone();
+export function MonacoDiffEditor(props: MonacoDiffEditorProps) {
+  let containerRef: HTMLDivElement | undefined;
+  let diffEditor: monaco.editor.IStandaloneDiffEditor | undefined;
 
-        spawn(async move {
-            let script = format!(r#"
-                (function() {{
-                    const container = document.getElementById('{id}');
+  onMount(() => {
+    if (!containerRef) return;
 
-                    const diffEditor = monaco.editor.createDiffEditor(container, {{
-                        theme: 'vs-dark',
-                        automaticLayout: true,
-                        readOnly: false,
-                        renderSideBySide: true,
-                    }});
-
-                    diffEditor.setModel({{
-                        original: monaco.editor.createModel({original}, '{language}'),
-                        modified: monaco.editor.createModel({modified}, '{language}'),
-                    }});
-
-                    window.monacoDiffEditors = window.monacoDiffEditors || {{}};
-                    window.monacoDiffEditors['{id}'] = diffEditor;
-                }})();
-            "#,
-                original = serde_json::to_string(&original).unwrap(),
-                modified = serde_json::to_string(&modified).unwrap(),
-            );
-
-            document::eval(&script);
-        });
+    // Create diff editor
+    diffEditor = monaco.editor.createDiffEditor(containerRef, {
+      theme: 'vs-dark',
+      automaticLayout: true,
+      readOnly: false,
+      renderSideBySide: true,
     });
 
-    rsx! {
-        div {
-            id: "{editor_id}",
-            class: "w-full h-full",
-        }
-    }
+    // Set models
+    const originalModel = monaco.editor.createModel(props.original, props.language);
+    const modifiedModel = monaco.editor.createModel(props.modified, props.language);
+
+    diffEditor.setModel({
+      original: originalModel,
+      modified: modifiedModel,
+    });
+
+    // Cleanup
+    onCleanup(() => {
+      originalModel.dispose();
+      modifiedModel.dispose();
+      diffEditor?.dispose();
+    });
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      class="w-full h-full"
+    />
+  );
 }
 ```
 
 ---
 
-## Terminal System (alacritty_terminal)
+## Terminal System (xterm.js + portable-pty)
 
 ### Architecture
 
@@ -459,7 +411,7 @@ pub fn MonacoDiffEditor(
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Terminal Manager (Rust)
+### Terminal Backend (Tauri Commands)
 
 ```rust
 use alacritty_terminal::term::{Term, Config as TermConfig};
@@ -627,11 +579,14 @@ pub struct RenderCell {
 }
 ```
 
-### Dioxus Terminal Component
+### SolidJS Terminal Component
 
-```rust
-use dioxus::prelude::*;
-use crate::terminal::{Terminal, TerminalRenderState, TerminalSize};
+```typescript
+import { createSignal, onMount, onCleanup } from 'solid-js';
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
 
 #[component]
 pub fn TerminalView(
@@ -850,82 +805,111 @@ window.TerminalRenderer = TerminalRenderer;
 
 ## State Management
 
-Using Dioxus signals with context providers:
+Using SolidJS signals and context for reactive state management:
 
-```rust
-use dioxus::prelude::*;
+```typescript
+import { createSignal, createContext, useContext, ParentComponent } from 'solid-js';
 
-// Global application state
-#[derive(Clone)]
-pub struct AppState {
-    pub lanes: Signal<Vec<Lane>>,
-    pub active_lane_id: Signal<Option<LaneId>>,
-    pub terminals: Signal<HashMap<TerminalId, Terminal>>,
-    pub theme: Signal<Theme>,
-    pub settings: Signal<Settings>,
+// Types from Tauri backend
+interface Lane {
+  id: string;
+  name: string;
+  workingDir: string;
+  terminalId?: string;
 }
 
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            lanes: Signal::new(Vec::new()),
-            active_lane_id: Signal::new(None),
-            terminals: Signal::new(HashMap::new()),
-            theme: Signal::new(Theme::default()),
-            settings: Signal::new(Settings::load().unwrap_or_default()),
-        }
-    }
-
-    // Derived state
-    pub fn active_lane(&self) -> Option<Lane> {
-        let id = self.active_lane_id.read();
-        id.as_ref().and_then(|id| {
-            self.lanes.read().iter().find(|l| l.id == *id).cloned()
-        })
-    }
+interface AppState {
+  lanes: () => Lane[];
+  setLanes: (lanes: Lane[]) => void;
+  activeLaneId: () => string | null;
+  setActiveLaneId: (id: string | null) => void;
+  theme: () => 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
 }
 
-// Context provider at app root
-fn App() -> Element {
-    let state = use_context_provider(|| AppState::new());
+// Create context
+const AppContext = createContext<AppState>();
 
-    rsx! {
-        div { class: "app-container h-screen flex flex-col bg-gray-900 text-gray-100",
-            TitleBar {}
-            div { class: "flex-1 flex overflow-hidden",
-                Sidebar {}
-                MainContent {}
-            }
-            StatusBar {}
-        }
-    }
+// Provider component
+export const AppProvider: ParentComponent = (props) => {
+  const [lanes, setLanes] = createSignal<Lane[]>([]);
+  const [activeLaneId, setActiveLaneId] = createSignal<string | null>(null);
+  const [theme, setTheme] = createSignal<'dark' | 'light'>('dark');
+
+  const state: AppState = {
+    lanes,
+    setLanes,
+    activeLaneId,
+    setActiveLaneId,
+    theme,
+    setTheme,
+  };
+
+  return (
+    <AppContext.Provider value={state}>
+      {props.children}
+    </AppContext.Provider>
+  );
+};
+
+// Hook to consume state
+export function useAppState() {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppState must be used within AppProvider');
+  }
+  return context;
 }
 
-// Consuming state in components
-#[component]
-fn Sidebar() -> Element {
-    let state = use_context::<AppState>();
-    let lanes = state.lanes.read();
+// Example: App component with provider
+function App() {
+  return (
+    <AppProvider>
+      <div class="app-container h-screen flex flex-col bg-gray-900 text-gray-100">
+        <TitleBar />
+        <div class="flex-1 flex overflow-hidden">
+          <Sidebar />
+          <MainContent />
+        </div>
+        <StatusBar />
+      </div>
+    </AppProvider>
+  );
+}
 
-    rsx! {
-        aside { class: "w-64 bg-gray-800 border-r border-gray-700 flex flex-col",
-            div { class: "p-4 border-b border-gray-700",
-                h2 { class: "text-sm font-semibold text-gray-400 uppercase", "Lanes" }
-            }
-            div { class: "flex-1 overflow-y-auto",
-                for lane in lanes.iter() {
-                    LaneItem { lane: lane.clone() }
-                }
-            }
-            button {
-                class: "m-4 p-2 bg-blue-600 hover:bg-blue-700 rounded text-sm",
-                onclick: move |_| {
-                    // Create new lane
-                },
-                "+ New Lane"
-            }
-        }
-    }
+// Example: Consuming state in a component
+function Sidebar() {
+  const { lanes, setActiveLaneId } = useAppState();
+
+  const createNewLane = async () => {
+    // Tauri command to create lane
+    await invoke('lane_create', { name: 'New Lane' });
+    // Refresh lanes list
+  };
+
+  return (
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+      <div class="p-4 border-b border-gray-700">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase">Lanes</h2>
+      </div>
+      <div class="flex-1 overflow-y-auto">
+        <For each={lanes()}>
+          {(lane) => (
+            <LaneItem
+              lane={lane}
+              onClick={() => setActiveLaneId(lane.id)}
+            />
+          )}
+        </For>
+      </div>
+      <button
+        class="m-4 p-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+        onClick={createNewLane}
+      >
+        + New Lane
+      </button>
+    </aside>
+  );
 }
 ```
 
@@ -938,55 +922,55 @@ User Input (Keyboard/Mouse)
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Dioxus Event Handler                      │
-│  (onkeydown, onclick, oninput, etc.)                        │
+│                  SolidJS Event Handler                       │
+│  (onClick, onInput, onKeyDown, etc.)                        │
 └────────────────────────────┬────────────────────────────────┘
                              │
          ┌───────────────────┼───────────────────┐
          │                   │                   │
          ▼                   ▼                   ▼
 ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│   Command   │     │   Direct    │     │   JS Interop    │
-│   Palette   │     │   Action    │     │  (Monaco/Term)  │
+│   Command   │     │   Direct    │     │   JS Libraries  │
+│   Palette   │     │   Action    │     │  (Monaco/xterm) │
 └──────┬──────┘     └──────┬──────┘     └────────┬────────┘
        │                   │                      │
        └───────────────────┼──────────────────────┘
                            │
                            ▼
               ┌─────────────────────────┐
-              │    Action Dispatcher    │
-              │   (pattern matching)    │
+              │    Tauri Invoke         │
+              │   (IPC to Backend)      │
               └────────────┬────────────┘
                            │
        ┌───────────────────┼───────────────────┐
        │                   │                   │
        ▼                   ▼                   ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│    Core     │    │   Plugin    │    │    LSP      │
-│   Service   │    │   Runtime   │    │   Client    │
-│ (Lane, Git) │    │   (WASM)    │    │  (tower)    │
+│  Terminal   │    │     Git     │    │    Lane     │
+│  Commands   │    │  Commands   │    │  Commands   │
+│   (Rust)    │    │   (Rust)    │    │   (Rust)    │
 └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
        │                  │                  │
        └──────────────────┼──────────────────┘
                           │
                           ▼
-                 ┌─────────────────┐
-                 │  Signal Update  │
-                 │  (state.set())  │
-                 └────────┬────────┘
+              ┌──────────────────────┐
+              │   Tauri Event        │
+              │  (IPC to Frontend)   │
+              └──────────┬───────────┘
+                         │
+                         ▼
+                ┌────────────────────┐
+                │  SolidJS Signal    │
+                │  Update (reactive) │
+                └─────────┬──────────┘
                           │
                           ▼
-                 ┌─────────────────┐
-                 │  Component      │
-                 │  Re-render      │
-                 │ (reactive)      │
-                 └────────┬────────┘
-                          │
-                          ▼
-                 ┌─────────────────┐
-                 │  WebView DOM    │
-                 │   Update        │
-                 └─────────────────┘
+                ┌────────────────────┐
+                │  Fine-grained      │
+                │  DOM Update        │
+                │  (no VDOM)         │
+                └────────────────────┘
 ```
 
 ---
@@ -1065,63 +1049,114 @@ world codelane-plugin {
 
 ## Build & Development
 
-### Dioxus Configuration
+### Tauri Configuration
 
-```toml
-# Dioxus.toml
-[application]
-name = "codelane"
-default_platform = "desktop"
+```json
+// src-tauri/tauri.conf.json
+{
+  "productName": "Codelane",
+  "version": "0.1.0",
+  "identifier": "dev.codelane.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev --host",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [{
+      "title": "Codelane",
+      "width": 1200,
+      "height": 800,
+      "minWidth": 800,
+      "minHeight": 600,
+      "resizable": true,
+      "fullscreen": false
+    }],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      },
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}
+```
 
-[desktop]
-title = "Codelane"
-width = 1200
-height = 800
-resizable = true
-decorations = true
+### Vite Configuration
 
-[desktop.window]
-min_width = 800
-min_height = 600
+```typescript
+// frontend/vite.config.ts
+import { defineConfig } from 'vite';
+import solid from 'vite-plugin-solid';
 
-[web.watcher]
-watch_path = ["src", "assets"]
-reload_html = true
-index_on_404 = true
-
-[web.resource]
-style = ["assets/tailwind.css"]
-script = ["assets/monaco.js", "assets/terminal.js"]
-
-[bundle]
-identifier = "dev.codelane.app"
-publisher = "Codelane"
-icon = ["assets/icons/icon.png"]
+export default defineConfig({
+  plugins: [solid()],
+  clearScreen: false,
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: '0.0.0.0',
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 1421,
+    },
+  },
+  build: {
+    target: ['es2021', 'chrome100', 'safari13'],
+    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+    sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          monaco: ['monaco-editor'],
+          xterm: ['xterm', 'xterm-addon-fit'],
+        },
+      },
+    },
+  },
+});
 ```
 
 ### Development Commands
 
 ```bash
-# Install Dioxus CLI
-cargo install dioxus-cli
+# Install dependencies (frontend + Tauri CLI)
+pnpm install
 
 # Development with hot reload
-dx serve --platform desktop
+pnpm dev
+# or
+make dev
 
-# Development with Rust hot-patching (experimental)
-dx serve --platform desktop --hotpatch
+# Frontend only (for UI work)
+cd frontend && pnpm dev
 
 # Build release
-dx build --release --platform desktop
-
-# Bundle for distribution
-dx bundle --platform desktop
+pnpm build
+# or
+make build
 
 # Run tests
 cargo test --workspace
+make test
 
-# Lint
+# Code quality
+cargo fmt --all
 cargo clippy --workspace -- -D warnings
+make fmt
+make lint
+
+# Clean build artifacts
+make clean
 ```
 
 ### CI/CD Pipeline
@@ -1140,11 +1175,8 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact: codelane-macos-x64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact: codelane-macos-arm64
+            target: universal-apple-darwin
+            artifact: codelane-macos
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: codelane-windows-x64
@@ -1157,25 +1189,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Build
-        run: dx build --release --platform desktop --target ${{ matrix.target }}
+      - name: Build frontend
+        run: pnpm build --filter frontend
 
-      - name: Bundle
-        run: dx bundle --platform desktop
+      - name: Build Tauri app
+        run: pnpm tauri build --target ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/
+          path: src-tauri/target/release/bundle/
 ```
 
 ---
@@ -1221,12 +1263,14 @@ jobs:
 - AI agent orchestration improvements
 
 ### Native Renderer (Optional)
-If WebView performance is insufficient:
-- Migrate to Dioxus Blitz (WGPU renderer)
-- Custom terminal renderer with wgpu
-- Requires reimplementing Monaco features
+If WebView performance becomes a bottleneck:
+- Explore Tauri's custom protocol for optimized asset loading
+- Consider GPU-accelerated canvas rendering for terminal
+- Profile and optimize xterm.js configuration
+- Investigate WebGPU for intensive rendering tasks
 
-### Mobile Support
-- Dioxus supports iOS/Android
-- Touch-optimized UI components
-- Remote lane connections
+### Mobile Support (Future)
+- Tauri supports mobile platforms (iOS/Android) in v2+
+- Would require touch-optimized UI redesign
+- Remote lane connections via SSH/websocket
+- Simplified feature set for mobile form factor
