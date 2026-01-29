@@ -50,8 +50,10 @@ impl Default for TerminalState {
 
 /// A single terminal instance with PTY handle
 struct TerminalInstance {
-    /// The master side of the PTY (implements Write for input)
+    /// The master side of the PTY (for resizing)
     master: Box<dyn MasterPty + Send>,
+    /// Writer for input (taken lazily on first write)
+    writer: Option<Box<dyn Write + Send>>,
     /// The child process handle (must be kept alive)
     #[allow(dead_code)]
     child: Box<dyn portable_pty::Child + Send + Sync>,
@@ -216,9 +218,10 @@ pub async fn create_terminal(
         read_pty_output(reader, id_clone, app_clone);
     });
 
-    // Create the terminal instance
+    // Create the terminal instance (writer taken lazily on first write)
     let instance = TerminalInstance {
         master: pair.master,
+        writer: None,
         child,
         cols: 80,
         rows: 24,
@@ -330,14 +333,26 @@ pub async fn write_terminal(
         .get_mut(&id)
         .ok_or_else(|| format!("Terminal not found: {}", id))?;
 
-    // Write directly to the master PTY (it implements Write)
-    instance
-        .master
+    // Take writer on first use and keep it for subsequent writes
+    if instance.writer.is_none() {
+        let writer = instance
+            .master
+            .take_writer()
+            .map_err(|e| format!("Failed to take PTY writer: {}", e))?;
+        instance.writer = Some(writer);
+    }
+
+    // Write using the stored writer
+    let writer = instance
+        .writer
+        .as_mut()
+        .ok_or("Writer not available")?;
+
+    writer
         .write_all(data.as_bytes())
         .map_err(|e| format!("Failed to write to PTY: {}", e))?;
 
-    instance
-        .master
+    writer
         .flush()
         .map_err(|e| format!("Failed to flush PTY: {}", e))?;
 
