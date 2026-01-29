@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js';
+import { open } from '@tauri-apps/plugin-dialog';
 import { Dialog, Button, TextField } from './ui';
 import { createLane } from '../lib/lane-api';
 import type { Lane } from '../types/lane';
@@ -61,6 +62,23 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     props.onOpenChange(false);
   };
 
+  const handleBrowse = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Project Directory',
+      });
+
+      if (selected && typeof selected === 'string') {
+        setWorkingDir(selected);
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Failed to open folder picker:', err);
+    }
+  };
+
   return (
     <Dialog
       open={props.open}
@@ -77,13 +95,30 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
           description="A descriptive name for this project workspace"
         />
 
-        <TextField
-          label="Working Directory"
-          placeholder="/path/to/project"
-          value={workingDir()}
-          onChange={setWorkingDir}
-          description="Absolute path to your project directory"
-        />
+        <div>
+          <label class="block text-sm font-medium text-zed-text-primary mb-2">
+            Working Directory
+          </label>
+          <div class="flex gap-2">
+            <input
+              type="text"
+              class="flex-1 input"
+              placeholder="/path/to/project"
+              value={workingDir()}
+              onInput={(e) => setWorkingDir(e.currentTarget.value)}
+            />
+            <Button
+              variant="secondary"
+              onClick={handleBrowse}
+              disabled={isCreating()}
+            >
+              Browse...
+            </Button>
+          </div>
+          <p class="text-xs text-zed-text-tertiary mt-1">
+            Absolute path to your project directory
+          </p>
+        </div>
 
         <Show when={error()}>
           <div class="p-3 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30 text-sm text-zed-accent-red">
