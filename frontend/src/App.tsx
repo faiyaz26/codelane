@@ -272,7 +272,7 @@ function App() {
                   {/* Terminal Section */}
                   <div class="flex-1 flex flex-col overflow-hidden border-r border-zed-border-subtle">
                     <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
-                      <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Terminal</h3>
+                      <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
                       <div class="flex items-center gap-2">
                         {/* Process Monitor */}
                         <ProcessMonitor laneId={activeLaneId()} />
