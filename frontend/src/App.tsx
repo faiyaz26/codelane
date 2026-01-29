@@ -189,11 +189,15 @@ function App() {
                       </div>
                     </div>
                     <div class="flex-1 overflow-hidden">
-                      <TerminalView
-                        cwd={activeLane()?.workingDir}
-                        onTerminalReady={(id) => console.log('Terminal ready:', id)}
-                        onTerminalExit={(id) => console.log('Terminal exited:', id)}
-                      />
+                      {/* Key forces terminal to remount when lane changes */}
+                      <Show when={activeLane()}>
+                        <TerminalView
+                          key={activeLane()!.id}
+                          cwd={activeLane()!.workingDir}
+                          onTerminalReady={(id) => console.log('Terminal ready:', id)}
+                          onTerminalExit={(id) => console.log('Terminal exited:', id)}
+                        />
+                      </Show>
                     </div>
                   </div>
 
