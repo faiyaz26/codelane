@@ -189,21 +189,24 @@ function App() {
                       </div>
                     </div>
                     <div class="flex-1 overflow-hidden">
-                      {/* Key forces terminal to remount when lane changes */}
-                      <Show when={activeLane()}>
-                        <TerminalView
-                          key={activeLane()!.id}
-                          cwd={activeLane()!.workingDir}
-                          onTerminalReady={(id) => console.log('Terminal ready:', id)}
-                          onTerminalExit={(id) => console.log('Terminal exited:', id)}
-                        />
+                      {/* Using keyed Show to force terminal recreation on lane change */}
+                      <Show when={activeLane()} keyed>
+                        {(lane) => (
+                          <TerminalView
+                            cwd={lane.workingDir}
+                            onTerminalReady={(id) => console.log('Terminal ready:', id)}
+                            onTerminalExit={(id) => console.log('Terminal exited:', id)}
+                          />
+                        )}
                       </Show>
                     </div>
                   </div>
 
                   {/* Git Status Panel */}
                   <div class="w-80 flex flex-col overflow-hidden">
-                    <GitStatus workingDir={activeLane()?.workingDir || ''} />
+                    <Show when={activeLane()} keyed>
+                      {(lane) => <GitStatus workingDir={lane.workingDir} />}
+                    </Show>
                   </div>
                 </div>
               </Show>
