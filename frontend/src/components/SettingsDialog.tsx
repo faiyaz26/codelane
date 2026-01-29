@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, createEffect, Show } from 'solid-js';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { AgentSelector } from './AgentSelector';
@@ -18,6 +18,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const [isLoading, setIsLoading] = createSignal(false);
 
   // Load settings when dialog opens
+  createEffect(() => {
+    if (props.open) {
+      loadSettings();
+    }
+  });
+
+  // Load settings when dialog opens
   const loadSettings = async () => {
     setIsLoading(true);
     setError(null);
@@ -25,6 +32,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       const loaded = await getAgentSettings();
       setSettings(loaded);
     } catch (err) {
+      console.error('Failed to load settings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load settings');
     } finally {
       setIsLoading(false);
@@ -71,13 +79,30 @@ export function SettingsDialog(props: SettingsDialogProps) {
       description="Configure global agent settings for Codelane."
     >
       <div class="space-y-6">
+        {/* Loading State */}
         <Show when={isLoading()}>
           <div class="text-center py-8 text-zed-text-secondary">
             Loading settings...
           </div>
         </Show>
 
-        <Show when={!isLoading() && settings()}>
+        {/* Error State */}
+        <Show when={!isLoading() && error()}>
+          <div class="p-4 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30">
+            <p class="font-semibold text-zed-accent-red mb-2">Error loading settings</p>
+            <p class="text-sm text-zed-accent-red mb-3">{error()}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadSettings}
+            >
+              Retry
+            </Button>
+          </div>
+        </Show>
+
+        {/* Settings Form */}
+        <Show when={!isLoading() && !error() && settings()}>
           <div class="space-y-6">
             {/* Default Agent Section */}
             <div>
@@ -120,31 +145,31 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 </div>
               </div>
             </div>
-          </div>
-        </Show>
 
-        <Show when={error()}>
-          <div class="p-3 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30 text-sm text-zed-accent-red">
-            {error()}
-          </div>
-        </Show>
+            {/* Save Error Display */}
+            <Show when={error()}>
+              <div class="p-3 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30 text-sm text-zed-accent-red">
+                {error()}
+              </div>
+            </Show>
 
-        <Show when={!isLoading() && settings()}>
-          <div class="flex justify-end gap-2 pt-4 border-t border-zed-border-default">
-            <Button
-              variant="secondary"
-              onClick={handleCancel}
-              disabled={isSaving()}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={isSaving()}
-            >
-              {isSaving() ? 'Saving...' : 'Save Settings'}
-            </Button>
+            {/* Action Buttons */}
+            <div class="flex justify-end gap-2 pt-4 border-t border-zed-border-default">
+              <Button
+                variant="secondary"
+                onClick={handleCancel}
+                disabled={isSaving()}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={isSaving()}
+              >
+                {isSaving() ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
           </div>
         </Show>
       </div>
