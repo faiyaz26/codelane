@@ -1,4 +1,4 @@
-import { createContext, useContext, ParentComponent, createSignal } from 'solid-js';
+import { createContext, useContext, createSignal, JSX } from 'solid-js';
 
 export type Theme = 'dark' | 'light';
 
@@ -10,7 +10,11 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType>();
 
-export const ThemeProvider: ParentComponent = (props) => {
+interface ThemeProviderProps {
+  children?: JSX.Element;
+}
+
+export function ThemeProvider(props: ThemeProviderProps) {
   // Default to dark theme (Zed-inspired)
   const [theme, setTheme] = createSignal<Theme>('dark');
 
@@ -45,7 +49,7 @@ export const ThemeProvider: ParentComponent = (props) => {
       {props.children}
     </ThemeContext.Provider>
   );
-};
+}
 
 export function useTheme() {
   const context = useContext(ThemeContext);

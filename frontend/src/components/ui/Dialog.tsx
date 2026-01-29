@@ -1,14 +1,15 @@
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
-import { ParentComponent } from 'solid-js';
+import { JSX } from 'solid-js';
 
 interface DialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   title?: string;
   description?: string;
+  children?: JSX.Element;
 }
 
-export const Dialog: ParentComponent<DialogProps> = (props) => {
+export function Dialog(props: DialogProps) {
   return (
     <KobalteDialog.Root open={props.open} onOpenChange={props.onOpenChange}>
       <KobalteDialog.Portal>
@@ -47,6 +48,6 @@ export const Dialog: ParentComponent<DialogProps> = (props) => {
       </KobalteDialog.Portal>
     </KobalteDialog.Root>
   );
-};
+}
 
 export const DialogTrigger = KobalteDialog.Trigger;
