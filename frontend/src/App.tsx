@@ -16,6 +16,8 @@ function App() {
   const [activeLaneId, setActiveLaneIdSignal] = createSignal<string | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  // Track which lanes have had terminals created (to avoid creating all at once)
+  const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
 
   // Load lanes on mount
   onMount(async () => {
@@ -54,6 +56,8 @@ function App() {
   const handleLaneSelect = (laneId: string) => {
     setActiveLaneIdSignal(laneId);
     setActiveLaneId(laneId);
+    // Mark this lane as initialized so its terminal gets created
+    setInitializedLanes((prev) => new Set(prev).add(laneId));
   };
 
   const handleLaneDelete = async (laneId: string) => {
@@ -189,8 +193,8 @@ function App() {
                       </div>
                     </div>
                     <div class="flex-1 overflow-hidden">
-                      {/* Render terminals for all lanes, but only show the active one */}
-                      <For each={lanes()}>
+                      {/* Render terminals only for lanes that have been activated */}
+                      <For each={lanes().filter(lane => initializedLanes().has(lane.id))}>
                         {(lane) => (
                           <div
                             class="h-full"
@@ -209,7 +213,7 @@ function App() {
 
                   {/* Git Status Panel */}
                   <div class="w-80 flex flex-col overflow-hidden">
-                    <For each={lanes()}>
+                    <For each={lanes().filter(lane => initializedLanes().has(lane.id))}>
                       {(lane) => (
                         <div
                           class="h-full"
