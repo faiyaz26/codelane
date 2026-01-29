@@ -47,7 +47,7 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
 }
 
 /**
- * Lists all lanes, sorted by most recently updated
+ * Lists all lanes, sorted by sort_order (or updated_at if sort_order is null)
  */
 export async function listLanes(): Promise<Lane[]> {
   const db = await getDatabase();
@@ -62,7 +62,7 @@ export async function listLanes(): Promise<Lane[]> {
   }>>(
     `SELECT id, name, working_dir, config, created_at, updated_at
      FROM lanes
-     ORDER BY updated_at DESC`
+     ORDER BY COALESCE(sort_order, 999999), updated_at DESC`
   );
 
   return rows.map(row => {
@@ -179,4 +179,19 @@ export async function touchLane(laneId: string): Promise<void> {
     'UPDATE lanes SET last_accessed = ? WHERE id = ?',
     [now, laneId]
   );
+}
+
+/**
+ * Update sort order for lanes
+ */
+export async function updateLaneOrder(laneIds: string[]): Promise<void> {
+  const db = await getDatabase();
+
+  // Update each lane's sort_order based on its position in the array
+  for (let i = 0; i < laneIds.length; i++) {
+    await db.execute(
+      'UPDATE lanes SET sort_order = ? WHERE id = ?',
+      [i, laneIds[i]]
+    );
+  }
 }
