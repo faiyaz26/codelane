@@ -12,6 +12,15 @@
 
 ## Phase 1: Foundation (MVP)
 
+### Theming System
+- [ ] Zed Editor-inspired default theme
+- [ ] Dark mode with professional color palette
+- [ ] Consistent spacing and typography
+- [ ] Semantic color tokens (background, foreground, accent, border, etc.)
+- [ ] Theme context provider for SolidJS
+- [ ] CSS variables for dynamic theming
+- [ ] Smooth transitions between UI states
+
 ### Lane Management
 - [ ] Create, rename, delete lanes (projects)
 - [ ] Lane persistence across sessions
