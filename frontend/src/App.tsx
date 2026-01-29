@@ -184,35 +184,27 @@ function App() {
     await window.toggleMaximize();
   };
 
+  const handleTitleBarMouseDown = async (e: MouseEvent) => {
+    if (e.button === 0) { // Left click only
+      if (e.detail === 2) {
+        // Double click - toggle maximize
+        await handleTitleBarDoubleClick();
+      } else {
+        // Single click - start dragging
+        const window = getCurrentWindow();
+        await window.startDragging();
+      }
+    }
+  };
+
   return (
     <ThemeProvider>
       <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
         {/* Title Bar */}
         <div
-          class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center justify-between px-4"
-          onDblClick={handleTitleBarDoubleClick}
-        >
-          {/* Left spacer */}
-          <div class="flex-1" />
-
-          {/* Centered title */}
-          <h1 class="text-lg font-semibold">Codelane</h1>
-
-          {/* Right side items */}
-          <div class="flex-1 flex items-center justify-end gap-3">
-            <span class="text-xs text-zed-text-tertiary">AI Orchestrator for Local Development</span>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              class="p-2 rounded-md hover:bg-zed-bg-hover transition-colors text-zed-text-secondary hover:text-zed-text-primary"
-              title="Settings"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
-        </div>
+          class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center justify-between px-4 select-none cursor-default"
+          onMouseDown={handleTitleBarMouseDown}
+        />
 
         {/* Main Content */}
         <div class="flex-1 flex overflow-hidden">
@@ -246,10 +238,20 @@ function App() {
               />
             </Show>
 
-            <div class="p-4 border-t border-zed-border-subtle">
-              <Button variant="primary" class="w-full" onClick={() => setDialogOpen(true)}>
+            <div class="p-4 border-t border-zed-border-subtle flex gap-2">
+              <Button variant="primary" class="flex-1" onClick={() => setDialogOpen(true)}>
                 + New Lane
               </Button>
+              <button
+                onClick={() => setSettingsOpen(true)}
+                class="p-2 rounded-md hover:bg-zed-bg-hover transition-colors text-zed-text-secondary hover:text-zed-text-primary border border-zed-border-default"
+                title="Settings"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
             </div>
           </div>
 
