@@ -8,6 +8,26 @@ This document contains instructions for AI agents working on this project.
 - Write clear, concise commit messages following conventional commits format
 - Focus on the "why" not the "what" in commit messages
 
+## Documentation Guidelines
+
+**DO NOT create these types of files:**
+- Implementation summaries (e.g., `IMPLEMENTATION_*.md`, `*_IMPLEMENTATION.md`)
+- Detailed status reports or progress documentation
+- Step-by-step completion logs or checklists as markdown files
+- Testing guides as separate files
+
+**Use NOTES.md for temporary content:**
+- Implementation notes while working on a feature
+- Quick testing checklists
+- Work-in-progress documentation
+- Clean up regularly when work is complete
+
+**Keep documentation minimal and in existing files:**
+- The codebase itself is the source of truth
+- Update existing docs (README.md, CLAUDE.md, features.md, tech-architecture.md) when needed
+- Use inline code comments for complex logic
+- Use commit messages for change history
+
 ## Project Context
 
 **Codelane** is an AI orchestrator for local development. It's a desktop application built with:
@@ -65,4 +85,4 @@ This document contains instructions for AI agents working on this project.
 ## Best Practices to Maintain
 
 See `TAURI_BEST_PRACTICES.md` for detailed Tauri-specific guidelines.
-See `claude.md` for project conventions and patterns.
+See `CLAUDE.md` for project conventions and patterns.

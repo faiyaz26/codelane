@@ -1,3 +1,14 @@
+import { AgentConfig } from './agent';
+
+/**
+ * Lane configuration
+ */
+export interface LaneConfig {
+  agentOverride?: AgentConfig;
+  env?: [string, string][];
+  lspServers?: string[];
+}
+
 /**
  * Lane type - represents a project workspace with its own terminal and AI agents
  */
@@ -7,6 +18,7 @@ export interface Lane {
   workingDir: string;
   createdAt: number;
   updatedAt: number;
+  config?: LaneConfig;
 }
 
 /**

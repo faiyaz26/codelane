@@ -4,23 +4,37 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { Button } from './components/ui';
 import { LaneList } from './components/LaneList';
 import { CreateLaneDialog } from './components/CreateLaneDialog';
+import { SettingsDialog } from './components/SettingsDialog';
 import { TerminalView } from './components/TerminalView';
 import { GitStatus } from './components/GitStatus';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
+import { getAgentSettings } from './lib/settings-api';
 import type { Lane } from './types/lane';
+import type { AgentSettings } from './types/agent';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [lanes, setLanes] = createSignal<Lane[]>([]);
   const [activeLaneId, setActiveLaneIdSignal] = createSignal<string | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
 
-  // Load lanes on mount
+  // Load lanes and settings on mount
   onMount(async () => {
+    // Load agent settings
+    try {
+      const settings = await getAgentSettings();
+      setAgentSettings(settings);
+    } catch (err) {
+      console.error('Failed to load agent settings:', err);
+      // Settings will use defaults if this fails
+    }
+
     await loadLanes();
     // Restore active lane from localStorage
     const savedActiveLaneId = getActiveLaneId();
@@ -98,14 +112,28 @@ function App() {
 
   const activeLane = () => lanes().find((l) => l.id === activeLaneId());
 
+  const handleSettingsSaved = (settings: AgentSettings) => {
+    setAgentSettings(settings);
+  };
+
   return (
     <ThemeProvider>
       <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
         {/* Title Bar */}
         <div class="h-12 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center px-4">
           <h1 class="text-lg font-semibold">Codelane</h1>
-          <div class="ml-auto flex items-center gap-2">
+          <div class="ml-auto flex items-center gap-3">
             <span class="text-xs text-zed-text-tertiary">AI Orchestrator for Local Development</span>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              class="p-2 rounded-md hover:bg-zed-bg-hover transition-colors text-zed-text-secondary hover:text-zed-text-primary"
+              title="Settings"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -252,6 +280,13 @@ function App() {
           onOpenChange={setDialogOpen}
           onLaneCreated={handleLaneCreated}
           existingLanes={lanes()}
+        />
+
+        {/* Settings Dialog */}
+        <SettingsDialog
+          open={settingsOpen()}
+          onOpenChange={setSettingsOpen}
+          onSettingsSaved={handleSettingsSaved}
         />
       </div>
     </ThemeProvider>

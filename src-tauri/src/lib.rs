@@ -4,6 +4,7 @@
 //! Commands are organized by domain: lane, git, and filesystem operations.
 
 pub mod lane;
+pub mod settings;
 mod git;
 mod fs;
 
@@ -28,6 +29,8 @@ pub fn run() {
     builder
         // Manage lane state
         .manage(lane::LaneState::new())
+        // Manage settings state
+        .manage(settings::SettingsState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Lane commands
@@ -36,6 +39,11 @@ pub fn run() {
             lane::lane_get,
             lane::lane_update,
             lane::lane_delete,
+            // Settings commands
+            settings::settings_get_agents,
+            settings::settings_update_agents,
+            settings::lane_get_agent_config,
+            settings::lane_update_agent_config,
             // Git commands
             git::git_status,
             git::git_diff,

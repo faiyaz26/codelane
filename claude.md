@@ -10,6 +10,30 @@ Build a fast, efficient AI orchestrator for local development that:
 - Feels native and responsive
 - Follows security best practices
 
+## Documentation Guidelines
+
+**DO NOT create these types of files:**
+- Implementation summaries (e.g., `IMPLEMENTATION_*.md`, `*_IMPLEMENTATION.md`)
+- Detailed status reports or progress documentation
+- Step-by-step completion logs
+- Testing guides or checklists as separate files
+
+**Use NOTES.md for temporary content:**
+- Implementation notes while working on a feature
+- Quick testing checklists
+- Work-in-progress documentation
+- This file should be cleaned up regularly
+
+**Keep documentation in existing files:**
+- `README.md` - User-facing features and setup
+- `CLAUDE.md` (this file) - Conventions and patterns
+- `features.md` - Feature descriptions
+- `tech-architecture.md` - Architecture decisions
+- Inline code comments for complex logic
+- Commit messages for change history
+
+**Rationale:** The codebase itself is the source of truth. Avoid duplicate documentation that gets out of sync.
+
 ## Technology Decisions
 
 ### Why SolidJS over React/Dioxus?

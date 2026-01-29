@@ -3,6 +3,7 @@
 //! This module handles the creation, persistence, and management of lanes.
 //! A lane represents a project workspace with its own terminal and AI agents.
 
+use codelane_core::config::AgentConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -10,6 +11,23 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
+
+/// Lane configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaneConfig {
+    /// Per-lane agent override (overrides global default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_override: Option<AgentConfig>,
+
+    /// Environment variables to set
+    #[serde(default)]
+    pub env: Vec<(String, String)>,
+
+    /// LSP servers to enable
+    #[serde(default)]
+    pub lsp_servers: Vec<String>,
+}
 
 /// Represents a lane (project workspace)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +38,10 @@ pub struct Lane {
     pub working_dir: String,
     pub created_at: i64,
     pub updated_at: i64,
+
+    /// Lane-specific configuration
+    #[serde(default)]
+    pub config: LaneConfig,
 }
 
 impl Lane {
@@ -32,6 +54,7 @@ impl Lane {
             working_dir,
             created_at: now,
             updated_at: now,
+            config: LaneConfig::default(),
         }
     }
 
@@ -49,7 +72,7 @@ impl Lane {
 
 /// State management for lanes
 pub struct LaneState {
-    lanes: Mutex<HashMap<String, Lane>>,
+    pub(crate) lanes: Mutex<HashMap<String, Lane>>,
     storage_dir: PathBuf,
 }
 
@@ -90,7 +113,7 @@ impl LaneState {
     }
 
     /// Saves a lane to disk
-    fn save_lane(&self, lane: &Lane) -> Result<(), String> {
+    pub fn save_lane(&self, lane: &Lane) -> Result<(), String> {
         let file_path = self.storage_dir.join(format!("{}.json", lane.id));
         let content = serde_json::to_string_pretty(lane)
             .map_err(|e| format!("Failed to serialize lane: {}", e))?;
@@ -99,6 +122,12 @@ impl LaneState {
             .map_err(|e| format!("Failed to write lane file: {}", e))?;
 
         Ok(())
+    }
+
+    /// Lists all lanes (helper for other modules)
+    pub fn list_lanes(&self) -> Result<Vec<Lane>, String> {
+        let lanes = self.lanes.lock().unwrap();
+        Ok(lanes.values().cloned().collect())
     }
 
     /// Deletes a lane file from disk

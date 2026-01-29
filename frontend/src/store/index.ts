@@ -1,5 +1,7 @@
 import { createStore } from 'solid-js/store';
 import { createContext, useContext } from 'solid-js';
+import type { AgentConfig, AgentSettings } from '../types/agent';
+import { defaultAgentSettings } from '../types/agent';
 
 // Types
 export interface Lane {
@@ -8,6 +10,11 @@ export interface Lane {
   workingDir: string;
   createdAt: string;
   updatedAt: string;
+  config?: {
+    agentOverride?: AgentConfig;
+    env?: [string, string][];
+    lspServers?: string[];
+  };
 }
 
 export interface Terminal {
@@ -37,6 +44,9 @@ interface AppStore {
   // Git
   gitStatus: Map<string, GitStatus>;
 
+  // Settings
+  agentSettings: AgentSettings;
+
   // UI State
   ui: {
     sidebarOpen: boolean;
@@ -54,6 +64,8 @@ const initialState: AppStore = {
   activeTerminalId: null,
 
   gitStatus: new Map(),
+
+  agentSettings: defaultAgentSettings,
 
   ui: {
     sidebarOpen: true,
@@ -119,6 +131,19 @@ export const storeActions = {
     });
   },
 
+  // Settings actions
+  setAgentSettings: (settings: AgentSettings) => {
+    setStore('agentSettings', settings);
+  },
+
+  updateDefaultAgent: (agentConfig: AgentConfig) => {
+    setStore('agentSettings', 'defaultAgent', agentConfig);
+  },
+
+  updateAgentPreset: (presetName: string, agentConfig: AgentConfig) => {
+    setStore('agentSettings', 'presets', presetName, agentConfig);
+  },
+
   // UI actions
   toggleSidebar: () => {
     setStore('ui', 'sidebarOpen', (open) => !open);
@@ -158,6 +183,15 @@ export const storeSelectors = {
 
   isDialogOpen: (dialogName: string) => {
     return store.ui.dialogOpen === dialogName;
+  },
+
+  // Get resolved agent config for a lane (lane override or global default)
+  getResolvedAgentConfig: (laneId: string): AgentConfig => {
+    const lane = store.lanes.find((l) => l.id === laneId);
+    if (lane?.config?.agentOverride) {
+      return lane.config.agentOverride;
+    }
+    return store.agentSettings.defaultAgent;
   },
 };
 

@@ -1,6 +1,7 @@
 //! Application configuration
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Global application configuration
@@ -159,6 +160,169 @@ impl Default for ThemeConfig {
             name: "dark".to_string(),
             custom_css: None,
         }
+    }
+}
+
+/// CLI agent type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentType {
+    /// Claude Code CLI
+    Claude,
+    /// Cursor CLI
+    Cursor,
+    /// Aider CLI
+    Aider,
+    /// Traditional shell (backward compatibility)
+    Shell,
+}
+
+/// CLI agent configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConfig {
+    /// Type of agent
+    pub agent_type: AgentType,
+    /// Command to execute
+    pub command: String,
+    /// CLI arguments
+    pub args: Vec<String>,
+    /// Environment variables
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    /// Use lane's working directory
+    #[serde(default = "default_true")]
+    pub use_lane_cwd: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self::shell_default()
+    }
+}
+
+impl AgentConfig {
+    /// Default shell configuration
+    pub fn shell_default() -> Self {
+        Self {
+            agent_type: AgentType::Shell,
+            command: if cfg!(windows) {
+                "powershell.exe".to_string()
+            } else {
+                std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+            },
+            args: if cfg!(windows) {
+                vec!["-NoLogo".to_string()]
+            } else {
+                vec!["-l".to_string(), "-i".to_string()]
+            },
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// Claude Code preset
+    pub fn claude_preset() -> Self {
+        Self {
+            agent_type: AgentType::Claude,
+            command: "claude".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// Cursor preset
+    pub fn cursor_preset() -> Self {
+        Self {
+            agent_type: AgentType::Cursor,
+            command: "cursor".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// Aider preset
+    pub fn aider_preset() -> Self {
+        Self {
+            agent_type: AgentType::Aider,
+            command: "aider".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+}
+
+/// Global agent settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSettings {
+    /// Default agent to use
+    pub default_agent: AgentConfig,
+    /// Predefined agent configurations
+    #[serde(default)]
+    pub presets: HashMap<String, AgentConfig>,
+}
+
+impl Default for AgentSettings {
+    fn default() -> Self {
+        let mut presets = HashMap::new();
+        presets.insert("shell".to_string(), AgentConfig::shell_default());
+        presets.insert("claude".to_string(), AgentConfig::claude_preset());
+        presets.insert("cursor".to_string(), AgentConfig::cursor_preset());
+        presets.insert("aider".to_string(), AgentConfig::aider_preset());
+
+        Self {
+            default_agent: AgentConfig::shell_default(),
+            presets,
+        }
+    }
+}
+
+impl AgentSettings {
+    /// Load agent settings from the default location
+    pub fn load() -> crate::Result<Self> {
+        let settings_path = Self::settings_path()?;
+
+        if settings_path.exists() {
+            let content = std::fs::read_to_string(&settings_path)?;
+            let settings: AgentSettings = serde_json::from_str(&content)
+                .map_err(|e| crate::Error::Config(format!("Failed to parse agent settings: {}", e)))?;
+            Ok(settings)
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    /// Save agent settings to the default location
+    pub fn save(&self) -> crate::Result<()> {
+        let settings_path = Self::settings_path()?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = settings_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| crate::Error::Config(format!("Failed to serialize agent settings: {}", e)))?;
+        std::fs::write(&settings_path, content)?;
+
+        Ok(())
+    }
+
+    /// Get the settings file path (~/.codelane/settings.json)
+    pub fn settings_path() -> crate::Result<PathBuf> {
+        let home = std::env::var("HOME")
+            .map_err(|_| crate::Error::Config("Could not determine home directory".into()))?;
+
+        let codelane_dir = PathBuf::from(home).join(".codelane");
+        Ok(codelane_dir.join("settings.json"))
     }
 }
 

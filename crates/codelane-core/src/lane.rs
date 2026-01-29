@@ -1,5 +1,6 @@
 //! Lane (project workspace) management
 
+use crate::config::AgentConfig;
 use crate::{LaneId, TerminalId};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -54,14 +55,16 @@ impl Lane {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LaneConfig {
     /// Shell to use for terminals (None = system default)
+    /// DEPRECATED: Use agent_override instead
     pub shell: Option<String>,
 
     /// Environment variables to set
     #[serde(default)]
     pub env: Vec<(String, String)>,
 
-    /// Default AI agent to use
-    pub default_agent: Option<String>,
+    /// Per-lane agent override (overrides global default)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_override: Option<AgentConfig>,
 
     /// LSP servers to enable
     #[serde(default)]
