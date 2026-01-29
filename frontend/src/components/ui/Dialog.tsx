@@ -1,12 +1,11 @@
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
-import { JSX } from 'solid-js';
 
 interface DialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   title?: string;
   description?: string;
-  children?: JSX.Element;
+  children?: any;
 }
 
 export function Dialog(props: DialogProps) {

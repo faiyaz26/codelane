@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, JSX } from 'solid-js';
+import { createContext, useContext, createSignal } from 'solid-js';
 
 export type Theme = 'dark' | 'light';
 
@@ -11,7 +11,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType>();
 
 interface ThemeProviderProps {
-  children?: JSX.Element;
+  children?: any;
 }
 
 export function ThemeProvider(props: ThemeProviderProps) {
