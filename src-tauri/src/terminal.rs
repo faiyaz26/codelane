@@ -129,6 +129,8 @@ pub async fn create_terminal(
         .map(PathBuf::from)
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")));
 
+    tracing::info!("Creating terminal with working directory: {:?}", working_dir);
+
     // Validate working directory exists
     if !working_dir.exists() {
         return Err(format!(

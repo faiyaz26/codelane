@@ -98,6 +98,7 @@ export function TerminalView(props: TerminalViewProps) {
     const existingId = terminalId();
     if (!existingId) {
       try {
+        console.log('Creating terminal with cwd:', props.cwd);
         const id = await invoke<string>('create_terminal', {
           shell: props.shell,
           cwd: props.cwd,
@@ -109,7 +110,7 @@ export function TerminalView(props: TerminalViewProps) {
         // Call callback if provided
         props.onTerminalReady?.(id);
 
-        console.log(`Terminal created with ID: ${id}`);
+        console.log(`Terminal created with ID: ${id}, cwd: ${props.cwd}`);
       } catch (error) {
         console.error('Failed to create terminal:', error);
         terminal.write('\r\n\x1b[1;31mFailed to create terminal:\x1b[0m ' + error + '\r\n');
