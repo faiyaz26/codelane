@@ -1,5 +1,5 @@
 import { Button as KobalteButton } from '@kobalte/core/button';
-import { JSX, splitProps } from 'solid-js';
+import { splitProps } from 'solid-js';
 
 interface ButtonProps extends KobalteButton.ButtonRootProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';

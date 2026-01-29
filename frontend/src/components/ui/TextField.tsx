@@ -1,5 +1,5 @@
 import { TextField as KobalteTextField } from '@kobalte/core/text-field';
-import { JSX, splitProps } from 'solid-js';
+import { splitProps } from 'solid-js';
 
 interface TextFieldProps extends KobalteTextField.TextFieldRootProps {
   label?: string;
