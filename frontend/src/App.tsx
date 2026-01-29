@@ -157,7 +157,7 @@ function App() {
                 {/* Lane Info Header */}
                 <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-6 py-4">
                   <h2 class="text-lg font-bold">{activeLane()?.name}</h2>
-                  <p class="text-zed-text-tertiary text-xs mt-1">{activeLane()?.working_dir}</p>
+                  <p class="text-zed-text-tertiary text-xs mt-1">{activeLane()?.workingDir}</p>
                 </div>
 
                 {/* Terminal Section */}
@@ -175,7 +175,7 @@ function App() {
                   </div>
                   <div class="flex-1 overflow-hidden">
                     <TerminalView
-                      cwd={activeLane()?.working_dir}
+                      cwd={activeLane()?.workingDir}
                       onTerminalReady={(id) => console.log('Terminal ready:', id)}
                       onTerminalExit={(id) => console.log('Terminal exited:', id)}
                     />

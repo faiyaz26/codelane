@@ -42,11 +42,11 @@ export function LaneList(props: LaneListProps) {
               <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">{lane.name}</div>
-                  <div class="text-xs text-zed-text-tertiary mt-1 truncate" title={lane.working_dir}>
-                    {lane.working_dir}
+                  <div class="text-xs text-zed-text-tertiary mt-1 truncate" title={lane.workingDir}>
+                    {lane.workingDir}
                   </div>
                   <div class="text-xs text-zed-text-tertiary mt-1">
-                    Updated {formatDate(lane.updated_at)}
+                    Updated {formatDate(lane.updatedAt)}
                   </div>
                 </div>
                 <Show when={props.onLaneDelete}>

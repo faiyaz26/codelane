@@ -36,7 +36,7 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     try {
       const lane = await createLane({
         name: laneName,
-        working_dir: laneWorkingDir,
+        workingDir: laneWorkingDir,
       });
 
       // Reset form

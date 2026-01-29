@@ -4,9 +4,9 @@
 export interface Lane {
   id: string;
   name: string;
-  working_dir: string;
-  created_at: number;
-  updated_at: number;
+  workingDir: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /**
@@ -14,14 +14,14 @@ export interface Lane {
  */
 export interface CreateLaneParams {
   name: string;
-  working_dir: string;
+  workingDir: string;
 }
 
 /**
  * Parameters for updating an existing lane
  */
 export interface UpdateLaneParams {
-  lane_id: string;
+  laneId: string;
   name?: string;
-  working_dir?: string;
+  workingDir?: string;
 }

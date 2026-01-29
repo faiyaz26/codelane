@@ -23,7 +23,7 @@ export async function listLanes(): Promise<Lane[]> {
  * Gets a specific lane by ID
  */
 export async function getLane(laneId: string): Promise<Lane> {
-  return invoke<Lane>('lane_get', { lane_id: laneId });
+  return invoke<Lane>('lane_get', { laneId });
 }
 
 /**
@@ -37,5 +37,5 @@ export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
  * Deletes a lane
  */
 export async function deleteLane(laneId: string): Promise<void> {
-  return invoke<void>('lane_delete', { lane_id: laneId });
+  return invoke<void>('lane_delete', { laneId });
 }
