@@ -1,4 +1,5 @@
 import { createSignal, onMount, Show } from 'solid-js';
+import { ask } from '@tauri-apps/plugin-dialog';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Button } from './components/ui';
 import { LaneList } from './components/LaneList';
@@ -56,7 +57,15 @@ function App() {
   };
 
   const handleLaneDelete = async (laneId: string) => {
-    if (!confirm('Are you sure you want to delete this lane?')) {
+    const lane = lanes().find(l => l.id === laneId);
+    const laneName = lane?.name || 'this lane';
+
+    const confirmed = await ask(`Are you sure you want to delete "${laneName}"?`, {
+      title: 'Delete Lane',
+      kind: 'warning',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -75,7 +84,10 @@ function App() {
         }
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete lane');
+      await ask(err instanceof Error ? err.message : 'Failed to delete lane', {
+        title: 'Error',
+        kind: 'error',
+      });
       console.error('Failed to delete lane:', err);
     }
   };
