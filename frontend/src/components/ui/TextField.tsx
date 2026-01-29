@@ -1,37 +1,44 @@
 import { TextField as KobalteTextField } from '@kobalte/core/text-field';
-import { splitProps } from 'solid-js';
 
-interface TextFieldProps extends KobalteTextField.TextFieldRootProps {
+interface TextFieldProps {
   label?: string;
   placeholder?: string;
   description?: string;
   errorMessage?: string;
+  value?: string;
+  onChange?: (value: string) => void;
+  class?: string;
 }
 
 export function TextField(props: TextFieldProps) {
-  const [local, others] = splitProps(props, ['label', 'placeholder', 'description', 'errorMessage', 'class']);
-
   return (
-    <KobalteTextField.Root class={local.class} {...others} validationState={local.errorMessage ? 'invalid' : 'valid'}>
-      {local.label && (
+    <KobalteTextField
+      class={props.class}
+      value={props.value}
+      onChange={props.onChange}
+      validationState={props.errorMessage ? 'invalid' : 'valid'}
+    >
+      {props.label && (
         <KobalteTextField.Label class="block text-sm font-medium text-zed-text-primary mb-2">
-          {local.label}
+          {props.label}
         </KobalteTextField.Label>
       )}
       <KobalteTextField.Input
-        placeholder={local.placeholder}
-        class="w-full px-3 py-2 bg-zed-bg-surface border border-zed-border-default rounded-md text-zed-text-primary placeholder:text-zed-text-tertiary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue focus:border-transparent transition-colors data-[invalid]:border-zed-accent-red"
+        placeholder={props.placeholder}
+        class={`w-full px-3 py-2 bg-zed-bg-surface border rounded-md text-zed-text-primary placeholder:text-zed-text-tertiary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue focus:border-transparent transition-colors ${
+          props.errorMessage ? 'border-zed-accent-red' : 'border-zed-border-default'
+        }`}
       />
-      {local.description && (
+      {props.description && (
         <KobalteTextField.Description class="mt-1 text-xs text-zed-text-tertiary">
-          {local.description}
+          {props.description}
         </KobalteTextField.Description>
       )}
-      {local.errorMessage && (
+      {props.errorMessage && (
         <KobalteTextField.ErrorMessage class="mt-1 text-xs text-zed-accent-red">
-          {local.errorMessage}
+          {props.errorMessage}
         </KobalteTextField.ErrorMessage>
       )}
-    </KobalteTextField.Root>
+    </KobalteTextField>
   );
 }

@@ -1,7 +1,8 @@
+import { Button as KobalteButton } from '@kobalte/core/button';
+
 interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
-  class?: string;
   children?: any;
   onClick?: () => void;
   disabled?: boolean;
@@ -23,20 +24,15 @@ export function Button(props: ButtonProps) {
     lg: 'h-12 px-6 text-base',
   };
 
-  const classes = [
+  const className = [
     baseClasses,
     variantClasses[props.variant || 'primary'],
     sizeClasses[props.size || 'md'],
-    props.class,
   ].filter(Boolean).join(' ');
 
   return (
-    <button
-      class={classes}
-      onClick={props.onClick}
-      disabled={props.disabled}
-    >
+    <KobalteButton class={className} onClick={props.onClick} disabled={props.disabled}>
       {props.children}
-    </button>
+    </KobalteButton>
   );
 }

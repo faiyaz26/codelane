@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@kobalte/core": "^0.13.11",
-    "solid-js": "^1.9.4"
+    "solid-js": "^1.9.11"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.9.1",

@@ -10,22 +10,11 @@ interface DialogProps {
 
 export function Dialog(props: DialogProps) {
   return (
-    <KobalteDialog.Root open={props.open} onOpenChange={props.onOpenChange}>
+    <KobalteDialog open={props.open} onOpenChange={props.onOpenChange}>
       <KobalteDialog.Portal>
-        <KobalteDialog.Overlay class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
-        <div class="fixed inset-0 z-50 flex items-center justify-center">
-          <KobalteDialog.Content class="relative z-50 w-full max-w-lg bg-zed-bg-overlay border border-zed-border-default rounded-lg shadow-2xl p-6 data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95">
-            {props.title && (
-              <KobalteDialog.Title class="text-lg font-semibold text-zed-text-primary mb-2">
-                {props.title}
-              </KobalteDialog.Title>
-            )}
-            {props.description && (
-              <KobalteDialog.Description class="text-sm text-zed-text-secondary mb-4">
-                {props.description}
-              </KobalteDialog.Description>
-            )}
-            <div>{props.children}</div>
+        <KobalteDialog.Overlay class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <KobalteDialog.Content class="relative w-full max-w-lg bg-zed-bg-overlay border border-zed-border-default rounded-lg shadow-2xl p-6">
             <KobalteDialog.CloseButton class="absolute top-4 right-4 rounded-md p-1 hover:bg-zed-bg-hover transition-colors">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -42,11 +31,21 @@ export function Dialog(props: DialogProps) {
                 />
               </svg>
             </KobalteDialog.CloseButton>
+
+            {props.title && (
+              <KobalteDialog.Title class="text-lg font-semibold text-zed-text-primary mb-2">
+                {props.title}
+              </KobalteDialog.Title>
+            )}
+            {props.description && (
+              <KobalteDialog.Description class="text-sm text-zed-text-secondary mb-4">
+                {props.description}
+              </KobalteDialog.Description>
+            )}
+            <div>{props.children}</div>
           </KobalteDialog.Content>
         </div>
       </KobalteDialog.Portal>
-    </KobalteDialog.Root>
+    </KobalteDialog>
   );
 }
-
-export const DialogTrigger = KobalteDialog.Trigger;
