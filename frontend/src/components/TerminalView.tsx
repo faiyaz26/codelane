@@ -93,9 +93,13 @@ export function TerminalView(props: TerminalViewProps) {
         cols: terminal.cols,
         rows: terminal.rows,
         cwd: props.cwd,
+        env: {
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor',
+        },
       });
 
-      console.log('PTY spawned successfully');
+      console.log('PTY spawned with PID:', pty.pid);
 
       // Bidirectional data flow
       pty.onData((data) => {
@@ -119,8 +123,8 @@ export function TerminalView(props: TerminalViewProps) {
         props.onTerminalExit?.();
       });
 
-      // Call ready callback (PID not exposed by plugin)
-      props.onTerminalReady?.(0);
+      // Call ready callback with actual PID
+      props.onTerminalReady?.(pty.pid);
 
       // Handle resize events
       const resizeObserver = new ResizeObserver(() => {
