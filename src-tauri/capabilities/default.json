@@ -46,6 +46,11 @@
     "pty:allow-write",
     "pty:allow-read",
     "pty:allow-resize",
-    "pty:allow-kill"
+    "pty:allow-kill",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-close"
   ]
 }
