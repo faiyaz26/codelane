@@ -4,17 +4,18 @@ This file contains temporary implementation notes, testing checklists, and work-
 
 ## Current Work
 
-### SQLite Migration (🚧 In Progress)
+### SQLite Migration (✅ Complete)
 - Added tauri-plugin-sql dependency
-- Created database schema (lanes, lane_configs tables)
+- Created comprehensive database schema
 - Database initialization on app startup
+- Migrated lane API to use SQL queries
 - Storage: `~/.codelane/codelane.db`
 
 **Next Steps:**
-- [ ] Migrate lane API from JSON to SQLite
-- [ ] Add data migration from JSON files to SQLite
-- [ ] Test database CRUD operations
+- [ ] Add migration tool for existing JSON lane files
+- [ ] Test CRUD operations thoroughly
 - [ ] Update TerminalView to use agent configs from DB
+- [ ] Add favorites/tags UI
 
 ### Agent Settings System (✅ Complete)
 - Backend: Agent configuration types, settings persistence, Tauri commands
