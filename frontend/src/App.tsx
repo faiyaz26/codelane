@@ -191,13 +191,16 @@ function App() {
                     <div class="flex-1 overflow-hidden">
                       {/* Using keyed Show to force terminal recreation on lane change */}
                       <Show when={activeLane()} keyed>
-                        {(lane) => (
-                          <TerminalView
-                            cwd={lane.workingDir}
-                            onTerminalReady={(id) => console.log('Terminal ready:', id)}
-                            onTerminalExit={(id) => console.log('Terminal exited:', id)}
-                          />
-                        )}
+                        {(lane) => {
+                          console.log('Rendering terminal for lane:', lane.name, 'with workingDir:', lane.workingDir);
+                          return (
+                            <TerminalView
+                              cwd={lane.workingDir}
+                              onTerminalReady={(id) => console.log('Terminal ready:', id)}
+                              onTerminalExit={(id) => console.log('Terminal exited:', id)}
+                            />
+                          );
+                        }}
                       </Show>
                     </div>
                   </div>

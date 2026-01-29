@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 /// Represents a lane (project workspace)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Lane {
     pub id: String,
     pub name: String,
