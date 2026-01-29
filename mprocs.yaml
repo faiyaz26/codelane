@@ -1,0 +1,12 @@
+procs:
+  frontend:
+    cmd: ["pnpm", "dev"]
+    cwd: "./frontend"
+    stop:
+      send_signal: {signal: SIGINT}
+
+  tauri:
+    cmd: ["bash", "-c", "sleep 5 && cargo run"]
+    cwd: "./src-tauri"
+    stop:
+      send_signal: {signal: SIGINT}

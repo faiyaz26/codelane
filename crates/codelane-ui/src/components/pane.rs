@@ -1,0 +1,2 @@
+//! Pane component
+// TODO: Implement

@@ -1,0 +1,17 @@
+[package]
+name = "codelane-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WASM plugin host for Codelane"
+
+[dependencies]
+codelane-core.workspace = true
+
+wasmtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

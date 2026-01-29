@@ -1,0 +1,26 @@
+[package]
+name = "codelane-terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal emulation for Codelane with ANSI escape sequence support"
+
+[dependencies]
+codelane-core.workspace = true
+
+# PTY handling
+portable-pty.workspace = true
+
+# Async runtime
+tokio.workspace = true
+futures.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Utilities
+parking_lot.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

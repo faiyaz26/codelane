@@ -1,0 +1,64 @@
+# Cargo configuration for Codelane
+
+[alias]
+# Development shortcuts
+dev = "tauri dev"
+xtask = "run --package xtask --"
+b = "build"
+c = "check"
+t = "test"
+r = "run"
+
+# Workspace commands
+check-all = "check --workspace"
+test-all = "test --workspace"
+build-all = "build --workspace"
+
+[build]
+# Use all available CPU cores for compilation
+jobs = -1
+
+# Target directory (default, but explicit for clarity)
+target-dir = "target"
+
+[target.wasm32-unknown-unknown]
+# WASM target configuration for Dioxus web builds
+rustflags = [
+    "-C", "link-arg=--max-memory=4294967296",
+]
+
+# macOS uses the system linker (no special config needed)
+# [target.x86_64-apple-darwin]
+# [target.aarch64-apple-darwin]
+
+[target.x86_64-unknown-linux-gnu]
+# Linux x86_64 - use lld if available for faster linking
+# Uncomment if lld is installed: sudo apt install lld
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-pc-windows-msvc]
+# Windows x86_64
+rustflags = ["-C", "link-arg=/DEBUG:NONE"]
+
+[env]
+# Environment variables for builds
+RUST_BACKTRACE = "1"
+
+[net]
+# Network configuration
+retry = 3
+git-fetch-with-cli = true
+
+[registries.crates-io]
+protocol = "sparse"
+
+[profile.dev]
+# Development profile optimizations are in Cargo.toml
+
+[profile.release]
+# Release profile optimizations are in Cargo.toml
+
+# Uncomment for faster incremental builds (uses more disk space)
+# [profile.dev.package."*"]
+# opt-level = 0

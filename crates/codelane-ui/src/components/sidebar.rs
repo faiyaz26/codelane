@@ -1,0 +1,2 @@
+//! Sidebar component
+// TODO: Implement

@@ -1,0 +1,18 @@
+[package]
+name = "codelane-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Git integration for Codelane using gitoxide"
+
+[dependencies]
+codelane-core.workspace = true
+
+gix.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+notify.workspace = true

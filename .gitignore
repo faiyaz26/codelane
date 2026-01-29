@@ -1,0 +1,30 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# Node.js / pnpm
+node_modules/
+dist/
+*.log
+pnpm-lock.yaml
+
+# Tauri
+/src-tauri/target
+/src-tauri/WixTools
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build outputs
+/frontend/dist
+/assets/tailwind.css
+
+# Temporary files
+*.tmp
+.cache/

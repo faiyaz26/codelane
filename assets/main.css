@@ -1,0 +1,291 @@
+/*
+ * Codelane Custom Styles
+ *
+ * This file contains custom CSS that complements Tailwind CSS.
+ * Use this for styles that are difficult to express with Tailwind utilities
+ * or for third-party integration styles (e.g., Monaco editor).
+ */
+
+/* Root variables for consistent theming */
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  /* Semantic colors */
+  --color-bg-primary: #0f0f10;
+  --color-bg-secondary: #1a1a1b;
+  --color-bg-tertiary: #252526;
+  --color-border-subtle: #2d2d2d;
+  --color-border-default: #3e3e42;
+  --color-text-primary: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-accent-blue: #3b82f6;
+  --color-accent-green: #22c55e;
+  --color-accent-yellow: #eab308;
+  --color-accent-red: #ef4444;
+}
+
+/* Global reset additions */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Monaco Editor integration styles */
+.monaco-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.monaco-editor {
+  font-family: var(--font-mono) !important;
+}
+
+/* Terminal integration styles */
+.terminal-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-bg-primary);
+}
+
+.terminal-container .xterm {
+  padding: 8px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 4px;
+}
+
+/* Diff view styles */
+.diff-view {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diff-line {
+  display: flex;
+  white-space: pre;
+}
+
+.diff-line-number {
+  width: 50px;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--color-text-muted);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.diff-line-content {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.diff-line.added {
+  background-color: rgba(34, 197, 94, 0.15);
+}
+
+.diff-line.added .diff-line-content {
+  color: #4ade80;
+}
+
+.diff-line.removed {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+.diff-line.removed .diff-line-content {
+  color: #f87171;
+}
+
+.diff-line.modified {
+  background-color: rgba(234, 179, 8, 0.1);
+}
+
+/* Command palette styles */
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 100px;
+  z-index: 100;
+}
+
+.command-palette {
+  width: 600px;
+  max-width: 90vw;
+  max-height: 400px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.command-palette-input {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 16px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.command-palette-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.command-palette-results {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.command-palette-item:hover,
+.command-palette-item.selected {
+  background-color: var(--color-bg-tertiary);
+}
+
+.command-palette-item-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  color: var(--color-text-muted);
+}
+
+.command-palette-item-title {
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.command-palette-item-shortcut {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Resizable pane styles */
+.pane-resizer {
+  flex-shrink: 0;
+  background-color: transparent;
+  transition: background-color 0.15s;
+  z-index: 10;
+}
+
+.pane-resizer:hover,
+.pane-resizer.active {
+  background-color: var(--color-accent-blue);
+}
+
+.pane-resizer.horizontal {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.pane-resizer.vertical {
+  height: 4px;
+  cursor: row-resize;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border-default);
+  border-top-color: var(--color-accent-blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* Toast notifications */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+}
+
+.toast {
+  padding: 12px 16px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.2s ease-out;
+}
+
+.toast.success {
+  border-left: 3px solid var(--color-accent-green);
+}
+
+.toast.error {
+  border-left: 3px solid var(--color-accent-red);
+}
+
+.toast.warning {
+  border-left: 3px solid var(--color-accent-yellow);
+}
+
+.toast.info {
+  border-left: 3px solid var(--color-accent-blue);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
