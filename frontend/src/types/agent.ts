@@ -79,3 +79,10 @@ export const defaultAgentSettings: AgentSettings = {
     aider: aiderPreset,
   },
 };
+
+/**
+ * Get default agent settings (function wrapper for consistency)
+ */
+export function getDefaultAgentSettings(): AgentSettings {
+  return defaultAgentSettings;
+}

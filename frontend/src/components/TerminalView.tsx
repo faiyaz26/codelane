@@ -4,12 +4,16 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { spawn, type Pty } from 'tauri-pty';
 import { ZED_THEME } from '../theme';
+import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
+import type { AgentConfig } from '../types/agent';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
+  laneId: string;
   cwd?: string;
   onTerminalReady?: (pid: number) => void;
   onTerminalExit?: () => void;
+  onAgentFailed?: (agentType: string, command: string) => void;
 }
 
 export function TerminalView(props: TerminalViewProps) {
@@ -81,25 +85,75 @@ export function TerminalView(props: TerminalViewProps) {
     terminal.focus();
 
     try {
-      // Get default shell from environment or use zsh as fallback
-      // On Windows: powershell.exe, on Unix: $SHELL or zsh
-      const defaultShell = import.meta.env.VITE_SHELL || 'zsh';
-      const shell = defaultShell;
-      const args = ['-l', '-i'];  // Login, interactive shell
+      // Load agent config for this lane
+      let agentConfig = await getLaneAgentConfig(props.laneId);
 
-      console.log('Spawning shell:', shell, 'in directory:', props.cwd);
+      console.log('Agent config:', JSON.stringify(agentConfig, null, 2));
 
-      pty = await spawn(shell, args, {
-        cols: terminal.cols,
-        rows: terminal.rows,
-        cwd: props.cwd,
-        env: {
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-        },
-      });
+      // Merge agent env with terminal env and add unique identifier
+      const env = {
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        CODELANE_LANE_ID: props.laneId,
+        CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
+        ...agentConfig.env,
+      };
 
-      console.log('PTY spawned with PID:', pty.pid);
+      let spawnSuccess = false;
+
+      // Try to spawn the configured agent
+      if (agentConfig.agentType !== 'shell') {
+        console.log('Checking if agent exists:', agentConfig.command);
+
+        // Check if command exists before trying to spawn
+        const commandPath = await checkCommandExists(agentConfig.command);
+
+        if (commandPath) {
+          console.log('Agent found at:', commandPath);
+          console.log('Spawning agent:', commandPath);
+
+          try {
+            pty = await spawn(commandPath, agentConfig.args, {
+              cols: terminal.cols,
+              rows: terminal.rows,
+              cwd: agentConfig.useLaneCwd ? props.cwd : undefined,
+              env,
+            });
+
+            spawnSuccess = true;
+            console.log('Agent spawned successfully');
+          } catch (spawnError) {
+            console.error('Failed to spawn agent:', spawnError);
+            spawnSuccess = false;
+            // Notify parent that agent failed
+            props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
+          }
+        } else {
+          console.log('Agent command not found in PATH:', agentConfig.command);
+          spawnSuccess = false;
+          // Notify parent that agent is not installed
+          props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
+        }
+      }
+
+      // Fallback to shell if agent failed or agent type is shell
+      if (!spawnSuccess) {
+        // Use zsh as default shell (will use user's default shell via -l flag)
+        const fallbackShell = 'zsh';
+        console.log('Using shell:', fallbackShell);
+
+        pty = await spawn(fallbackShell, ['-l', '-i'], {
+          cols: terminal.cols,
+          rows: terminal.rows,
+          cwd: props.cwd,
+          env: {
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+          },
+        });
+
+        console.log('Shell spawned with PID:', pty.pid);
+      }
 
       // Bidirectional data flow
       pty.onData((data) => {

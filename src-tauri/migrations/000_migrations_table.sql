@@ -1,6 +1,4 @@
--- Migration tracking table
--- This table tracks which migrations have been applied
-
+-- Schema migrations tracking table
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,

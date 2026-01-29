@@ -6,16 +6,21 @@ This file contains temporary implementation notes, testing checklists, and work-
 
 ### SQLite Migration (✅ Complete)
 - Added tauri-plugin-sql dependency
-- Created comprehensive database schema
+- Created database schema with JSON columns for flexibility
 - Database initialization on app startup
-- Migrated lane API to use SQL queries
+- Migrated lane API to use SQL queries with JSON config column
+- Migrated settings API to use SQLite instead of JSON files
 - Storage: `~/.codelane/codelane.db`
+- Schema uses:
+  - `lanes.config` JSON column for LaneConfig (agentOverride, env, lspServers)
+  - `settings` key-value table for global settings (agent_settings stored as JSON)
+- JSON field indexes using `json_extract()` for efficient queries
 
 **Next Steps:**
-- [ ] Add migration tool for existing JSON lane files
 - [ ] Test CRUD operations thoroughly
-- [ ] Update TerminalView to use agent configs from DB
+- [x] Update TerminalView to use agent configs from DB
 - [ ] Add favorites/tags UI
+- [ ] Remove deprecated Rust settings.rs module (frontend handles settings directly)
 
 ### Agent Settings System (✅ Complete)
 - Backend: Agent configuration types, settings persistence, Tauri commands

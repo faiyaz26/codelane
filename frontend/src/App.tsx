@@ -7,6 +7,7 @@ import { CreateLaneDialog } from './components/CreateLaneDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { TerminalView } from './components/TerminalView';
 import { GitStatus } from './components/GitStatus';
+import { ProcessMonitor } from './components/ProcessMonitor';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings } from './lib/settings-api';
@@ -24,6 +25,10 @@ function App() {
   const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
+  // Notification state
+  const [notification, setNotification] = createSignal<{ message: string; type: 'error' | 'warning' | 'info' } | null>(null);
+  // Track terminal PIDs for process monitoring
+  const [terminalPids, setTerminalPids] = createSignal<Map<string, number>>(new Map());
 
   // Load lanes and settings on mount
   onMount(async () => {
@@ -127,6 +132,52 @@ function App() {
     setAgentSettings(settings);
   };
 
+  const handleAgentFailed = (agentType: string, command: string) => {
+    console.log('handleAgentFailed called with:', agentType, command);
+    const notif = {
+      message: `Agent "${agentType}" (${command}) is not installed. Using shell instead. Click settings to configure.`,
+      type: 'warning' as const,
+    };
+    console.log('Setting notification:', notif);
+    setNotification(notif);
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => {
+      console.log('Auto-dismissing notification');
+      setNotification(null);
+    }, 8000);
+  };
+
+  const handleReloadTerminal = async () => {
+    const laneId = activeLaneId();
+    if (!laneId) return;
+
+    const confirmed = await ask('Reload terminal? This will restart the terminal session.', {
+      title: 'Reload Terminal',
+      kind: 'warning',
+    });
+
+    if (confirmed) {
+      // Clear the PID for this lane
+      setTerminalPids((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(laneId);
+        return newMap;
+      });
+
+      // Remove from initialized lanes to unmount terminal
+      setInitializedLanes((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(laneId);
+        return newSet;
+      });
+
+      // Re-add after a short delay to remount with fresh terminal
+      setTimeout(() => {
+        setInitializedLanes((prev) => new Set(prev).add(laneId));
+      }, 100);
+    }
+  };
+
   return (
     <ThemeProvider>
       <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
@@ -222,12 +273,22 @@ function App() {
                   <div class="flex-1 flex flex-col overflow-hidden border-r border-zed-border-subtle">
                     <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
                       <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Terminal</h3>
-                      <div class="flex gap-2">
+                      <div class="flex items-center gap-2">
+                        {/* Process Monitor */}
+                        <ProcessMonitor laneId={activeLaneId()} />
+
+                        <div class="h-4 w-px bg-zed-border-default" />
+
+                        {/* Reload Button */}
                         <button
-                          class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover"
-                          title="Clear terminal"
+                          onClick={handleReloadTerminal}
+                          class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover flex items-center gap-1"
+                          title="Reload terminal with agent"
                         >
-                          Clear
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Reload
                         </button>
                       </div>
                     </div>
@@ -240,9 +301,21 @@ function App() {
                             style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
                           >
                             <TerminalView
+                              laneId={lane.id}
                               cwd={lane.workingDir}
-                              onTerminalReady={(pid) => console.log(`Terminal ready for ${lane.name}, PID:`, pid)}
-                              onTerminalExit={() => console.log(`Terminal exited for ${lane.name}`)}
+                              onTerminalReady={(pid) => {
+                                console.log(`Terminal ready for ${lane.name}, PID:`, pid);
+                                setTerminalPids((prev) => new Map(prev).set(lane.id, pid));
+                              }}
+                              onTerminalExit={() => {
+                                console.log(`Terminal exited for ${lane.name}`);
+                                setTerminalPids((prev) => {
+                                  const newMap = new Map(prev);
+                                  newMap.delete(lane.id);
+                                  return newMap;
+                                });
+                              }}
+                              onAgentFailed={handleAgentFailed}
                             />
                           </div>
                         )}
@@ -299,6 +372,46 @@ function App() {
           onOpenChange={setSettingsOpen}
           onSettingsSaved={handleSettingsSaved}
         />
+
+        {/* Notification Toast */}
+        <Show when={notification()}>
+          {(notif) => (
+            <div class="fixed top-4 right-4 z-50 max-w-md animate-slide-in">
+              <div
+                class={`rounded-lg shadow-lg border p-4 flex items-start gap-3 ${
+                  notif().type === 'error'
+                    ? 'bg-red-900/90 border-red-700 text-red-100'
+                    : notif().type === 'warning'
+                    ? 'bg-yellow-900/90 border-yellow-700 text-yellow-100'
+                    : 'bg-blue-900/90 border-blue-700 text-blue-100'
+                }`}
+              >
+                <div class="flex-shrink-0 mt-0.5">
+                  {notif().type === 'warning' ? (
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm font-medium">{notif().message}</p>
+                </div>
+                <button
+                  onClick={() => setNotification(null)}
+                  class="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </Show>
       </div>
     </ThemeProvider>
   );

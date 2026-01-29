@@ -4,6 +4,7 @@
 
 use codelane_core::config::{AgentConfig, AgentSettings};
 use std::sync::Mutex;
+use std::process::Command;
 use tauri::State;
 
 /// Global settings state
@@ -113,4 +114,33 @@ pub fn lane_update_agent_config(
     lane_state.save_lane(&lane_clone)?;
 
     Ok(lane_clone)
+}
+
+/// Check if a command exists and return its full path
+#[tauri::command]
+pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
+    // Try to find the command using 'which' on Unix or 'where' on Windows
+    #[cfg(unix)]
+    let output = Command::new("which")
+        .arg(&command)
+        .output()
+        .map_err(|e| format!("Failed to execute 'which': {}", e))?;
+
+    #[cfg(windows)]
+    let output = Command::new("where")
+        .arg(&command)
+        .output()
+        .map_err(|e| format!("Failed to execute 'where': {}", e))?;
+
+    if output.status.success() {
+        let path = String::from_utf8(output.stdout)
+            .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
+            .trim()
+            .lines()
+            .next() // Get first line (first match)
+            .map(|s| s.to_string());
+        Ok(path)
+    } else {
+        Ok(None)
+    }
 }

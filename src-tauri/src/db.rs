@@ -26,5 +26,5 @@ pub fn db_get_path() -> String {
     get_db_url()
 }
 
-/// Initialize database schema SQL
+/// Initialize database schema SQL (for reference)
 pub const INIT_SCHEMA: &str = include_str!("../migrations/001_initial_schema.sql");

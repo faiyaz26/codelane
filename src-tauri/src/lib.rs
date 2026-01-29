@@ -6,6 +6,7 @@
 pub mod lane;
 pub mod settings;
 pub mod db;
+pub mod process;
 mod git;
 mod fs;
 
@@ -48,6 +49,10 @@ pub fn run() {
             settings::settings_update_agents,
             settings::lane_get_agent_config,
             settings::lane_update_agent_config,
+            settings::check_command_exists,
+            // Process monitoring
+            process::get_process_stats,
+            process::find_process_by_lane,
             // Git commands
             git::git_status,
             git::git_diff,

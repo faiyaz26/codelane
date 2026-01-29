@@ -1,22 +1,46 @@
 /**
- * Settings API - Tauri command wrappers for agent settings
+ * Settings API - SQLite-based agent settings management
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { getDatabase } from './db';
 import type { AgentConfig, AgentSettings } from '../types/agent';
+import { getDefaultAgentSettings } from '../types/agent';
+import { getLane } from './lane-api';
+
+const AGENT_SETTINGS_KEY = 'agent_settings';
 
 /**
- * Get current agent settings
+ * Get current agent settings from database
  */
 export async function getAgentSettings(): Promise<AgentSettings> {
-  return await invoke<AgentSettings>('settings_get_agents');
+  const db = await getDatabase();
+
+  const rows = await db.select<Array<{ value: string }>>(
+    'SELECT value FROM settings WHERE key = ?',
+    [AGENT_SETTINGS_KEY]
+  );
+
+  if (rows.length === 0) {
+    // Return default settings if not found
+    return getDefaultAgentSettings();
+  }
+
+  return JSON.parse(rows[0].value);
 }
 
 /**
- * Update agent settings
+ * Update agent settings in database
  */
 export async function updateAgentSettings(settings: AgentSettings): Promise<void> {
-  await invoke('settings_update_agents', { settings });
+  const db = await getDatabase();
+  const now = Math.floor(Date.now() / 1000);
+
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [AGENT_SETTINGS_KEY, JSON.stringify(settings), now]
+  );
 }
 
 /**
@@ -24,16 +48,27 @@ export async function updateAgentSettings(settings: AgentSettings): Promise<void
  * Resolution: lane override -> global default
  */
 export async function getLaneAgentConfig(laneId: string): Promise<AgentConfig> {
-  return await invoke<AgentConfig>('lane_get_agent_config', { laneId });
+  const lane = await getLane(laneId);
+
+  // If lane has override, use it
+  if (lane.config.agentOverride) {
+    return lane.config.agentOverride;
+  }
+
+  // Otherwise use global default
+  const settings = await getAgentSettings();
+  return settings.defaultAgent;
 }
 
 /**
- * Update agent configuration for a specific lane
- * Pass null to use global default
+ * Check if a command exists in the system and return its full path
  */
-export async function updateLaneAgentConfig(
-  laneId: string,
-  agentConfig: AgentConfig | null
-): Promise<void> {
-  await invoke('lane_update_agent_config', { laneId, agentConfig });
+export async function checkCommandExists(command: string): Promise<string | null> {
+  try {
+    const result = await invoke<string | null>('check_command_exists', { command });
+    return result;
+  } catch (error) {
+    console.error('Failed to check command:', error);
+    return null;
+  }
 }

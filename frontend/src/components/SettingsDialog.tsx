@@ -16,6 +16,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal(false);
+  const [isAgentValid, setIsAgentValid] = createSignal(true);
 
   // Load settings when dialog opens
   createEffect(() => {
@@ -116,6 +117,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 value={settings()!.defaultAgent}
                 onChange={(config) => setSettings((s) => s ? { ...s, defaultAgent: config } : null)}
                 presets={settings()!.presets}
+                onValidationChange={setIsAgentValid}
               />
             </div>
 
@@ -146,6 +148,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               </div>
             </div>
 
+
             {/* Save Error Display */}
             <Show when={error()}>
               <div class="p-3 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30 text-sm text-zed-accent-red">
@@ -165,7 +168,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <Button
                 variant="primary"
                 onClick={handleSave}
-                disabled={isSaving()}
+                disabled={isSaving() || !isAgentValid()}
               >
                 {isSaving() ? 'Saving...' : 'Save Settings'}
               </Button>

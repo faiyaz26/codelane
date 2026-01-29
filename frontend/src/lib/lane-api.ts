@@ -19,18 +19,17 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     throw new Error('Working directory is required');
   }
 
-  // Insert lane
-  await db.execute(
-    `INSERT INTO lanes (id, name, working_dir, created_at, updated_at, last_accessed)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, params.name, params.workingDir, now, now, now]
-  );
+  // Default config as JSON
+  const defaultConfig = JSON.stringify({
+    env: [],
+    lspServers: [],
+  });
 
-  // Insert default config
+  // Insert lane with config
   await db.execute(
-    `INSERT INTO lane_configs (lane_id, agent_override, env, lsp_servers)
-     VALUES (?, NULL, '[]', '[]')`,
-    [id]
+    `INSERT INTO lanes (id, name, working_dir, config, created_at, updated_at, last_accessed)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, params.name, params.workingDir, defaultConfig, now, now, now]
   );
 
   // Return the created lane
@@ -57,32 +56,30 @@ export async function listLanes(): Promise<Lane[]> {
     id: string;
     name: string;
     working_dir: string;
+    config: string;
     created_at: number;
     updated_at: number;
-    agent_override: string | null;
-    env: string | null;
-    lsp_servers: string | null;
   }>>(
-    `SELECT
-      l.id, l.name, l.working_dir, l.created_at, l.updated_at,
-      lc.agent_override, lc.env, lc.lsp_servers
-     FROM lanes l
-     LEFT JOIN lane_configs lc ON l.id = lc.lane_id
-     ORDER BY l.updated_at DESC`
+    `SELECT id, name, working_dir, config, created_at, updated_at
+     FROM lanes
+     ORDER BY updated_at DESC`
   );
 
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    workingDir: row.working_dir,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    config: {
-      agentOverride: row.agent_override ? JSON.parse(row.agent_override) : undefined,
-      env: row.env ? JSON.parse(row.env) : [],
-      lspServers: row.lsp_servers ? JSON.parse(row.lsp_servers) : [],
-    },
-  }));
+  return rows.map(row => {
+    const config = JSON.parse(row.config || '{}');
+    return {
+      id: row.id,
+      name: row.name,
+      workingDir: row.working_dir,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      config: {
+        agentOverride: config.agentOverride,
+        env: config.env || [],
+        lspServers: config.lspServers || [],
+      },
+    };
+  });
 }
 
 /**
@@ -95,18 +92,13 @@ export async function getLane(laneId: string): Promise<Lane> {
     id: string;
     name: string;
     working_dir: string;
+    config: string;
     created_at: number;
     updated_at: number;
-    agent_override: string | null;
-    env: string | null;
-    lsp_servers: string | null;
   }>>(
-    `SELECT
-      l.id, l.name, l.working_dir, l.created_at, l.updated_at,
-      lc.agent_override, lc.env, lc.lsp_servers
-     FROM lanes l
-     LEFT JOIN lane_configs lc ON l.id = lc.lane_id
-     WHERE l.id = ?`,
+    `SELECT id, name, working_dir, config, created_at, updated_at
+     FROM lanes
+     WHERE id = ?`,
     [laneId]
   );
 
@@ -115,6 +107,7 @@ export async function getLane(laneId: string): Promise<Lane> {
   }
 
   const row = rows[0];
+  const config = JSON.parse(row.config || '{}');
   return {
     id: row.id,
     name: row.name,
@@ -122,9 +115,9 @@ export async function getLane(laneId: string): Promise<Lane> {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     config: {
-      agentOverride: row.agent_override ? JSON.parse(row.agent_override) : undefined,
-      env: row.env ? JSON.parse(row.env) : [],
-      lspServers: row.lsp_servers ? JSON.parse(row.lsp_servers) : [],
+      agentOverride: config.agentOverride,
+      env: config.env || [],
+      lspServers: config.lspServers || [],
     },
   };
 }
@@ -172,7 +165,6 @@ export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
 export async function deleteLane(laneId: string): Promise<void> {
   const db = await getDatabase();
 
-  // SQLite will automatically delete lane_configs due to CASCADE
   await db.execute('DELETE FROM lanes WHERE id = ?', [laneId]);
 }
 
