@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* XTerm.js styles */
+@import '@xterm/xterm/css/xterm.css';
+
 /* CSS Variables for theming */
 :root.dark {
   /* Backgrounds */
@@ -124,4 +127,36 @@
   .input {
     @apply px-3 py-2 bg-zed-bg-surface border border-zed-border-default rounded-md text-zed-text-primary placeholder:text-zed-text-tertiary focus:border-zed-accent-blue transition-colors;
   }
+}
+
+/* Terminal overrides */
+.xterm {
+  padding: 8px;
+  height: 100%;
+}
+
+.xterm .xterm-viewport {
+  overflow-y: auto;
+}
+
+.xterm .xterm-screen {
+  cursor: text;
+}
+
+/* Hide xterm scrollbar and use browser default */
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #0b93f6;
 }
