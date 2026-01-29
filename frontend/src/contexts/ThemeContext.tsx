@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal } from 'solid-js';
+import { createContext, useContext, createSignal, onMount } from 'solid-js';
 
 export type Theme = 'dark' | 'light';
 
@@ -31,12 +31,14 @@ export function ThemeProvider(props: ThemeProviderProps) {
   };
 
   // Load theme from localStorage on mount
-  const savedTheme = localStorage.getItem('codelane-theme') as Theme | null;
-  if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
-    applyTheme(savedTheme);
-  } else {
-    applyTheme('dark');
-  }
+  onMount(() => {
+    const savedTheme = localStorage.getItem('codelane-theme') as Theme | null;
+    if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
+      applyTheme(savedTheme);
+    } else {
+      applyTheme('dark');
+    }
+  });
 
   const value: ThemeContextType = {
     theme,
