@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show, For } from 'solid-js';
+import { createSignal, onMount, Show, For, createMemo } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -9,12 +9,14 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { TerminalView } from './components/TerminalView';
 import { GitStatus } from './components/GitStatus';
 import { ProcessMonitor } from './components/ProcessMonitor';
-import { listLanes, deleteLane } from './lib/lane-api';
-import { getActiveLaneId, setActiveLaneId } from './lib/storage';
+import { BottomPanel } from './components/BottomPanel';
+import { listLanes, deleteLane, updateLaneConfig } from './lib/lane-api';
+import { getActiveLaneId, setActiveLaneId, getPanelState, setPanelState } from './lib/storage';
 import { getAgentSettings } from './lib/settings-api';
 import { initDatabase } from './lib/db';
-import type { Lane } from './types/lane';
+import type { Lane, Tab } from './types/lane';
 import type { AgentSettings } from './types/agent';
+import { v4 as uuidv4 } from 'uuid';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
@@ -95,8 +97,8 @@ function App() {
     const lane = lanes().find(l => l.id === laneId);
     const laneName = lane?.name || 'this lane';
 
-    const confirmed = await ask(`Are you sure you want to delete "${laneName}"?`, {
-      title: 'Delete Lane',
+    const confirmed = await ask(`Are you sure you want to close "${laneName}"?`, {
+      title: 'Close Lane',
       kind: 'warning',
     });
 
@@ -128,7 +130,14 @@ function App() {
   };
 
 
-  const activeLane = () => lanes().find((l) => l.id === activeLaneId());
+  const activeLane = createMemo(() => {
+    return lanes().find((l) => l.id === activeLaneId());
+  });
+
+  // Memoize initialized lanes to prevent recreation
+  const initializedLanesList = createMemo(() => {
+    return lanes().filter(lane => initializedLanes().has(lane.id));
+  });
 
   const handleSettingsSaved = (settings: AgentSettings) => {
     setAgentSettings(settings);
@@ -179,6 +188,86 @@ function App() {
       }, 100);
     }
   };
+
+
+  const updateLaneInState = (laneId: string, updatedConfig: Lane['config']) => {
+    setLanes((prev) =>
+      prev.map((l) =>
+        l.id === laneId ? { ...l, config: updatedConfig, updatedAt: Math.floor(Date.now() / 1000) } : l
+      )
+    );
+  };
+
+  const handleTabCreate = async () => {
+    const lane = activeLane();
+    if (!lane) return;
+
+    const tabs = lane.config?.tabs || [];
+    const newTab: Tab = {
+      id: uuidv4(),
+      type: 'terminal',
+      title: `Terminal ${tabs.length + 1}`,
+      sortOrder: tabs.length,
+      createdAt: Math.floor(Date.now() / 1000),
+    };
+
+    const updatedConfig = {
+      ...lane.config,
+      tabs: [...tabs, newTab],
+      activeTabId: newTab.id,
+    };
+
+    updateLaneInState(lane.id, updatedConfig);
+    await updateLaneConfig(lane.id, updatedConfig);
+  };
+
+  const handleTabClose = async (tabId: string) => {
+    const lane = activeLane();
+    if (!lane || !lane.config?.tabs) return;
+
+    const tabs = lane.config.tabs.filter(t => t.id !== tabId);
+
+    // If closing the last tab, collapse the panel
+    if (tabs.length === 0) {
+      const updatedConfig = {
+        ...lane.config,
+        tabs: [],
+        activeTabId: undefined,
+      };
+      updateLaneInState(lane.id, updatedConfig);
+      await updateLaneConfig(lane.id, updatedConfig);
+
+      // Collapse the panel
+      setPanelState(lane.id, {
+        ...getPanelState(lane.id),
+        collapsed: true,
+      });
+      return;
+    }
+
+    const updatedConfig = {
+      ...lane.config,
+      tabs,
+      activeTabId: lane.config.activeTabId === tabId ? tabs[0].id : lane.config.activeTabId,
+    };
+
+    updateLaneInState(lane.id, updatedConfig);
+    await updateLaneConfig(lane.id, updatedConfig);
+  };
+
+  const handleTabSelect = async (tabId: string) => {
+    const lane = activeLane();
+    if (!lane) return;
+
+    const updatedConfig = {
+      ...lane.config,
+      activeTabId: tabId,
+    };
+
+    updateLaneInState(lane.id, updatedConfig);
+    await updateLaneConfig(lane.id, updatedConfig);
+  };
+
 
   const handleTitleBarDoubleClick = async () => {
     const window = getCurrentWindow();
@@ -285,75 +374,103 @@ function App() {
                   <p class="text-zed-text-tertiary text-xs mt-1">{activeLane()?.workingDir}</p>
                 </div>
 
-                {/* Main Content Area: Terminal + Git Status */}
-                <div class="flex-1 flex overflow-hidden">
-                  {/* Terminal Section */}
-                  <div class="flex-1 flex flex-col overflow-hidden border-r border-zed-border-subtle">
-                    <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
-                      <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
-                      <div class="flex items-center gap-2">
-                        {/* Process Monitor */}
-                        <ProcessMonitor laneId={activeLaneId()} />
+                {/* Main Content Area with Agent Terminal and Git Status */}
+                <div class="flex-1 flex flex-col overflow-hidden">
+                  <div class="flex-1 flex overflow-hidden">
+                    {/* Agent Terminal Section */}
+                    <div class="flex-1 flex flex-col overflow-hidden border-r border-zed-border-subtle">
+                      <div class="border-b border-zed-border-subtle bg-zed-bg-panel px-4 py-2 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
+                        <div class="flex items-center gap-2">
+                          {/* Process Monitor */}
+                          <ProcessMonitor laneId={activeLaneId()} />
 
-                        <div class="h-4 w-px bg-zed-border-default" />
+                          <div class="h-4 w-px bg-zed-border-default" />
 
-                        {/* Reload Button */}
-                        <button
-                          onClick={handleReloadTerminal}
-                          class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover flex items-center gap-1"
-                          title="Reload terminal with agent"
-                        >
-                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Reload
-                        </button>
+                          {/* Reload Button */}
+                          <button
+                            onClick={handleReloadTerminal}
+                            class="text-xs text-zed-text-tertiary hover:text-zed-text-primary transition-colors px-2 py-1 rounded hover:bg-zed-bg-hover flex items-center gap-1"
+                            title="Reload terminal with agent"
+                          >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Reload
+                          </button>
+                        </div>
+                      </div>
+                      <div class="flex-1 overflow-hidden">
+                        {/* Render agent terminal for each lane (only active one visible) */}
+                        <For each={Array.from(initializedLanes())}>
+                          {(laneId) => {
+                            const lane = lanes().find(l => l.id === laneId);
+                            if (!lane) return null;
+                            return (
+                              <div
+                                class="h-full"
+                                style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
+                              >
+                                <TerminalView
+                                  laneId={lane.id}
+                                  cwd={lane.workingDir}
+                                  onTerminalReady={(pid) => {
+                                    console.log(`Terminal ready for ${lane.name}, PID:`, pid);
+                                    setTerminalPids((prev) => new Map(prev).set(lane.id, pid));
+                                  }}
+                                  onTerminalExit={() => {
+                                    console.log(`Terminal exited for ${lane.name}`);
+                                    setTerminalPids((prev) => {
+                                      const newMap = new Map(prev);
+                                      newMap.delete(lane.id);
+                                      return newMap;
+                                    });
+                                  }}
+                                  onAgentFailed={handleAgentFailed}
+                                />
+                              </div>
+                            );
+                          }}
+                        </For>
                       </div>
                     </div>
-                    <div class="flex-1 overflow-hidden">
-                      {/* Render terminals only for lanes that have been activated */}
-                      <For each={lanes().filter(lane => initializedLanes().has(lane.id))}>
-                        {(lane) => (
-                          <div
-                            class="h-full"
-                            style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
-                          >
-                            <TerminalView
-                              laneId={lane.id}
-                              cwd={lane.workingDir}
-                              onTerminalReady={(pid) => {
-                                console.log(`Terminal ready for ${lane.name}, PID:`, pid);
-                                setTerminalPids((prev) => new Map(prev).set(lane.id, pid));
-                              }}
-                              onTerminalExit={() => {
-                                console.log(`Terminal exited for ${lane.name}`);
-                                setTerminalPids((prev) => {
-                                  const newMap = new Map(prev);
-                                  newMap.delete(lane.id);
-                                  return newMap;
-                                });
-                              }}
-                              onAgentFailed={handleAgentFailed}
-                            />
-                          </div>
-                        )}
+
+                    {/* Git Status Panel */}
+                    <div class="w-80 flex flex-col overflow-hidden">
+                      <For each={Array.from(initializedLanes())}>
+                        {(laneId) => {
+                          const lane = lanes().find(l => l.id === laneId);
+                          if (!lane) return null;
+                          return (
+                            <div
+                              class="h-full"
+                              style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
+                            >
+                              <GitStatus workingDir={lane.workingDir} />
+                            </div>
+                          );
+                        }}
                       </For>
                     </div>
                   </div>
 
-                  {/* Git Status Panel */}
-                  <div class="w-80 flex flex-col overflow-hidden">
-                    <For each={lanes().filter(lane => initializedLanes().has(lane.id))}>
-                      {(lane) => (
-                        <div
-                          class="h-full"
-                          style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
-                        >
-                          <GitStatus workingDir={lane.workingDir} />
-                        </div>
-                      )}
-                    </For>
-                  </div>
+                  {/* Bottom Panel with Plain Shell Tabs - One per lane */}
+                  <For each={lanes()}>
+                    {(lane) => (
+                      <Show when={lane.id === activeLaneId()}>
+                        <BottomPanel
+                          laneId={lane.id}
+                          workingDir={lane.workingDir}
+                          tabs={lane.config?.tabs || []}
+                          activeTabId={lane.config?.activeTabId}
+                          onTabCreate={handleTabCreate}
+                          onTabClose={handleTabClose}
+                          onTabSelect={handleTabSelect}
+                          onAgentFailed={handleAgentFailed}
+                        />
+                      </Show>
+                    )}
+                  </For>
                 </div>
               </Show>
             </div>

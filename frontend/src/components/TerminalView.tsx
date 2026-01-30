@@ -11,6 +11,7 @@ import '@xterm/xterm/css/xterm.css';
 interface TerminalViewProps {
   laneId: string;
   cwd?: string;
+  useAgent?: boolean; // If false, use plain shell instead of agent
   onTerminalReady?: (pid: number) => void;
   onTerminalExit?: () => void;
   onAgentFailed?: (agentType: string, command: string) => void;
@@ -85,24 +86,26 @@ export function TerminalView(props: TerminalViewProps) {
     terminal.focus();
 
     try {
-      // Load agent config for this lane
-      let agentConfig = await getLaneAgentConfig(props.laneId);
-
-      console.log('Agent config:', JSON.stringify(agentConfig, null, 2));
-
-      // Merge agent env with terminal env and add unique identifier
-      const env = {
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        CODELANE_LANE_ID: props.laneId,
-        CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
-        ...agentConfig.env,
-      };
-
       let spawnSuccess = false;
+      const useAgent = props.useAgent !== false; // Default to true
 
-      // Try to spawn the configured agent
-      if (agentConfig.agentType !== 'shell') {
+      // Load agent config only if useAgent is true
+      if (useAgent) {
+        let agentConfig = await getLaneAgentConfig(props.laneId);
+
+        console.log('Agent config:', JSON.stringify(agentConfig, null, 2));
+
+        // Merge agent env with terminal env and add unique identifier
+        const env = {
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor',
+          CODELANE_LANE_ID: props.laneId,
+          CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
+          ...agentConfig.env,
+        };
+
+        // Try to spawn the configured agent
+        if (agentConfig.agentType !== 'shell') {
         console.log('Checking if agent exists:', agentConfig.command);
 
         // Check if command exists before trying to spawn
@@ -134,9 +137,10 @@ export function TerminalView(props: TerminalViewProps) {
           // Notify parent that agent is not installed
           props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
         }
+        }
       }
 
-      // Fallback to shell if agent failed or agent type is shell
+      // Fallback to shell if agent failed, agent type is shell, or useAgent is false
       if (!spawnSuccess) {
         // Use zsh as default shell (will use user's default shell via -l flag)
         const fallbackShell = 'zsh';
@@ -206,9 +210,19 @@ export function TerminalView(props: TerminalViewProps) {
         }
       }, 100);
 
+      // Listen for custom terminal resize events
+      const handleTerminalResize = () => {
+        if (fitAddon && terminal && pty) {
+          fitAddon.fit();
+          pty.resize(terminal.cols, terminal.rows);
+        }
+      };
+      window.addEventListener('terminal-resize', handleTerminalResize);
+
       // Cleanup
       onCleanup(() => {
         resizeObserver.disconnect();
+        window.removeEventListener('terminal-resize', handleTerminalResize);
       });
     } catch (error) {
       console.error('Failed to create PTY:', error);

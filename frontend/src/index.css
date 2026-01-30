@@ -1,9 +1,9 @@
+/* XTerm.js styles - must be first */
+@import '@xterm/xterm/css/xterm.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* XTerm.js styles */
-@import '@xterm/xterm/css/xterm.css';
 
 /* CSS Variables for theming */
 :root.dark {

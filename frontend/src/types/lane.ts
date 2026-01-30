@@ -1,12 +1,30 @@
 import { AgentConfig } from './agent';
 
 /**
+ * Tab type - what kind of content the tab displays
+ */
+export type TabType = 'terminal' | 'extension';
+
+/**
+ * Tab configuration
+ */
+export interface Tab {
+  id: string;
+  type: TabType;
+  title: string;
+  sortOrder: number;
+  createdAt: number;
+}
+
+/**
  * Lane configuration
  */
 export interface LaneConfig {
   agentOverride?: AgentConfig;
   env?: [string, string][];
   lspServers?: string[];
+  tabs?: Tab[];
+  activeTabId?: string;
 }
 
 /**

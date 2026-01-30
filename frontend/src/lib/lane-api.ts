@@ -195,3 +195,16 @@ export async function updateLaneOrder(laneIds: string[]): Promise<void> {
     );
   }
 }
+
+/**
+ * Update lane configuration
+ */
+export async function updateLaneConfig(laneId: string, config: Lane['config']): Promise<void> {
+  const db = await getDatabase();
+  const now = Math.floor(Date.now() / 1000);
+
+  await db.execute(
+    'UPDATE lanes SET config = ?, updated_at = ? WHERE id = ?',
+    [JSON.stringify(config), now, laneId]
+  );
+}
