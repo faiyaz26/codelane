@@ -197,7 +197,8 @@ export function TerminalView(props: TerminalViewProps) {
           if (fitAddon && terminal && pty) {
             fitAddon.fit();
             pty.resize(terminal.cols, terminal.rows);
-            terminal.scrollToBottom();
+            // Scroll to bottom after a brief delay to ensure terminal has updated
+            setTimeout(() => terminal.scrollToBottom(), 50);
           }
         }, 10) as unknown as number;
       });
@@ -211,7 +212,8 @@ export function TerminalView(props: TerminalViewProps) {
         if (fitAddon && terminal && pty) {
           fitAddon.fit();
           pty.resize(terminal.cols, terminal.rows);
-          terminal.scrollToBottom();
+          // Scroll to bottom after a brief delay to ensure terminal has updated
+          setTimeout(() => terminal.scrollToBottom(), 50);
         }
       }, 100);
 
@@ -220,7 +222,8 @@ export function TerminalView(props: TerminalViewProps) {
         if (fitAddon && terminal && pty) {
           fitAddon.fit();
           pty.resize(terminal.cols, terminal.rows);
-          terminal.scrollToBottom();
+          // Scroll to bottom after a brief delay to ensure terminal has updated
+          setTimeout(() => terminal.scrollToBottom(), 50);
         }
       };
       window.addEventListener('terminal-resize', handleTerminalResize);
