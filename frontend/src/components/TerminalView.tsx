@@ -157,58 +157,17 @@ export function TerminalView(props: TerminalViewProps) {
         console.log('Shell spawned with PID:', pty.pid);
       }
 
-      // Local echo experiment - track what we've echoed locally
-      let localEchoBuffer = '';
-      let echoTimeout: number | undefined;
-
-      // Bidirectional data flow with local echo
+      // Bidirectional data flow
       pty.onData((data) => {
-        if (!terminal) return;
-
-        // Check if this is echoing back what we typed
-        if (localEchoBuffer.length > 0) {
-          // Simple check: if PTY data starts with our buffer, it's the echo
-          if (data.startsWith(localEchoBuffer)) {
-            // Skip the echoed part, only show the rest
-            const remaining = data.slice(localEchoBuffer.length);
-            localEchoBuffer = '';
-            if (echoTimeout) clearTimeout(echoTimeout);
-
-            if (remaining) {
-              terminal.write(remaining);
-            }
-            return;
-          } else {
-            // Different data (maybe password prompt or control chars)
-            // Clear buffer and show everything
-            localEchoBuffer = '';
-            if (echoTimeout) clearTimeout(echoTimeout);
-          }
+        if (terminal) {
+          terminal.write(data);
         }
-
-        terminal.write(data);
       });
 
       terminal.onData((data) => {
-        if (!pty) return;
-
-        // Check if this is a printable character (not control char)
-        const isPrintable = data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) < 127;
-
-        if (isPrintable) {
-          // Local echo immediately for better responsiveness
-          terminal.write(data);
-          localEchoBuffer += data;
-
-          // Clear buffer after 200ms if no echo comes back (e.g., password input)
-          if (echoTimeout) clearTimeout(echoTimeout);
-          echoTimeout = setTimeout(() => {
-            localEchoBuffer = '';
-          }, 200) as unknown as number;
+        if (pty) {
+          pty.write(data);
         }
-
-        // Always send to PTY
-        pty.write(data);
       });
 
       // Handle PTY exit
