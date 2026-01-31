@@ -9,14 +9,14 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { TerminalView } from './components/TerminalView';
 import { GitStatus } from './components/GitStatus';
 import { ProcessMonitor } from './components/ProcessMonitor';
-import { BottomPanel } from './components/BottomPanel';
-import { listLanes, deleteLane, updateLaneConfig } from './lib/lane-api';
-import { getActiveLaneId, setActiveLaneId, getPanelState, setPanelState } from './lib/storage';
+import { TabPanel } from './components/tabs/TabPanel';
+import { listLanes, deleteLane } from './lib/lane-api';
+import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings } from './lib/settings-api';
 import { initDatabase } from './lib/db';
-import type { Lane, Tab } from './types/lane';
+import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
-import { v4 as uuidv4 } from 'uuid';
+import { tabManager } from './services/TabManager';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
@@ -54,11 +54,18 @@ function App() {
       // Settings will use defaults if this fails
     }
 
-    await loadLanes();
-    // Restore active lane from localStorage
+    // Restore active lane from localStorage first
     const savedActiveLaneId = getActiveLaneId();
     if (savedActiveLaneId) {
       setActiveLaneIdSignal(savedActiveLaneId);
+    }
+
+    // Load lanes (this will initialize the active lane if needed)
+    await loadLanes();
+
+    // If we had a saved active lane, ensure it's initialized
+    if (savedActiveLaneId) {
+      await handleLaneSelect(savedActiveLaneId);
     }
   });
 
@@ -71,7 +78,7 @@ function App() {
 
       // If no active lane is set but lanes exist, set the first one as active
       if (!activeLaneId() && laneList.length > 0) {
-        handleLaneSelect(laneList[0].id);
+        await handleLaneSelect(laneList[0].id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load lanes');
@@ -86,10 +93,18 @@ function App() {
     handleLaneSelect(lane.id);
   };
 
-  const handleLaneSelect = (laneId: string) => {
+  const handleLaneSelect = async (laneId: string) => {
     setActiveLaneIdSignal(laneId);
     setActiveLaneId(laneId);
-    // Mark this lane as initialized so its terminal gets created
+
+    // Initialize TabManager FIRST (before marking as initialized)
+    try {
+      await tabManager.initializeLane(laneId);
+    } catch (err) {
+      console.error('[App] Failed to initialize TabManager for lane:', laneId, err);
+    }
+
+    // THEN mark this lane as initialized so its components render
     setInitializedLanes((prev) => new Set(prev).add(laneId));
   };
 
@@ -110,11 +125,14 @@ function App() {
       await deleteLane(laneId);
       setLanes((prev) => prev.filter((l) => l.id !== laneId));
 
+      // Dispose TabManager for this lane
+      tabManager.disposeLane(laneId);
+
       // If the deleted lane was active, clear active lane
       if (activeLaneId() === laneId) {
         const remaining = lanes().filter((l) => l.id !== laneId);
         if (remaining.length > 0) {
-          handleLaneSelect(remaining[0].id);
+          await handleLaneSelect(remaining[0].id);
         } else {
           setActiveLaneIdSignal(null);
           setActiveLaneId(null);
@@ -190,83 +208,6 @@ function App() {
   };
 
 
-  const updateLaneInState = (laneId: string, updatedConfig: Lane['config']) => {
-    setLanes((prev) =>
-      prev.map((l) =>
-        l.id === laneId ? { ...l, config: updatedConfig, updatedAt: Math.floor(Date.now() / 1000) } : l
-      )
-    );
-  };
-
-  const handleTabCreate = async () => {
-    const lane = activeLane();
-    if (!lane) return;
-
-    const tabs = lane.config?.tabs || [];
-    const newTab: Tab = {
-      id: uuidv4(),
-      type: 'terminal',
-      title: `Terminal ${tabs.length + 1}`,
-      sortOrder: tabs.length,
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-
-    const updatedConfig = {
-      ...lane.config,
-      tabs: [...tabs, newTab],
-      activeTabId: newTab.id,
-    };
-
-    updateLaneInState(lane.id, updatedConfig);
-    await updateLaneConfig(lane.id, updatedConfig);
-  };
-
-  const handleTabClose = async (tabId: string) => {
-    const lane = activeLane();
-    if (!lane || !lane.config?.tabs) return;
-
-    const tabs = lane.config.tabs.filter(t => t.id !== tabId);
-
-    // If closing the last tab, collapse the panel
-    if (tabs.length === 0) {
-      const updatedConfig = {
-        ...lane.config,
-        tabs: [],
-        activeTabId: undefined,
-      };
-      updateLaneInState(lane.id, updatedConfig);
-      await updateLaneConfig(lane.id, updatedConfig);
-
-      // Collapse the panel
-      setPanelState(lane.id, {
-        ...getPanelState(lane.id),
-        collapsed: true,
-      });
-      return;
-    }
-
-    const updatedConfig = {
-      ...lane.config,
-      tabs,
-      activeTabId: lane.config.activeTabId === tabId ? tabs[0].id : lane.config.activeTabId,
-    };
-
-    updateLaneInState(lane.id, updatedConfig);
-    await updateLaneConfig(lane.id, updatedConfig);
-  };
-
-  const handleTabSelect = async (tabId: string) => {
-    const lane = activeLane();
-    if (!lane) return;
-
-    const updatedConfig = {
-      ...lane.config,
-      activeTabId: tabId,
-    };
-
-    updateLaneInState(lane.id, updatedConfig);
-    await updateLaneConfig(lane.id, updatedConfig);
-  };
 
 
   const handleTitleBarDoubleClick = async () => {
@@ -455,21 +396,20 @@ function App() {
                   </div>
 
                   {/* Bottom Panel with Plain Shell Tabs - One per lane */}
-                  <For each={lanes()}>
-                    {(lane) => (
-                      <Show when={lane.id === activeLaneId()}>
-                        <BottomPanel
-                          laneId={lane.id}
-                          workingDir={lane.workingDir}
-                          tabs={lane.config?.tabs || []}
-                          activeTabId={lane.config?.activeTabId}
-                          onTabCreate={handleTabCreate}
-                          onTabClose={handleTabClose}
-                          onTabSelect={handleTabSelect}
-                          onAgentFailed={handleAgentFailed}
-                        />
-                      </Show>
-                    )}
+                  <For each={Array.from(initializedLanes())}>
+                    {(laneId) => {
+                      const lane = createMemo(() => lanes().find((l) => l.id === laneId));
+
+                      return (
+                        <Show when={lane()}>
+                          {(l) => (
+                            <Show when={l().id === activeLaneId()}>
+                              <TabPanel laneId={l().id} workingDir={l().workingDir} />
+                            </Show>
+                          )}
+                        </Show>
+                      );
+                    }}
                   </For>
                 </div>
               </Show>

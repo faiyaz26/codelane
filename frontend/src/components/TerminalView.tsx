@@ -18,12 +18,15 @@ interface TerminalViewProps {
 }
 
 export function TerminalView(props: TerminalViewProps) {
+  console.log('[TerminalView] Created with laneId:', props.laneId);
+
   let containerRef: HTMLDivElement | undefined;
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
   let pty: Pty | undefined;
 
   onMount(async () => {
+    console.log('[TerminalView] Mounting laneId:', props.laneId);
     if (!containerRef) return;
 
     // Create xterm.js instance with Zed theme
@@ -234,6 +237,7 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Cleanup on unmount
   onCleanup(async () => {
+    console.log('[TerminalView] Cleanup for laneId:', props.laneId);
     if (pty) {
       try {
         await pty.kill();

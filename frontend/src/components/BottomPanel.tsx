@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, onCleanup, createMemo, createEffect } from 'solid-js';
+import { createSignal, Show, For, Index, onMount, onCleanup, createMemo, createEffect } from 'solid-js';
 import type { Tab } from '../types/lane';
 import { TerminalView } from './TerminalView';
 import { getPanelState, setPanelState } from '../lib/storage';
@@ -15,6 +15,8 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel(props: BottomPanelProps) {
+  console.log('[BottomPanel] Created for lane:', props.laneId);
+
   // Load initial state from localStorage
   const initialState = getPanelState(props.laneId);
   const [collapsed, setCollapsed] = createSignal(initialState.collapsed);
@@ -33,30 +35,55 @@ export function BottomPanel(props: BottomPanelProps) {
     });
   });
 
-  // Trigger terminal resize when expanding and create tab if none exist
+  // Log collapsed state changes
+  createEffect(() => {
+    console.log('[BottomPanel] Collapsed state changed to:', collapsed());
+  });
+
+  // Log tabs prop changes
+  createEffect(() => {
+    console.log('[BottomPanel] Tabs prop changed:', props.tabs.length, props.tabs);
+  });
+
+  // Create tab if none exist when expanding
   createEffect((prev) => {
     const isCollapsed = collapsed();
     // If we just expanded (was collapsed, now not)
     if (prev === true && isCollapsed === false) {
       // If there are no tabs, create one
-      if (tabs().length === 0) {
+      if (props.tabs.length === 0) {
+        console.log('[BottomPanel] Creating tab on expand');
         props.onTabCreate();
       }
-
-      // Use requestAnimationFrame to ensure DOM has updated
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent('terminal-resize'));
-        // Also dispatch regular resize as backup
-        window.dispatchEvent(new Event('resize'));
-      });
+      // ResizeObserver in TerminalView will handle resize automatically
     }
     return isCollapsed;
   });
 
-  // Memoize tabs to prevent recreation on every prop change
-  const tabs = createMemo(() => props.tabs, [], (a, b) => {
-    if (a.length !== b.length) return false;
-    return a.every((tab, i) => tab.id === b[i]?.id);
+  // Auto-collapse when all tabs are closed (but not during expansion)
+  createEffect((prev) => {
+    const tabCount = props.tabs.length;
+    const wasCollapsed = prev?.collapsed ?? false;
+    const currentCollapsed = collapsed();
+
+    // Only auto-collapse if we had tabs before and now we don't
+    // Don't auto-collapse if we're currently expanding from a collapsed state
+    if (tabCount === 0 && !currentCollapsed && prev && prev.tabCount > 0) {
+      console.log('[BottomPanel] Auto-collapsing due to no tabs');
+      setCollapsed(true);
+    }
+
+    return { tabCount, collapsed: currentCollapsed };
+  });
+
+  // Create stable tab IDs array - only update if IDs actually change
+  const tabIds = createMemo((prev = []) => {
+    const current = props.tabs.map(t => t.id);
+    // If IDs are the same, return previous array reference to prevent For loop updates
+    if (prev.length === current.length && prev.every((id, i) => id === current[i])) {
+      return prev;
+    }
+    return current;
   });
 
   const handleMouseDown = (e: MouseEvent) => {
@@ -66,7 +93,11 @@ export function BottomPanel(props: BottomPanelProps) {
   };
 
   const handleToggleCollapse = () => {
-    setCollapsed((prev) => !prev);
+    console.log('[BottomPanel] handleToggleCollapse called, current collapsed:', collapsed());
+    setCollapsed((prev) => {
+      console.log('[BottomPanel] Setting collapsed from', prev, 'to', !prev);
+      return !prev;
+    });
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -82,11 +113,13 @@ export function BottomPanel(props: BottomPanelProps) {
   };
 
   onMount(() => {
+    console.log('[BottomPanel] Mounted for lane:', props.laneId);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   });
 
   onCleanup(() => {
+    console.log('[BottomPanel] Cleanup for lane:', props.laneId);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   });
@@ -132,7 +165,7 @@ export function BottomPanel(props: BottomPanelProps) {
         {/* Tabs */}
         <Show when={!collapsed()}>
           <div class="flex-1 flex items-center gap-1 overflow-x-auto">
-            <For each={tabs()}>
+            <For each={props.tabs}>
               {(tab) => (
                 <div
                   class={`group flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors cursor-pointer ${
@@ -178,25 +211,34 @@ export function BottomPanel(props: BottomPanelProps) {
 
       {/* Tab Content - Always mounted, hidden when collapsed */}
       <div
-        class="flex-1 overflow-hidden"
-        style={{ display: collapsed() ? 'none' : 'block' }}
+        class="flex-1 overflow-hidden relative"
+        style={{
+          height: collapsed() ? '0' : 'auto',
+          visibility: collapsed() ? 'hidden' : 'visible'
+        }}
       >
-        <For each={tabs()}>
-          {(tab) => (
-            <div
-              class="h-full"
-              style={{ display: props.activeTabId === tab.id ? 'block' : 'none' }}
-            >
-              <Show when={tab.type === 'terminal'}>
+        <For each={tabIds()}>
+          {(tabId) => {
+            const isActive = () => props.activeTabId === tabId;
+
+            return (
+              <div
+                class="absolute inset-0"
+                style={{
+                  'z-index': isActive() ? '10' : '0',
+                  opacity: isActive() ? '1' : '0',
+                  'pointer-events': isActive() ? 'auto' : 'none'
+                }}
+              >
                 <TerminalView
-                  laneId={`${props.laneId}-tab-${tab.id}`}
+                  laneId={`${props.laneId}-tab-${tabId}`}
                   cwd={props.workingDir}
                   useAgent={false}
                   onAgentFailed={props.onAgentFailed}
                 />
-              </Show>
-            </div>
-          )}
+              </div>
+            );
+          }}
         </For>
       </div>
     </div>
