@@ -1,7 +1,6 @@
 import { createEffect, onCleanup, onMount } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { spawn, type Pty } from 'tauri-pty';
 import { ZED_THEME } from '../theme';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
@@ -77,17 +76,6 @@ export function TerminalView(props: TerminalViewProps) {
 
     // Open terminal in the container
     terminal.open(containerRef);
-
-    // Add WebGL renderer for better performance
-    try {
-      const webglAddon = new WebglAddon();
-      terminal.loadAddon(webglAddon);
-      webglAddon.onContextLoss(() => {
-        webglAddon.dispose();
-      });
-    } catch (e) {
-      console.warn('WebGL renderer not available, using canvas fallback');
-    }
 
     // Fit terminal to container
     fitAddon.fit();
