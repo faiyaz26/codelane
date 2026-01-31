@@ -30,7 +30,7 @@ export function TerminalView(props: TerminalViewProps) {
 
     // Create xterm.js instance with Zed theme
     terminal = new Terminal({
-      cursorBlink: true,
+      cursorBlink: false,
       cursorStyle: 'block',
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,

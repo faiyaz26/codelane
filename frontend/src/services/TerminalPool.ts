@@ -129,7 +129,7 @@ class TerminalPool {
   private async createTerminal(config: TerminalConfig): Promise<TerminalHandle> {
     // Create xterm.js instance
     const terminal = new Terminal({
-      cursorBlink: true,
+      cursorBlink: false,
       cursorStyle: 'block',
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
