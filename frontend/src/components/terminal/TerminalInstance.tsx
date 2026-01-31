@@ -5,6 +5,7 @@
  */
 
 import { onMount, onCleanup, createEffect } from 'solid-js';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { ZED_THEME } from '../../theme';
 import type { TerminalHandle } from '../../types/terminal';
 
@@ -23,6 +24,17 @@ export function TerminalInstance(props: TerminalInstanceProps) {
 
     // Open terminal in container
     terminal.open(containerRef);
+
+    // Add WebGL renderer for better performance
+    try {
+      const webglAddon = new WebglAddon();
+      terminal.loadAddon(webglAddon);
+      webglAddon.onContextLoss(() => {
+        webglAddon.dispose();
+      });
+    } catch (e) {
+      console.warn('WebGL renderer not available, using canvas fallback');
+    }
 
     // Fit terminal to container
     fitAddon.fit();
