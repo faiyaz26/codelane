@@ -66,9 +66,10 @@ export function TerminalView(props: TerminalViewProps) {
         brightCyan: ZED_THEME.terminal.brightCyan,
         brightWhite: ZED_THEME.terminal.brightWhite,
       },
-      scrollback: 10000,
+      scrollback: 5000,
       convertEol: false,
       windowsMode: false,
+      fastScrollModifier: 'shift',
     });
 
     // Add FitAddon for auto-sizing
@@ -187,7 +188,7 @@ export function TerminalView(props: TerminalViewProps) {
       // Call ready callback with actual PID
       props.onTerminalReady?.(pty.pid);
 
-      // Handle resize events with debouncing to prevent ResizeObserver warnings
+      // Handle resize events with debouncing
       let resizeTimeout: number | undefined;
       const resizeObserver = new ResizeObserver(() => {
         if (resizeTimeout) {
@@ -197,10 +198,8 @@ export function TerminalView(props: TerminalViewProps) {
           if (fitAddon && terminal && pty) {
             fitAddon.fit();
             pty.resize(terminal.cols, terminal.rows);
-            // Scroll to bottom after a brief delay to ensure terminal has updated
-            setTimeout(() => terminal.scrollToBottom(), 50);
           }
-        }, 10) as unknown as number;
+        }, 100) as unknown as number;
       });
 
       if (containerRef) {
@@ -222,8 +221,6 @@ export function TerminalView(props: TerminalViewProps) {
         if (fitAddon && terminal && pty) {
           fitAddon.fit();
           pty.resize(terminal.cols, terminal.rows);
-          // Scroll to bottom after a brief delay to ensure terminal has updated
-          setTimeout(() => terminal.scrollToBottom(), 50);
         }
       };
       window.addEventListener('terminal-resize', handleTerminalResize);

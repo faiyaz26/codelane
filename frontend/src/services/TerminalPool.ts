@@ -165,9 +165,10 @@ class TerminalPool {
         brightCyan: ZED_THEME.terminal.brightCyan,
         brightWhite: ZED_THEME.terminal.brightWhite,
       },
-      scrollback: 10000,
+      scrollback: 5000,
       convertEol: false,
       windowsMode: false,
+      fastScrollModifier: 'shift',
     });
 
     // Add FitAddon
