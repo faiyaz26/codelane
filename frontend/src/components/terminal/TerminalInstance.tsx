@@ -34,6 +34,7 @@ export function TerminalInstance(props: TerminalInstanceProps) {
     setTimeout(() => {
       fitAddon.fit();
       pty.resize(terminal.cols, terminal.rows);
+      terminal.scrollToBottom();
     }, 100);
 
     // Handle resize events with debouncing
@@ -45,6 +46,7 @@ export function TerminalInstance(props: TerminalInstanceProps) {
       resizeTimeout = setTimeout(() => {
         fitAddon.fit();
         pty.resize(terminal.cols, terminal.rows);
+        terminal.scrollToBottom();
       }, 10) as unknown as number;
     });
 
@@ -54,6 +56,7 @@ export function TerminalInstance(props: TerminalInstanceProps) {
     const handleTerminalResize = () => {
       fitAddon.fit();
       pty.resize(terminal.cols, terminal.rows);
+      terminal.scrollToBottom();
     };
     window.addEventListener('terminal-resize', handleTerminalResize);
 
