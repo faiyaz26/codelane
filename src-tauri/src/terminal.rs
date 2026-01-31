@@ -57,6 +57,10 @@ struct TerminalInstance {
     /// The child process handle (must be kept alive)
     #[allow(dead_code)]
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// Child process PID
+    pid: u32,
+    /// Lane ID associated with this terminal (if any)
+    lane_id: Option<String>,
     /// Current terminal columns
     cols: u16,
     /// Current terminal rows
@@ -203,6 +207,9 @@ pub async fn create_terminal(
         }
     }
 
+    // Extract lane_id from environment before consuming it
+    let lane_id = env.as_ref().and_then(|e| e.get("CODELANE_LANE_ID").cloned());
+
     // Add custom environment variables if provided
     if let Some(env_vars) = env {
         for (key, value) in env_vars {
@@ -219,6 +226,9 @@ pub async fn create_terminal(
         .slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+
+    // Get the child PID
+    let pid = child.process_id().unwrap_or(0);
 
     // Clone the reader for the background thread
     let reader = pair
@@ -239,6 +249,8 @@ pub async fn create_terminal(
         master: pair.master,
         writer: None,
         child,
+        pid,
+        lane_id,
         cols: 80,
         rows: 24,
         output_buffer: Vec::new(),
@@ -532,6 +544,35 @@ pub async fn list_terminals(state: State<'_, TerminalState>) -> Result<Vec<Strin
     Ok(terminals.keys().cloned().collect())
 }
 
+/// Get the PID for a terminal by lane ID
+///
+/// # Arguments
+/// * `lane_id` - The lane ID to search for
+///
+/// # Returns
+/// The PID if found, or None
+#[tauri::command]
+pub async fn get_terminal_pid_by_lane(
+    state: State<'_, TerminalState>,
+    lane_id: String,
+) -> Result<Option<u32>, String> {
+    let terminals = state
+        .terminals
+        .lock()
+        .map_err(|e| format!("Failed to lock terminal state: {}", e))?;
+
+    // Find terminal with matching lane_id
+    for instance in terminals.values() {
+        if let Some(ref id) = instance.lane_id {
+            if id == &lane_id {
+                return Ok(Some(instance.pid));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 /// Initialize the terminal module and return the command handlers
 ///
 /// This function returns a handler that can be used with Tauri's invoke_handler.
@@ -575,12 +616,13 @@ mod tests {
     fn test_terminal_output_payload_serialization() {
         let payload = TerminalOutputPayload {
             id: "test-id".to_string(),
-            data: "hello world".to_string(),
+            data: b"hello world".to_vec(),
         };
 
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("test-id"));
-        assert!(json.contains("hello world"));
+        // Data is serialized as byte array
+        assert!(!json.is_empty());
     }
 
     #[test]

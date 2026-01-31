@@ -1,7 +1,22 @@
 //! Process monitoring for terminal sessions
 
 use serde::{Deserialize, Serialize};
-use sysinfo::{Pid, System};
+use std::sync::Mutex;
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
+
+/// Cached system instance for efficient process monitoring
+static SYSTEM: Mutex<Option<System>> = Mutex::new(None);
+
+fn get_system() -> std::sync::MutexGuard<'static, Option<System>> {
+    let mut guard = SYSTEM.lock().unwrap();
+    if guard.is_none() {
+        // Create system with minimal refresh - only what we need
+        *guard = Some(System::new_with_specifics(
+            RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+        ));
+    }
+    guard
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,17 +37,16 @@ pub struct ProcessInfo {
 /// Find process PID by environment variable (lane ID)
 #[tauri::command]
 pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
     {
         use std::process::Command;
 
-        // Use ps and grep to find processes with CODELANE_LANE_ID env var
+        // Use ps to find processes with CODELANE_LANE_ID env var
+        // macOS-specific: use ps with -E flag to show environment
         let output = Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "ps eww -o pid= | while read pid; do \
-                 if tr '\\0' '\\n' < /proc/$pid/environ 2>/dev/null | grep -q '^CODELANE_LANE_ID={}$'; then \
-                 echo $pid; break; fi; done",
+                "ps -eo pid,command | grep -v grep | grep 'CODELANE_LANE_ID={}' | awk '{{print $1}}' | head -1",
                 lane_id
             ))
             .output()
@@ -48,17 +62,27 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
         }
     }
 
-    // Fallback: search by process name
-    let mut system = System::new_all();
-    system.refresh_all();
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
 
-    // Look for shell processes (zsh, bash, etc.) or agent processes (claude, aider, etc.)
-    for (pid, process) in system.processes() {
-        let name = process.name().to_string_lossy().to_lowercase();
-        if name.contains("zsh") || name.contains("bash") || name.contains("claude") || name.contains("aider") {
-            // Found a potential match - return the first one
-            // This is not perfect but better than nothing
-            return Ok(Some(pid.as_u32()));
+        // Linux: use /proc filesystem
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "grep -l 'CODELANE_LANE_ID={}' /proc/*/environ 2>/dev/null | head -1 | cut -d/ -f3",
+                lane_id
+            ))
+            .output()
+            .map_err(|e| format!("Failed to execute grep command: {}", e))?;
+
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !pid_str.is_empty() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    return Ok(Some(pid));
+                }
+            }
         }
     }
 
@@ -68,10 +92,17 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
 /// Get process statistics for a given PID
 #[tauri::command]
 pub fn get_process_stats(pid: u32) -> Result<ProcessStats, String> {
-    let mut system = System::new_all();
-    system.refresh_all();
+    let mut system_guard = get_system();
+    let system = system_guard.as_mut().unwrap();
 
     let sys_pid = Pid::from_u32(pid);
+
+    // Only refresh the specific process, not all processes
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[sys_pid]),
+        true, // remove dead processes
+        ProcessRefreshKind::everything(),
+    );
 
     if let Some(process) = system.process(sys_pid) {
         let memory_bytes = process.memory();

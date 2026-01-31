@@ -51,8 +51,8 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 
   const fetchStatsByLaneId = async (laneId: string) => {
     try {
-      // First, find the PID by lane ID
-      const pid = await invoke<number | null>('find_process_by_lane', { laneId });
+      // First, get the PID from terminal state (more reliable than shell command)
+      const pid = await invoke<number | null>('get_terminal_pid_by_lane', { laneId });
 
       if (!pid) {
         setStats(null);

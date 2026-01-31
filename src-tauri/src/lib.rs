@@ -78,6 +78,7 @@ pub fn run() {
             terminal::close_terminal,
             terminal::get_terminal_info,
             terminal::list_terminals,
+            terminal::get_terminal_pid_by_lane,
         ])
         // Window setup
         .setup(|app| {
