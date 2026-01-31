@@ -258,25 +258,9 @@ class TerminalPool {
 
     status = 'ready';
 
-    // Bidirectional data flow with output buffering for better performance
-    let outputBuffer = '';
-    let writeScheduled = false;
-
+    // Bidirectional data flow
     pty.onData((data) => {
-      // Buffer the data
-      outputBuffer += data;
-
-      // Schedule a write if not already scheduled
-      if (!writeScheduled) {
-        writeScheduled = true;
-        requestAnimationFrame(() => {
-          if (outputBuffer) {
-            terminal.write(outputBuffer);
-            outputBuffer = '';
-          }
-          writeScheduled = false;
-        });
-      }
+      terminal.write(data);
     });
 
     terminal.onData((data) => {
