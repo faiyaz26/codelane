@@ -342,56 +342,36 @@ function App() {
                         </div>
                       </div>
                       <div class="flex-1 overflow-hidden">
-                        {/* Render agent terminal for each lane (only active one visible) */}
-                        <For each={Array.from(initializedLanes())}>
-                          {(laneId) => {
-                            const lane = lanes().find(l => l.id === laneId);
-                            if (!lane) return null;
-                            return (
-                              <div
-                                class="h-full"
-                                style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
-                              >
-                                <TerminalView
-                                  laneId={lane.id}
-                                  cwd={lane.workingDir}
-                                  onTerminalReady={(pid) => {
-                                    console.log(`Terminal ready for ${lane.name}, PID:`, pid);
-                                    setTerminalPids((prev) => new Map(prev).set(lane.id, pid));
-                                  }}
-                                  onTerminalExit={() => {
-                                    console.log(`Terminal exited for ${lane.name}`);
-                                    setTerminalPids((prev) => {
-                                      const newMap = new Map(prev);
-                                      newMap.delete(lane.id);
-                                      return newMap;
-                                    });
-                                  }}
-                                  onAgentFailed={handleAgentFailed}
-                                />
-                              </div>
-                            );
-                          }}
-                        </For>
+                        {/* Render only the active agent terminal */}
+                        <Show when={activeLane()}>
+                          {(lane) => (
+                            <TerminalView
+                              laneId={lane().id}
+                              cwd={lane().workingDir}
+                              onTerminalReady={(pid) => {
+                                console.log(`Terminal ready for ${lane().name}, PID:`, pid);
+                                setTerminalPids((prev) => new Map(prev).set(lane().id, pid));
+                              }}
+                              onTerminalExit={() => {
+                                console.log(`Terminal exited for ${lane().name}`);
+                                setTerminalPids((prev) => {
+                                  const newMap = new Map(prev);
+                                  newMap.delete(lane().id);
+                                  return newMap;
+                                });
+                              }}
+                              onAgentFailed={handleAgentFailed}
+                            />
+                          )}
+                        </Show>
                       </div>
                     </div>
 
                     {/* Git Status Panel */}
                     <div class="w-80 flex flex-col overflow-hidden">
-                      <For each={Array.from(initializedLanes())}>
-                        {(laneId) => {
-                          const lane = lanes().find(l => l.id === laneId);
-                          if (!lane) return null;
-                          return (
-                            <div
-                              class="h-full"
-                              style={{ display: lane.id === activeLaneId() ? 'block' : 'none' }}
-                            >
-                              <GitStatus workingDir={lane.workingDir} />
-                            </div>
-                          );
-                        }}
-                      </For>
+                      <Show when={activeLane()}>
+                        {(lane) => <GitStatus workingDir={lane().workingDir} />}
+                      </Show>
                     </div>
                   </div>
 
