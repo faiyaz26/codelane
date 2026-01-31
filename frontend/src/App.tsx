@@ -30,8 +30,8 @@ function App() {
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
   // Notification state
   const [notification, setNotification] = createSignal<{ message: string; type: 'error' | 'warning' | 'info' } | null>(null);
-  // Track terminal PIDs for process monitoring
-  const [terminalPids, setTerminalPids] = createSignal<Map<string, number>>(new Map());
+  // Track terminal IDs for process monitoring
+  const [terminalIds, setTerminalIds] = createSignal<Map<string, string>>(new Map());
 
   // Load lanes and settings on mount
   onMount(async () => {
@@ -348,13 +348,13 @@ function App() {
                             <TerminalView
                               laneId={lane().id}
                               cwd={lane().workingDir}
-                              onTerminalReady={(pid) => {
-                                console.log(`Terminal ready for ${lane().name}, PID:`, pid);
-                                setTerminalPids((prev) => new Map(prev).set(lane().id, pid));
+                              onTerminalReady={(terminalId) => {
+                                console.log(`Terminal ready for ${lane().name}, ID:`, terminalId);
+                                setTerminalIds((prev) => new Map(prev).set(lane().id, terminalId));
                               }}
                               onTerminalExit={() => {
                                 console.log(`Terminal exited for ${lane().name}`);
-                                setTerminalPids((prev) => {
+                                setTerminalIds((prev) => {
                                   const newMap = new Map(prev);
                                   newMap.delete(lane().id);
                                   return newMap;

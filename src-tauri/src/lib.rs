@@ -7,6 +7,7 @@ pub mod lane;
 pub mod settings;
 pub mod db;
 pub mod process;
+pub mod terminal;
 mod git;
 mod fs;
 
@@ -22,7 +23,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_pty::init())  // PTY plugin for terminals
         .plugin(tauri_plugin_sql::Builder::default().build());  // SQLite database
 
     // Add updater plugin on desktop platforms
@@ -34,6 +34,8 @@ pub fn run() {
         .manage(lane::LaneState::new())
         // Manage settings state
         .manage(settings::SettingsState::new())
+        // Manage terminal state
+        .manage(terminal::TerminalState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Database commands
@@ -68,6 +70,14 @@ pub fn run() {
             fs::list_directory,
             fs::watch_path,
             fs::unwatch_path,
+            // Terminal commands (using portable-pty)
+            terminal::create_terminal,
+            terminal::write_terminal,
+            terminal::read_terminal,
+            terminal::resize_terminal,
+            terminal::close_terminal,
+            terminal::get_terminal_info,
+            terminal::list_terminals,
         ])
         // Window setup
         .setup(|app| {

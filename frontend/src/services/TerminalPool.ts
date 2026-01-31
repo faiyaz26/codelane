@@ -3,13 +3,14 @@
  *
  * Manages terminal instances with lazy creation (only when needed),
  * proper cleanup, and resource limits.
+ *
+ * Now uses portable-pty backend with event-based output streaming
+ * for significantly reduced input latency.
  */
 
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { spawn } from 'tauri-pty';
-import { ZED_THEME } from '../theme';
+import { spawn, type PtyHandle } from './PortablePty';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
+import { createTerminal, createFitAddon, attachKeyHandlers } from '../lib/terminal-utils';
 import type {
   TerminalConfig,
   TerminalHandle,
@@ -51,10 +52,10 @@ class TerminalPool {
     }
 
     // Create new terminal
-    const handle = await this.createTerminal(config);
+    const handle = await this.createTerminalHandle(config);
     this.handles.set(config.id, handle);
 
-    console.log('[TerminalPool] Created terminal:', config.id, 'pid:', handle.pid);
+    console.log('[TerminalPool] Created terminal:', config.id);
 
     return handle;
   }
@@ -126,52 +127,10 @@ class TerminalPool {
   /**
    * Create a new terminal instance
    */
-  private async createTerminal(config: TerminalConfig): Promise<TerminalHandle> {
-    // Create xterm.js instance
-    const terminal = new Terminal({
-      cursorBlink: false,
-      cursorStyle: 'block',
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.4,
-      allowTransparency: false,
-      theme: {
-        background: ZED_THEME.bg.panel,
-        foreground: ZED_THEME.text.primary,
-        cursor: ZED_THEME.accent.blue,
-        cursorAccent: ZED_THEME.bg.panel,
-        selectionBackground: ZED_THEME.bg.active,
-        selectionForeground: ZED_THEME.text.primary,
-
-        // ANSI colors (normal)
-        black: ZED_THEME.terminal.black,
-        red: ZED_THEME.terminal.red,
-        green: ZED_THEME.terminal.green,
-        yellow: ZED_THEME.terminal.yellow,
-        blue: ZED_THEME.terminal.blue,
-        magenta: ZED_THEME.terminal.magenta,
-        cyan: ZED_THEME.terminal.cyan,
-        white: ZED_THEME.terminal.white,
-
-        // ANSI colors (bright)
-        brightBlack: ZED_THEME.terminal.brightBlack,
-        brightRed: ZED_THEME.terminal.brightRed,
-        brightGreen: ZED_THEME.terminal.brightGreen,
-        brightYellow: ZED_THEME.terminal.brightYellow,
-        brightBlue: ZED_THEME.terminal.brightBlue,
-        brightMagenta: ZED_THEME.terminal.brightMagenta,
-        brightCyan: ZED_THEME.terminal.brightCyan,
-        brightWhite: ZED_THEME.terminal.brightWhite,
-      },
-      scrollback: 5000,
-      convertEol: false,
-      windowsMode: false,
-      fastScrollModifier: 'shift',
-    });
-
-    // Add FitAddon
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
+  private async createTerminalHandle(config: TerminalConfig): Promise<TerminalHandle> {
+    // Create xterm.js instance with shared configuration
+    const terminal = createTerminal();
+    const fitAddon = createFitAddon(terminal);
 
     let status: TerminalStatus = 'initializing';
 
@@ -183,7 +142,7 @@ class TerminalPool {
     const laneId = config.id.split('-tab-')[0];
 
     // Merge environment
-    const baseEnv = {
+    const baseEnv: Record<string, string> = {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       CODELANE_LANE_ID: laneId,
@@ -191,7 +150,11 @@ class TerminalPool {
       ...config.env,
     };
 
-    let pty: Awaited<ReturnType<typeof spawn>> | undefined;
+    let pty: PtyHandle | undefined;
+
+    // Use sensible defaults since terminal isn't opened yet
+    const cols = terminal.cols > 0 ? terminal.cols : 80;
+    const rows = terminal.rows > 0 ? terminal.rows : 24;
 
     // Try agent first if enabled
     if (useAgent) {
@@ -202,10 +165,6 @@ class TerminalPool {
 
         if (commandPath) {
           try {
-            // Use sensible defaults since terminal isn't opened yet
-            const cols = terminal.cols > 0 ? terminal.cols : 80;
-            const rows = terminal.rows > 0 ? terminal.rows : 24;
-
             pty = await spawn(commandPath, agentConfig.args, {
               cols,
               rows,
@@ -225,19 +184,13 @@ class TerminalPool {
     if (!spawnSuccess) {
       const fallbackShell = 'zsh';
       try {
-        // Use sensible defaults since terminal isn't opened yet
-        const cols = terminal.cols > 0 ? terminal.cols : 80;
-        const rows = terminal.rows > 0 ? terminal.rows : 24;
-
-        pty = await spawn(fallbackShell, ['-l', '-i'], {
+        pty = await spawn(fallbackShell, undefined, {
           cols,
           rows,
           cwd: config.cwd,
-          env: {
-            TERM: 'xterm-256color',
-            COLORTERM: 'truecolor',
-          },
+          env: baseEnv,
         });
+        console.log('[TerminalPool] Shell spawned:', fallbackShell);
       } catch (error) {
         console.error('[TerminalPool] Failed to spawn shell:', error);
         throw error;
@@ -251,24 +204,24 @@ class TerminalPool {
       throw new Error(error);
     }
 
-    // Wait for PTY initialization if needed
-    if ('_init' in pty && pty._init instanceof Promise) {
-      await pty._init;
-    }
-
     status = 'ready';
 
-    // Bidirectional data flow
-    pty.onData((data) => {
+    // Attach custom key handlers (Shift+Enter, etc.)
+    attachKeyHandlers(terminal, (data) => pty!.write(data));
+
+    // Set up event-based data flow (low latency!)
+    // PTY output → terminal
+    await pty.onData((data) => {
       terminal.write(data);
     });
 
+    // Terminal input → PTY
     terminal.onData((data) => {
-      pty.write(data);
+      pty!.write(data);
     });
 
     // Handle PTY exit
-    pty.onExit(() => {
+    await pty.onExit(() => {
       console.log('[TerminalPool] PTY exited:', config.id);
       terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
       status = 'exited';
@@ -276,7 +229,6 @@ class TerminalPool {
 
     return {
       id: config.id,
-      pid: pty.pid,
       pty,
       terminal,
       fitAddon,

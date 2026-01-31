@@ -71,8 +71,8 @@ struct TerminalInstance {
 pub struct TerminalOutputPayload {
     /// Terminal ID
     pub id: String,
-    /// Output data as UTF-8 string
-    pub data: String,
+    /// Output data as raw bytes (preserves escape sequences)
+    pub data: Vec<u8>,
 }
 
 /// Payload for terminal exit events emitted to the frontend
@@ -102,7 +102,9 @@ pub struct TerminalInfo {
 ///
 /// # Arguments
 /// * `shell` - Optional shell command (defaults to $SHELL or /bin/bash)
+/// * `args` - Optional command arguments
 /// * `cwd` - Optional working directory (defaults to home directory)
+/// * `env` - Optional environment variables
 ///
 /// # Returns
 /// The terminal ID (UUID) on success, or an error message
@@ -114,7 +116,9 @@ pub async fn create_terminal(
     app: AppHandle,
     state: State<'_, TerminalState>,
     shell: Option<String>,
+    args: Option<Vec<String>>,
     cwd: Option<String>,
+    env: Option<HashMap<String, String>>,
 ) -> Result<String, String> {
     let terminal_id = uuid::Uuid::new_v4().to_string();
 
@@ -160,18 +164,23 @@ pub async fn create_terminal(
         .openpty(pty_size)
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-    // Build the command with login shell flags
+    // Build the command
     let mut cmd = CommandBuilder::new(&shell_cmd);
 
-    // For zsh/bash, use login shell mode
-    if shell_cmd.contains("zsh") || shell_cmd.contains("bash") {
+    // Add arguments if provided
+    if let Some(cmd_args) = args {
+        for arg in cmd_args {
+            cmd.arg(arg);
+        }
+    } else if shell_cmd.contains("zsh") || shell_cmd.contains("bash") {
+        // For zsh/bash without explicit args, use login shell mode
         cmd.arg("-l");  // Login shell
         cmd.arg("-i");  // Interactive
     }
 
     cmd.cwd(&working_dir);
 
-    tracing::info!("Spawning shell: {} with args in {:?}", shell_cmd, working_dir);
+    tracing::info!("Spawning command: {} in {:?}", shell_cmd, working_dir);
 
     // Inherit important environment variables
     for (key, value) in std::env::vars() {
@@ -190,6 +199,13 @@ pub async fn create_terminal(
             || key == "XDG_CONFIG_HOME"
             || key == "XDG_DATA_HOME"
         {
+            cmd.env(key, value);
+        }
+    }
+
+    // Add custom environment variables if provided
+    if let Some(env_vars) = env {
+        for (key, value) in env_vars {
             cmd.env(key, value);
         }
     }
@@ -264,8 +280,8 @@ fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: A
                 break;
             }
             Ok(n) => {
-                // Convert bytes to string, handling invalid UTF-8 gracefully
-                let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                // Send raw bytes to preserve escape sequences
+                let data = buf[..n].to_vec();
 
                 // Emit the terminal output event
                 if let Err(e) = app.emit(

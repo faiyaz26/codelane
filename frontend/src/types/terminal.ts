@@ -4,7 +4,7 @@
 
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
-import type { Pty } from 'tauri-pty';
+import type { PtyHandle } from '../services/PortablePty';
 
 /**
  * Terminal lifecycle status
@@ -26,8 +26,7 @@ export interface TerminalConfig {
  */
 export interface TerminalHandle {
   id: string;
-  pid: number;
-  pty: Pty;
+  pty: PtyHandle;
   terminal: Terminal;
   fitAddon: FitAddon;
   status: TerminalStatus;

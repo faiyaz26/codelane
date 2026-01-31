@@ -1,17 +1,17 @@
-import { createEffect, onCleanup, onMount } from 'solid-js';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { spawn, type Pty } from 'tauri-pty';
+import { onCleanup, onMount } from 'solid-js';
+import type { Terminal } from '@xterm/xterm';
+import type { FitAddon } from '@xterm/addon-fit';
+import { spawn, type PtyHandle } from '../services/PortablePty';
 import { ZED_THEME } from '../theme';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
-import type { AgentConfig } from '../types/agent';
+import { createTerminal, createFitAddon, attachKeyHandlers } from '../lib/terminal-utils';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
   laneId: string;
   cwd?: string;
   useAgent?: boolean; // If false, use plain shell instead of agent
-  onTerminalReady?: (pid: number) => void;
+  onTerminalReady?: (terminalId: string) => void;
   onTerminalExit?: () => void;
   onAgentFailed?: (agentType: string, command: string) => void;
 }
@@ -22,57 +22,15 @@ export function TerminalView(props: TerminalViewProps) {
   let containerRef: HTMLDivElement | undefined;
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
-  let pty: Pty | undefined;
+  let pty: PtyHandle | undefined;
 
   onMount(async () => {
     console.log('[TerminalView] Mounting laneId:', props.laneId);
     if (!containerRef) return;
 
-    // Create xterm.js instance with Zed theme
-    terminal = new Terminal({
-      cursorBlink: false,
-      cursorStyle: 'block',
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.4,
-      allowTransparency: false,
-      theme: {
-        background: ZED_THEME.bg.panel,
-        foreground: ZED_THEME.text.primary,
-        cursor: ZED_THEME.accent.blue,
-        cursorAccent: ZED_THEME.bg.panel,
-        selectionBackground: ZED_THEME.bg.active,
-        selectionForeground: ZED_THEME.text.primary,
-
-        // ANSI colors (normal)
-        black: ZED_THEME.terminal.black,
-        red: ZED_THEME.terminal.red,
-        green: ZED_THEME.terminal.green,
-        yellow: ZED_THEME.terminal.yellow,
-        blue: ZED_THEME.terminal.blue,
-        magenta: ZED_THEME.terminal.magenta,
-        cyan: ZED_THEME.terminal.cyan,
-        white: ZED_THEME.terminal.white,
-
-        // ANSI colors (bright)
-        brightBlack: ZED_THEME.terminal.brightBlack,
-        brightRed: ZED_THEME.terminal.brightRed,
-        brightGreen: ZED_THEME.terminal.brightGreen,
-        brightYellow: ZED_THEME.terminal.brightYellow,
-        brightBlue: ZED_THEME.terminal.brightBlue,
-        brightMagenta: ZED_THEME.terminal.brightMagenta,
-        brightCyan: ZED_THEME.terminal.brightCyan,
-        brightWhite: ZED_THEME.terminal.brightWhite,
-      },
-      scrollback: 5000,
-      convertEol: false,
-      windowsMode: false,
-      fastScrollModifier: 'shift',
-    });
-
-    // Add FitAddon for auto-sizing
-    fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
+    // Create xterm.js instance with shared configuration
+    terminal = createTerminal();
+    fitAddon = createFitAddon(terminal);
 
     // Open terminal in the container
     terminal.open(containerRef);
@@ -87,54 +45,59 @@ export function TerminalView(props: TerminalViewProps) {
       let spawnSuccess = false;
       const useAgent = props.useAgent !== false; // Default to true
 
+      // Base environment
+      const baseEnv: Record<string, string> = {
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        CODELANE_LANE_ID: props.laneId,
+        CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
+      };
+
       // Load agent config only if useAgent is true
       if (useAgent) {
-        let agentConfig = await getLaneAgentConfig(props.laneId);
+        const agentConfig = await getLaneAgentConfig(props.laneId);
 
         console.log('Agent config:', JSON.stringify(agentConfig, null, 2));
 
-        // Merge agent env with terminal env and add unique identifier
+        // Merge agent env with terminal env
         const env = {
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-          CODELANE_LANE_ID: props.laneId,
-          CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
+          ...baseEnv,
           ...agentConfig.env,
         };
 
         // Try to spawn the configured agent
         if (agentConfig.agentType !== 'shell') {
-        console.log('Checking if agent exists:', agentConfig.command);
+          console.log('Checking if agent exists:', agentConfig.command);
 
-        // Check if command exists before trying to spawn
-        const commandPath = await checkCommandExists(agentConfig.command);
+          // Check if command exists before trying to spawn
+          const commandPath = await checkCommandExists(agentConfig.command);
 
-        if (commandPath) {
-          console.log('Agent found at:', commandPath);
-          console.log('Spawning agent:', commandPath);
+          if (commandPath) {
+            console.log('Agent found at:', commandPath);
+            console.log('Spawning agent:', commandPath);
 
-          try {
-            pty = await spawn(commandPath, agentConfig.args, {
-              cols: terminal.cols,
-              rows: terminal.rows,
-              cwd: agentConfig.useLaneCwd ? props.cwd : undefined,
-              env,
-            });
+            try {
+              pty = await spawn(commandPath, agentConfig.args, {
+                cols: terminal.cols,
+                rows: terminal.rows,
+                cwd: agentConfig.useLaneCwd ? props.cwd : undefined,
+                env,
+              });
 
-            spawnSuccess = true;
-            console.log('Agent spawned successfully');
-          } catch (spawnError) {
-            console.error('Failed to spawn agent:', spawnError);
+              spawnSuccess = true;
+              console.log('Agent spawned successfully, terminal ID:', pty.id);
+            } catch (spawnError) {
+              console.error('Failed to spawn agent:', spawnError);
+              spawnSuccess = false;
+              // Notify parent that agent failed
+              props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
+            }
+          } else {
+            console.log('Agent command not found in PATH:', agentConfig.command);
             spawnSuccess = false;
-            // Notify parent that agent failed
+            // Notify parent that agent is not installed
             props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
           }
-        } else {
-          console.log('Agent command not found in PATH:', agentConfig.command);
-          spawnSuccess = false;
-          // Notify parent that agent is not installed
-          props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
-        }
         }
       }
 
@@ -144,26 +107,28 @@ export function TerminalView(props: TerminalViewProps) {
         const fallbackShell = 'zsh';
         console.log('Using shell:', fallbackShell);
 
-        pty = await spawn(fallbackShell, ['-l', '-i'], {
+        pty = await spawn(fallbackShell, undefined, {
           cols: terminal.cols,
           rows: terminal.rows,
           cwd: props.cwd,
-          env: {
-            TERM: 'xterm-256color',
-            COLORTERM: 'truecolor',
-          },
+          env: baseEnv,
         });
 
-        console.log('Shell spawned with PID:', pty.pid);
+        console.log('Shell spawned, terminal ID:', pty.id);
       }
 
-      // Bidirectional data flow
-      pty.onData((data) => {
+      // Attach custom key handlers (Shift+Enter, etc.)
+      attachKeyHandlers(terminal, (data) => pty!.write(data));
+
+      // Set up event-based data flow (low latency!)
+      // PTY output → terminal
+      await pty!.onData((data) => {
         if (terminal) {
           terminal.write(data);
         }
       });
 
+      // Terminal input → PTY
       terminal.onData((data) => {
         if (pty) {
           pty.write(data);
@@ -171,7 +136,7 @@ export function TerminalView(props: TerminalViewProps) {
       });
 
       // Handle PTY exit
-      pty.onExit(() => {
+      await pty!.onExit(() => {
         console.log('PTY exited');
         if (terminal) {
           terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
@@ -179,8 +144,8 @@ export function TerminalView(props: TerminalViewProps) {
         props.onTerminalExit?.();
       });
 
-      // Call ready callback with actual PID
-      props.onTerminalReady?.(pty.pid);
+      // Call ready callback with terminal ID
+      props.onTerminalReady?.(pty!.id);
 
       // Handle resize events with debouncing
       let resizeTimeout: number | undefined;
