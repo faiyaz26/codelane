@@ -258,12 +258,53 @@ class TerminalPool {
 
     status = 'ready';
 
-    // Bidirectional data flow
+    // Local echo experiment - track what we've echoed locally
+    let localEchoBuffer = '';
+    let echoTimeout: number | undefined;
+
+    // Bidirectional data flow with local echo
     pty.onData((data) => {
+      // Check if this is echoing back what we typed
+      if (localEchoBuffer.length > 0) {
+        // Simple check: if PTY data starts with our buffer, it's the echo
+        if (data.startsWith(localEchoBuffer)) {
+          // Skip the echoed part, only show the rest
+          const remaining = data.slice(localEchoBuffer.length);
+          localEchoBuffer = '';
+          if (echoTimeout) clearTimeout(echoTimeout);
+
+          if (remaining) {
+            terminal.write(remaining);
+          }
+          return;
+        } else {
+          // Different data (maybe password prompt or control chars)
+          // Clear buffer and show everything
+          localEchoBuffer = '';
+          if (echoTimeout) clearTimeout(echoTimeout);
+        }
+      }
+
       terminal.write(data);
     });
 
     terminal.onData((data) => {
+      // Check if this is a printable character (not control char)
+      const isPrintable = data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) < 127;
+
+      if (isPrintable) {
+        // Local echo immediately for better responsiveness
+        terminal.write(data);
+        localEchoBuffer += data;
+
+        // Clear buffer after 200ms if no echo comes back (e.g., password input)
+        if (echoTimeout) clearTimeout(echoTimeout);
+        echoTimeout = setTimeout(() => {
+          localEchoBuffer = '';
+        }, 200) as unknown as number;
+      }
+
+      // Always send to PTY
       pty.write(data);
     });
 
