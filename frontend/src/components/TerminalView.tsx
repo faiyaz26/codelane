@@ -1,7 +1,6 @@
 import { createEffect, onCleanup, onMount } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { spawn, type Pty } from 'tauri-pty';
 import { ZED_THEME } from '../theme';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
@@ -36,8 +35,7 @@ export function TerminalView(props: TerminalViewProps) {
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       lineHeight: 1.4,
-      letterSpacing: 0,
-      allowTransparency: true,
+      allowTransparency: false,
       theme: {
         background: ZED_THEME.bg.panel,
         foreground: ZED_THEME.text.primary,
@@ -75,10 +73,6 @@ export function TerminalView(props: TerminalViewProps) {
     // Add FitAddon for auto-sizing
     fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-
-    // Add WebLinksAddon for clickable links
-    const webLinksAddon = new WebLinksAddon();
-    terminal.loadAddon(webLinksAddon);
 
     // Open terminal in the container
     terminal.open(containerRef);

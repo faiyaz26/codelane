@@ -7,7 +7,6 @@
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { spawn } from 'tauri-pty';
 import { ZED_THEME } from '../theme';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
@@ -135,8 +134,7 @@ class TerminalPool {
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       lineHeight: 1.4,
-      letterSpacing: 0,
-      allowTransparency: true,
+      allowTransparency: false,
       theme: {
         background: ZED_THEME.bg.panel,
         foreground: ZED_THEME.text.primary,
@@ -174,10 +172,6 @@ class TerminalPool {
     // Add FitAddon
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-
-    // Add WebLinksAddon
-    const webLinksAddon = new WebLinksAddon();
-    terminal.loadAddon(webLinksAddon);
 
     let status: TerminalStatus = 'initializing';
 
