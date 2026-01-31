@@ -157,10 +157,26 @@ export function TerminalView(props: TerminalViewProps) {
         console.log('Shell spawned with PID:', pty.pid);
       }
 
-      // Bidirectional data flow
+      // Bidirectional data flow with output buffering for better performance
+      let outputBuffer = '';
+      let writeScheduled = false;
+
       pty.onData((data) => {
-        if (terminal) {
-          terminal.write(data);
+        if (!terminal) return;
+
+        // Buffer the data
+        outputBuffer += data;
+
+        // Schedule a write if not already scheduled
+        if (!writeScheduled) {
+          writeScheduled = true;
+          requestAnimationFrame(() => {
+            if (terminal && outputBuffer) {
+              terminal.write(outputBuffer);
+              outputBuffer = '';
+            }
+            writeScheduled = false;
+          });
         }
       });
 
