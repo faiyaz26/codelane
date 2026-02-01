@@ -43,10 +43,11 @@ export function TopBar(props: TopBarProps) {
       </Show>
 
       {/* Lane Tabs */}
-      <div class="flex-1 flex items-center h-full overflow-x-auto" data-no-drag>
+      <div class="flex-1 flex items-center h-full overflow-x-auto">
         <For each={props.lanes}>
           {(lane) => (
             <div
+              data-no-drag
               class={`group h-full flex items-center gap-2 px-4 border-r border-zed-border-subtle cursor-pointer transition-colors ${
                 lane.id === props.activeLaneId
                   ? 'bg-zed-bg-surface text-zed-text-primary'
