@@ -395,3 +395,15 @@
   border-radius: 3px;
   user-select: none;
 }
+
+/* Search match highlighting */
+.search-match {
+  background-color: rgb(var(--zed-accent-yellow) / 0.3);
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+.search-match-current {
+  background-color: rgb(var(--zed-accent-yellow) / 0.6);
+  outline: 1px solid rgb(var(--zed-accent-yellow));
+}

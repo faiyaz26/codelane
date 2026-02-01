@@ -1,10 +1,11 @@
-// File viewer component - displays file content with Shiki syntax highlighting and code folding
+// File viewer component - displays file content with Shiki syntax highlighting, code folding, and search
 
-import { createSignal, createEffect, createMemo, For, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage } from './types';
 import { themeManager, type ThemeId } from '../../services/ThemeManager';
+import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
 
 // Singleton highlighter instance
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -28,7 +29,7 @@ async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: ['github-dark-default', 'github-light-default', 'one-dark-pro'],
-      langs: [], // Start with no languages, load on demand
+      langs: [],
     });
   }
   return highlighterPromise;
@@ -58,34 +59,24 @@ async function ensureLanguageLoaded(highlighter: Highlighter, lang: string): Pro
   return targetLang;
 }
 
-// Foldable region detection
+// ============ FOLDING ============
+
 interface FoldRegion {
-  startLine: number; // 0-indexed
-  endLine: number;   // 0-indexed, inclusive
+  startLine: number;
+  endLine: number;
 }
 
-// Languages that use indentation-based folding
 const INDENTATION_LANGUAGES = new Set([
   'python', 'yaml', 'yml', 'coffee', 'coffeescript', 'haml', 'slim', 'pug', 'jade'
 ]);
 
-// Detect foldable regions based on brackets (for C-style languages)
 function detectBracketFoldRegions(content: string): FoldRegion[] {
   const lines = content.split('\n');
   const regions: FoldRegion[] = [];
   const stack: { char: string; line: number }[] = [];
 
-  const openBrackets: Record<string, string> = {
-    '{': '}',
-    '[': ']',
-    '(': ')',
-  };
-
-  const closeBrackets: Record<string, string> = {
-    '}': '{',
-    ']': '[',
-    ')': '(',
-  };
+  const openBrackets: Record<string, string> = { '{': '}', '[': ']', '(': ')' };
+  const closeBrackets: Record<string, string> = { '}': '{', ']': '[', ')': '(' };
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx];
@@ -96,7 +87,6 @@ function detectBracketFoldRegions(content: string): FoldRegion[] {
       const char = line[i];
       const prevChar = i > 0 ? line[i - 1] : '';
 
-      // Handle string detection (simplified)
       if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
         if (!inString) {
           inString = true;
@@ -108,10 +98,8 @@ function detectBracketFoldRegions(content: string): FoldRegion[] {
       }
 
       if (inString) continue;
-
-      // Skip line comments
       if (char === '/' && line[i + 1] === '/') break;
-      if (char === '#') break; // Python/Ruby comments
+      if (char === '#') break;
 
       if (openBrackets[char]) {
         stack.push({ char, line: lineIdx });
@@ -134,40 +122,31 @@ function detectBracketFoldRegions(content: string): FoldRegion[] {
   return regions;
 }
 
-// Detect foldable regions based on indentation (for Python, YAML, etc.)
 function detectIndentationFoldRegions(content: string): FoldRegion[] {
   const lines = content.split('\n');
   const regions: FoldRegion[] = [];
 
-  // Get indentation level of a line (number of leading spaces/tabs)
   const getIndent = (line: string): number => {
     const match = line.match(/^(\s*)/);
     if (!match) return 0;
-    // Convert tabs to 4 spaces for consistency
     return match[1].replace(/\t/g, '    ').length;
   };
 
-  // Check if line is empty or only whitespace/comments
   const isEmptyOrComment = (line: string): boolean => {
     const trimmed = line.trim();
     return trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('//');
   };
 
-  // Stack to track fold start points
   const stack: { indent: number; line: number }[] = [];
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx];
-
-    // Skip empty lines and comments for indent calculation
     if (isEmptyOrComment(line)) continue;
 
     const currentIndent = getIndent(line);
 
-    // Close all regions that have higher or equal indentation
     while (stack.length > 0 && stack[stack.length - 1].indent >= currentIndent) {
       const startInfo = stack.pop()!;
-      // Find the last non-empty line before current
       let endLine = lineIdx - 1;
       while (endLine > startInfo.line && isEmptyOrComment(lines[endLine])) {
         endLine--;
@@ -177,7 +156,6 @@ function detectIndentationFoldRegions(content: string): FoldRegion[] {
       }
     }
 
-    // Check if next non-empty line has higher indentation (start of fold)
     let nextNonEmptyIdx = lineIdx + 1;
     while (nextNonEmptyIdx < lines.length && isEmptyOrComment(lines[nextNonEmptyIdx])) {
       nextNonEmptyIdx++;
@@ -191,7 +169,6 @@ function detectIndentationFoldRegions(content: string): FoldRegion[] {
     }
   }
 
-  // Close any remaining open regions
   while (stack.length > 0) {
     const startInfo = stack.pop()!;
     let endLine = lines.length - 1;
@@ -206,48 +183,239 @@ function detectIndentationFoldRegions(content: string): FoldRegion[] {
   return regions;
 }
 
-// Main function to detect foldable regions based on language
 function detectFoldableRegions(content: string, language: string): FoldRegion[] {
   const normalizedLang = language.toLowerCase();
-
   let regions: FoldRegion[];
 
   if (INDENTATION_LANGUAGES.has(normalizedLang)) {
-    // Use indentation-based folding for Python, YAML, etc.
     regions = detectIndentationFoldRegions(content);
   } else {
-    // Use bracket-based folding for C-style languages
     regions = detectBracketFoldRegions(content);
   }
 
-  // Sort by start line
   regions.sort((a, b) => a.startLine - b.startLine);
-
   return regions;
+}
+
+// ============ SEARCH ============
+
+interface SearchMatch {
+  lineIdx: number;
+  startCol: number;
+  endCol: number;
+  text: string;
+}
+
+function findMatches(content: string, query: string, useRegex: boolean, caseSensitive: boolean): SearchMatch[] {
+  if (!query) return [];
+
+  const matches: SearchMatch[] = [];
+  const lines = content.split('\n');
+
+  try {
+    let regex: RegExp;
+    if (useRegex) {
+      regex = new RegExp(query, caseSensitive ? 'g' : 'gi');
+    } else {
+      // Escape special regex characters for literal search
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+    }
+
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx];
+      let match;
+      regex.lastIndex = 0; // Reset regex state
+
+      while ((match = regex.exec(line)) !== null) {
+        matches.push({
+          lineIdx,
+          startCol: match.index,
+          endCol: match.index + match[0].length,
+          text: match[0],
+        });
+
+        // Prevent infinite loop on zero-length matches
+        if (match[0].length === 0) {
+          regex.lastIndex++;
+        }
+      }
+    }
+  } catch (e) {
+    // Invalid regex - return empty matches
+    console.warn('Invalid search regex:', e);
+  }
+
+  return matches;
+}
+
+// Highlight matches in HTML content
+function highlightMatchesInHtml(
+  html: string,
+  matches: SearchMatch[],
+  lineIdx: number,
+  currentMatchIdx: number,
+  allMatches: SearchMatch[]
+): string {
+  const lineMatches = matches.filter(m => m.lineIdx === lineIdx);
+  if (lineMatches.length === 0) return html;
+
+  // We need to work with the text content, not HTML
+  // This is a simplified approach - extract text, find positions, wrap with highlights
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const textContent = tempDiv.textContent || '';
+
+  // Build result by processing character by character
+  let result = '';
+  let htmlIdx = 0;
+  let textIdx = 0;
+
+  // Sort matches by position
+  const sortedMatches = [...lineMatches].sort((a, b) => a.startCol - b.startCol);
+
+  for (const match of sortedMatches) {
+    // Find the global index of this match
+    const globalIdx = allMatches.findIndex(
+      m => m.lineIdx === match.lineIdx && m.startCol === match.startCol
+    );
+    const isCurrent = globalIdx === currentMatchIdx;
+
+    // Advance to match start
+    while (textIdx < match.startCol && htmlIdx < html.length) {
+      if (html[htmlIdx] === '<') {
+        // Skip HTML tag
+        const tagEnd = html.indexOf('>', htmlIdx);
+        if (tagEnd !== -1) {
+          result += html.substring(htmlIdx, tagEnd + 1);
+          htmlIdx = tagEnd + 1;
+        } else {
+          result += html[htmlIdx++];
+        }
+      } else if (html[htmlIdx] === '&') {
+        // Handle HTML entities
+        const entityEnd = html.indexOf(';', htmlIdx);
+        if (entityEnd !== -1 && entityEnd - htmlIdx < 10) {
+          result += html.substring(htmlIdx, entityEnd + 1);
+          htmlIdx = entityEnd + 1;
+          textIdx++;
+        } else {
+          result += html[htmlIdx++];
+          textIdx++;
+        }
+      } else {
+        result += html[htmlIdx++];
+        textIdx++;
+      }
+    }
+
+    // Add highlight start
+    const highlightClass = isCurrent ? 'search-match search-match-current' : 'search-match';
+    result += `<span class="${highlightClass}">`;
+
+    // Add match content
+    while (textIdx < match.endCol && htmlIdx < html.length) {
+      if (html[htmlIdx] === '<') {
+        const tagEnd = html.indexOf('>', htmlIdx);
+        if (tagEnd !== -1) {
+          result += html.substring(htmlIdx, tagEnd + 1);
+          htmlIdx = tagEnd + 1;
+        } else {
+          result += html[htmlIdx++];
+        }
+      } else if (html[htmlIdx] === '&') {
+        const entityEnd = html.indexOf(';', htmlIdx);
+        if (entityEnd !== -1 && entityEnd - htmlIdx < 10) {
+          result += html.substring(htmlIdx, entityEnd + 1);
+          htmlIdx = entityEnd + 1;
+          textIdx++;
+        } else {
+          result += html[htmlIdx++];
+          textIdx++;
+        }
+      } else {
+        result += html[htmlIdx++];
+        textIdx++;
+      }
+    }
+
+    result += '</span>';
+  }
+
+  // Add remaining content
+  result += html.substring(htmlIdx);
+
+  return result;
 }
 
 // Parse Shiki HTML output into lines
 function parseShikiHtml(html: string): string[] {
-  // Extract lines from Shiki output
-  const lineRegex = /<span class="line">(.*?)<\/span>/g;
   const lines: string[] = [];
-  let match;
 
-  while ((match = lineRegex.exec(html)) !== null) {
-    lines.push(match[1]);
+  // Find the code element content
+  const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/);
+  if (!codeMatch) {
+    return html.split('\n');
   }
 
-  // If no lines found, try alternative parsing
-  if (lines.length === 0) {
-    const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/);
-    if (codeMatch) {
-      // Split by newlines if it's plain content
-      return codeMatch[1].split('\n');
+  const codeContent = codeMatch[1];
+
+  // Shiki wraps each line in <span class="line">...</span>
+  // We need to handle nested spans properly, so we use a state machine approach
+  let pos = 0;
+  const lineStartTag = '<span class="line">';
+  const lineEndTag = '</span>';
+
+  while (pos < codeContent.length) {
+    const lineStart = codeContent.indexOf(lineStartTag, pos);
+    if (lineStart === -1) break;
+
+    const contentStart = lineStart + lineStartTag.length;
+
+    // Find the matching closing </span> by counting nesting
+    let depth = 1;
+    let searchPos = contentStart;
+    let contentEnd = -1;
+
+    while (searchPos < codeContent.length && depth > 0) {
+      const nextOpen = codeContent.indexOf('<span', searchPos);
+      const nextClose = codeContent.indexOf('</span>', searchPos);
+
+      if (nextClose === -1) break;
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Found an opening span before closing
+        depth++;
+        searchPos = nextOpen + 5; // Move past '<span'
+      } else {
+        // Found a closing span
+        depth--;
+        if (depth === 0) {
+          contentEnd = nextClose;
+        }
+        searchPos = nextClose + 7; // Move past '</span>'
+      }
     }
+
+    if (contentEnd !== -1) {
+      lines.push(codeContent.substring(contentStart, contentEnd));
+      pos = contentEnd + lineEndTag.length;
+    } else {
+      // Fallback: couldn't find matching close, take rest of content
+      lines.push(codeContent.substring(contentStart));
+      break;
+    }
+  }
+
+  // Fallback if no lines were found
+  if (lines.length === 0) {
+    return codeContent.split('\n');
   }
 
   return lines;
 }
+
+// ============ COMPONENT ============
 
 interface FileViewerProps {
   file: OpenFile | null;
@@ -255,21 +423,54 @@ interface FileViewerProps {
 
 export function FileViewer(props: FileViewerProps) {
   const [highlightedLines, setHighlightedLines] = createSignal<string[]>([]);
+  const [rawLines, setRawLines] = createSignal<string[]>([]);
   const [isHighlighting, setIsHighlighting] = createSignal(false);
   const [foldRegions, setFoldRegions] = createSignal<FoldRegion[]>([]);
   const [foldedLines, setFoldedLines] = createSignal<Set<number>>(new Set());
 
-  // Get fold region starting at a line
+  // Search state
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [useRegex, setUseRegex] = createSignal(false);
+  const [caseSensitive, setCaseSensitive] = createSignal(false);
+  const [currentMatchIdx, setCurrentMatchIdx] = createSignal(0);
+  const [searchError, setSearchError] = createSignal<string | null>(null);
+
+  let searchInputRef: HTMLInputElement | undefined;
+  let codeContainerRef: HTMLDivElement | undefined;
+
+  // Compute search matches
+  const searchMatches = createMemo(() => {
+    const content = props.file?.content;
+    const query = searchQuery();
+
+    if (!content || !query || !searchOpen()) {
+      setSearchError(null);
+      return [];
+    }
+
+    try {
+      if (useRegex()) {
+        // Validate regex
+        new RegExp(query);
+      }
+      setSearchError(null);
+      return findMatches(content, query, useRegex(), caseSensitive());
+    } catch (e) {
+      setSearchError('Invalid regex');
+      return [];
+    }
+  });
+
+  // Folding helpers
   const getFoldRegionAt = (lineIdx: number): FoldRegion | undefined => {
     return foldRegions().find(r => r.startLine === lineIdx);
   };
 
-  // Check if a line is the start of a foldable region
   const isFoldableStart = (lineIdx: number): boolean => {
     return foldRegions().some(r => r.startLine === lineIdx);
   };
 
-  // Check if a line is currently hidden due to folding
   const isLineHidden = (lineIdx: number): boolean => {
     const folded = foldedLines();
     for (const region of foldRegions()) {
@@ -280,12 +481,10 @@ export function FileViewer(props: FileViewerProps) {
     return false;
   };
 
-  // Check if a line is folded (the fold start line itself)
   const isLineFolded = (lineIdx: number): boolean => {
     return foldedLines().has(lineIdx);
   };
 
-  // Toggle fold at line
   const toggleFold = (lineIdx: number) => {
     setFoldedLines(prev => {
       const newSet = new Set(prev);
@@ -298,6 +497,119 @@ export function FileViewer(props: FileViewerProps) {
     });
   };
 
+  const getHiddenLineCount = (lineIdx: number): number => {
+    const region = getFoldRegionAt(lineIdx);
+    if (!region) return 0;
+    return region.endLine - region.startLine;
+  };
+
+  // Search navigation
+  const goToNextMatch = () => {
+    const matches = searchMatches();
+    if (matches.length === 0) return;
+
+    const nextIdx = (currentMatchIdx() + 1) % matches.length;
+    setCurrentMatchIdx(nextIdx);
+    scrollToMatch(matches[nextIdx]);
+  };
+
+  const goToPrevMatch = () => {
+    const matches = searchMatches();
+    if (matches.length === 0) return;
+
+    const prevIdx = (currentMatchIdx() - 1 + matches.length) % matches.length;
+    setCurrentMatchIdx(prevIdx);
+    scrollToMatch(matches[prevIdx]);
+  };
+
+  const scrollToMatch = (match: SearchMatch) => {
+    // Unfold the line if it's hidden
+    for (const region of foldRegions()) {
+      if (foldedLines().has(region.startLine) && match.lineIdx > region.startLine && match.lineIdx <= region.endLine) {
+        toggleFold(region.startLine);
+      }
+    }
+
+    // Scroll to the line
+    setTimeout(() => {
+      const lineEl = codeContainerRef?.querySelector(`[data-line="${match.lineIdx}"]`);
+      if (lineEl) {
+        lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
+  };
+
+  // Open search
+  const openSearch = () => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef?.focus(), 0);
+  };
+
+  // Close search
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setCurrentMatchIdx(0);
+  };
+
+  // Keyboard handler for global shortcuts
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Cmd/Ctrl + F to open search
+    if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+
+    // Escape to close search (only when search is open)
+    if (e.key === 'Escape' && searchOpen()) {
+      e.preventDefault();
+      closeSearch();
+      return;
+    }
+  };
+
+  // Search input keyboard handler (for Enter/Shift+Enter within the input)
+  const handleSearchKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        goToPrevMatch();
+      } else {
+        goToNextMatch();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSearch();
+    }
+  };
+
+  // Register keyboard listener
+  onMount(() => {
+    window.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Reset match index when matches change
+  createEffect(() => {
+    const matches = searchMatches();
+    if (matches.length > 0 && currentMatchIdx() >= matches.length) {
+      setCurrentMatchIdx(0);
+    }
+  });
+
+  // Scroll to first match when search query changes
+  createEffect(() => {
+    const matches = searchMatches();
+    if (matches.length > 0 && searchQuery()) {
+      setCurrentMatchIdx(0);
+      scrollToMatch(matches[0]);
+    }
+  });
+
   // Highlight code when file content or theme changes
   createEffect(() => {
     const file = props.file;
@@ -305,6 +617,7 @@ export function FileViewer(props: FileViewerProps) {
 
     if (!file || file.isLoading || file.error || file.content === null) {
       setHighlightedLines([]);
+      setRawLines([]);
       setFoldRegions([]);
       setFoldedLines(new Set());
       return;
@@ -314,9 +627,9 @@ export function FileViewer(props: FileViewerProps) {
     const language = getShikiLanguage(file.language);
     const shikiTheme = getShikiTheme(currentTheme);
 
-    // Detect foldable regions based on language type
+    setRawLines(content.split('\n'));
     setFoldRegions(detectFoldableRegions(content, language));
-    setFoldedLines(new Set()); // Reset folds when file changes
+    setFoldedLines(new Set());
 
     setIsHighlighting(true);
 
@@ -334,7 +647,6 @@ export function FileViewer(props: FileViewerProps) {
         setHighlightedLines(lines);
       } catch (err) {
         console.error('Highlighting failed:', err);
-        // Fallback to plain text
         const escaped = content
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
@@ -346,34 +658,131 @@ export function FileViewer(props: FileViewerProps) {
     })();
   });
 
-  // Calculate visible lines with fold info
+  // Calculate visible lines with fold info and search highlights
   const visibleLines = createMemo(() => {
     const lines = highlightedLines();
-    const result: { lineIdx: number; html: string; isFoldStart: boolean; isFolded: boolean }[] = [];
+    const matches = searchMatches();
+    const matchIdx = currentMatchIdx();
+    const result: { lineIdx: number; html: string; isFoldStart: boolean; isFolded: boolean; hasMatch: boolean }[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       if (isLineHidden(i)) continue;
 
+      let html = lines[i];
+
+      // Apply search highlighting
+      if (matches.length > 0) {
+        html = highlightMatchesInHtml(html, matches, i, matchIdx, matches);
+      }
+
       result.push({
         lineIdx: i,
-        html: lines[i],
+        html,
         isFoldStart: isFoldableStart(i),
         isFolded: isLineFolded(i),
+        hasMatch: matches.some(m => m.lineIdx === i),
       });
     }
 
     return result;
   });
 
-  // Get the number of hidden lines for a folded region
-  const getHiddenLineCount = (lineIdx: number): number => {
-    const region = getFoldRegionAt(lineIdx);
-    if (!region) return 0;
-    return region.endLine - region.startLine;
-  };
-
   return (
-    <div class="h-full flex flex-col bg-zed-bg-surface">
+    <div class="h-full flex flex-col bg-zed-bg-surface relative">
+      {/* Search bar */}
+      <Show when={searchOpen()}>
+        <div class="absolute top-0 right-4 z-10 mt-2 flex items-center gap-2 bg-zed-bg-panel border border-zed-border-default rounded-md shadow-lg p-1.5">
+          <div class="relative">
+            <input
+              ref={searchInputRef}
+              type="text"
+              class="w-64 h-7 px-2 text-sm bg-zed-bg-surface border border-zed-border-default rounded text-zed-text-primary placeholder:text-zed-text-disabled focus:border-zed-accent-blue focus:outline-none"
+              classList={{ 'border-zed-accent-red': !!searchError() }}
+              placeholder="Search..."
+              value={searchQuery()}
+              onInput={(e) => setSearchQuery(e.currentTarget.value)}
+              onKeyDown={handleSearchKeyDown}
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck={false}
+            />
+            <Show when={searchError()}>
+              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zed-accent-red">
+                {searchError()}
+              </span>
+            </Show>
+          </div>
+
+          {/* Match count */}
+          <span class="text-xs text-zed-text-tertiary min-w-[60px] text-center">
+            <Show when={searchMatches().length > 0} fallback={searchQuery() ? 'No results' : ''}>
+              {currentMatchIdx() + 1} of {searchMatches().length}
+            </Show>
+          </span>
+
+          {/* Navigation buttons */}
+          <button
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={goToPrevMatch}
+            disabled={searchMatches().length === 0}
+            title="Previous match (Shift+Enter)"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+          <button
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={goToNextMatch}
+            disabled={searchMatches().length === 0}
+            title="Next match (Enter)"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Divider */}
+          <div class="w-px h-5 bg-zed-border-default" />
+
+          {/* Toggle buttons */}
+          <button
+            class="h-6 px-1.5 flex items-center justify-center rounded text-xs font-mono"
+            classList={{
+              'bg-zed-accent-blue text-white': caseSensitive(),
+              'hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary': !caseSensitive(),
+            }}
+            onClick={() => setCaseSensitive(!caseSensitive())}
+            title="Match case"
+          >
+            Aa
+          </button>
+          <button
+            class="h-6 px-1.5 flex items-center justify-center rounded text-xs font-mono"
+            classList={{
+              'bg-zed-accent-blue text-white': useRegex(),
+              'hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary': !useRegex(),
+            }}
+            onClick={() => setUseRegex(!useRegex())}
+            title="Use regular expression"
+          >
+            .*
+          </button>
+
+          {/* Close button */}
+          <button
+            class="w-6 h-6 flex items-center justify-center rounded hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary"
+            onClick={closeSearch}
+            title="Close (Escape)"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+
       {/* No file selected state */}
       <Show when={!props.file}>
         <div class="flex-1 flex items-center justify-center">
@@ -449,11 +858,20 @@ export function FileViewer(props: FileViewerProps) {
           <div class="flex items-center gap-4 text-zed-text-disabled flex-shrink-0">
             <span>{props.file!.content?.split('\n').length || 0} lines</span>
             <span>{getLanguageDisplayName(props.file!.language)}</span>
+            <button
+              class="hover:text-zed-text-primary transition-colors"
+              onClick={openSearch}
+              title={`Search (${keyboardShortcutManager.formatShortcut({ id: '', description: '', key: 'f', modifiers: { cmdOrCtrl: true }, handler: () => {} })})`}
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
           </div>
         </div>
 
         {/* Code view with folding */}
-        <div class="flex-1 overflow-auto">
+        <div class="flex-1 overflow-auto" ref={codeContainerRef}>
           <Show
             when={!isHighlighting() && highlightedLines().length > 0}
             fallback={
@@ -474,7 +892,11 @@ export function FileViewer(props: FileViewerProps) {
               <code>
                 <For each={visibleLines()}>
                   {(line) => (
-                    <div class="code-line group" classList={{ 'folded': line.isFolded }}>
+                    <div
+                      class="code-line group"
+                      classList={{ 'folded': line.isFolded }}
+                      data-line={line.lineIdx}
+                    >
                       {/* Fold gutter */}
                       <span class="fold-gutter">
                         <Show when={line.isFoldStart}>
@@ -485,9 +907,7 @@ export function FileViewer(props: FileViewerProps) {
                             title={line.isFolded ? 'Expand' : 'Collapse'}
                           >
                             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <Show when={line.isFolded} fallback={
-                                <path d="M19 9l-7 7-7-7" />
-                              }>
+                              <Show when={line.isFolded} fallback={<path d="M19 9l-7 7-7-7" />}>
                                 <path d="M9 5l7 7-7 7" />
                               </Show>
                             </svg>
