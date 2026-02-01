@@ -5,54 +5,99 @@
 ## Core Concepts
 
 - **Lane**: A project workspace with its own terminal, AI agents, git state, and configuration
-- **Agent**: CLI-based AI coding assistants (Claude Code, OpenCode, GitHub Copilot CLI, Aider, etc.)
-- **Review Flow**: Human-centric code review with AI-generated explanations
+- **Agent**: CLI-based AI coding assistants (Claude Code, Aider, OpenCode, etc.)
+- **Review Flow**: Human-centric code review with AI-generated explanations (planned)
 
 ---
 
 ## Phase 1: Foundation (MVP)
 
 ### Theming System
-- [ ] Zed Editor-inspired default theme
-- [ ] Dark mode with professional color palette
-- [ ] Consistent spacing and typography
-- [ ] Semantic color tokens (background, foreground, accent, border, etc.)
-- [ ] Theme context provider for SolidJS
-- [ ] CSS variables for dynamic theming
-- [ ] Smooth transitions between UI states
+- [x] Zed Editor-inspired default theme
+- [x] Three themes: Dark, Zed One Dark, Light
+- [x] Consistent spacing and typography
+- [x] Semantic color tokens (background, foreground, accent, border, etc.)
+- [x] ThemeManager service for SolidJS
+- [x] CSS variables with RGB channels for opacity support
+- [x] Theme selection UI in Settings → Appearance
+- [x] Theme persistence via localStorage
+- [x] Smooth transitions between UI states
 
 ### Lane Management
-- [ ] Create, rename, delete lanes (projects)
-- [ ] Lane persistence across sessions
+- [x] Create lanes with folder picker
+- [x] Delete lanes
+- [x] Lane persistence across sessions (SQLite database)
+- [x] Lane switching via tab bar
+- [x] Lane-specific working directory
+- [x] Lane state serialization/restore
+- [x] Lane ordering infrastructure
+- [ ] Rename lanes
 - [ ] Quick lane switching (keyboard shortcuts)
-- [ ] Lane-specific working directory and environment
-- [ ] Lane state serialization/restore
 
 ### Terminal Integration
-- [ ] Embedded terminal emulator per lane
-- [ ] Support for any CLI-based AI agent
-- [ ] Shell environment inheritance
+- [x] Embedded xterm.js terminal emulator per lane
+- [x] Support for any CLI-based AI agent
+- [x] Shell environment inheritance
+- [x] ANSI color and formatting support
+- [x] Multiple terminal tabs per lane
+- [x] Theme-aware terminal colors (updates with app theme)
+- [x] Shift+Enter key binding for Claude Code compatibility
+- [x] Custom PTY integration via portable-pty (low latency)
+- [x] Terminal resize handling
 - [ ] Terminal history persistence
-- [ ] Copy/paste support
-- [ ] ANSI color and formatting support
 - [ ] Scrollback buffer with search
 
-### Multi-Pane Layout
+### Layout System
+- [x] Activity bar with view navigation
+- [x] Collapsible file explorer sidebar
+- [x] Collapsible bottom panel with tabs
+- [x] Resizable sidebar (drag to resize)
+- [x] Resizable bottom panel (drag to resize)
+- [x] Layout alignment between components
 - [ ] Split panes (horizontal/vertical)
-- [ ] Drag-and-drop pane resizing
 - [ ] Pane zoom/maximize
-- [ ] Layout presets (editor + terminal, review mode, etc.)
+- [ ] Layout presets
 - [ ] Layout persistence per lane
 
-### Basic Git Integration
-- [ ] Git status display
-- [ ] Staged/unstaged file list
-- [ ] Diff viewer with syntax highlighting
-- [ ] Basic commit interface
+### File Explorer
+- [x] Directory tree navigation
+- [x] File/folder icons
+- [x] Expandable directories
+- [x] File selection and viewing
+- [x] Working directory display
+- [x] Collapse/expand controls
+
+### Code Viewer
+- [x] Syntax highlighting with Shiki
+- [x] Theme-aware highlighting (matches app theme)
+- [x] Line numbers
+- [x] Line hover highlighting
+- [x] Lazy language loading
+- [x] Multiple file support
+- [ ] Code folding
+- [ ] Search within file
+- [ ] Go to line
+
+### Settings
+- [x] Settings dialog (modal)
+- [x] Appearance tab with theme selection
+- [x] Visual theme previews
+- [x] Agent configuration per lane
+- [x] Model selection (Claude models)
+- [x] Agent type selection (Claude Code, Aider, Shell)
+- [ ] Keybinding customization
+- [ ] Font size settings
+
+### Window Management
+- [x] Custom title bar
+- [x] macOS traffic light integration
+- [x] Window dragging from title bar
+- [x] Double-click to maximize
+- [x] Lane tabs in title bar
 
 ---
 
-## Phase 2: AI-Enhanced Review
+## Phase 2: AI-Enhanced Review (Planned)
 
 ### Smart Diff Viewer
 - [ ] Side-by-side and unified diff views
@@ -76,16 +121,22 @@
 
 ---
 
-## Phase 3: Editor Features
+## Phase 3: Editor Features (Planned)
 
-### Code Viewer/Editor
-- [ ] Syntax highlighting (tree-sitter based)
-- [ ] Line numbers with clickable navigation
+### Code Editor
+- [ ] Full editing capabilities
 - [ ] Code folding
 - [ ] Minimap
 - [ ] Bracket matching
 - [ ] Search and replace (regex support)
 - [ ] Go to line/symbol
+- [ ] Multiple cursors
+
+### Basic Git Integration
+- [ ] Git status display
+- [ ] Staged/unstaged file list
+- [ ] Diff viewer with syntax highlighting
+- [ ] Basic commit interface
 
 ### LSP Support (Opt-in)
 - [ ] Language server spawning and management
@@ -93,19 +144,11 @@
 - [ ] Hover information
 - [ ] Go to definition/references
 - [ ] Code completion
-- [ ] Signature help
 - [ ] Auto-format on save
-
-### Markdown Preview
-- [ ] Live preview pane
-- [ ] GitHub Flavored Markdown support
-- [ ] Mermaid diagram rendering
-- [ ] Code block syntax highlighting
-- [ ] Synchronized scrolling
 
 ---
 
-## Phase 4: Plugin Ecosystem
+## Phase 4: Plugin Ecosystem (Future)
 
 ### Plugin Architecture
 - [ ] WASM-based plugin runtime (sandboxed)
@@ -121,190 +164,50 @@
 - [ ] AI agent integrations
 - [ ] Custom review rules
 - [ ] Slash commands
-- [ ] Custom pane types
-
-### Built-in Plugins (Separate Packages)
-- [ ] GitHub integration (PR creation, review)
-- [ ] GitLab integration
-- [ ] Jira/Linear task linking
-- [ ] Slack notifications
 
 ---
 
-## Phase 5: Productivity Features
+## Technical Stack
 
-### Task Management
-- [ ] Todo list per lane
-- [ ] Task creation from code comments (TODO, FIXME)
-- [ ] Task linking to commits/PRs
-- [ ] Priority and status tracking
-- [ ] Due dates and reminders
+### Frontend
+- **Framework**: SolidJS (fine-grained reactivity)
+- **Styling**: Tailwind CSS with CSS variables
+- **Terminal**: xterm.js with fit addon
+- **Syntax Highlighting**: Shiki
+- **Build Tool**: Vite
 
-### Session Management
-- [ ] Save/restore complete workspace state
-- [ ] Named sessions
-- [ ] Session templates
-- [ ] Auto-save on exit
-
-### Collaboration (Future)
-- [ ] Share lane state
-- [ ] Collaborative review
-- [ ] Team dashboards
-
----
-
-## Cross-Cutting Features
-
-### Performance
-- [ ] Sub-100ms startup time
-- [ ] 60+ FPS UI rendering
-- [ ] Memory usage < 200MB base
-- [ ] Lazy loading of heavy features
-- [ ] Background indexing
-
-### Accessibility
-- [ ] Keyboard-first navigation
-- [ ] Screen reader support
-- [ ] High contrast themes
-- [ ] Customizable font sizes
-- [ ] Focus indicators
-
-### Customization
-- [ ] Themes (dark/light/custom)
-- [ ] Keybinding customization
-- [ ] Settings sync (optional)
-- [ ] Per-lane settings override
-- [ ] Custom CSS injection
+### Backend
+- **Runtime**: Tauri 2.0 (Rust)
+- **PTY**: portable-pty (event-driven, low latency)
+- **Database**: SQLite (via rusqlite)
+- **IPC**: Tauri commands and events
 
 ### Platform Support
-- [ ] macOS (Apple Silicon + Intel)
+- [x] macOS (Apple Silicon + Intel)
 - [ ] Windows (10+)
 - [ ] Linux (X11 + Wayland)
 
 ---
 
-## Command Palette Commands
-
-```
-Lane: New Lane
-Lane: Switch Lane
-Lane: Delete Lane
-Lane: Rename Lane
-
-Terminal: New Terminal
-Terminal: Split Horizontal
-Terminal: Split Vertical
-Terminal: Clear
-Terminal: Kill Process
-
-Git: Stage File
-Git: Unstage File
-Git: Commit
-Git: Push
-Git: Pull
-Git: Show Diff
-Git: Explain Changes
-
-Review: Start Review
-Review: Approve
-Review: Request Changes
-Review: Add Comment
-
-View: Toggle Sidebar
-View: Toggle Terminal
-View: Zoom Pane
-View: Reset Layout
-
-Settings: Open Settings
-Settings: Keyboard Shortcuts
-Settings: Themes
-```
-
----
-
-## Keyboard Shortcuts (Defaults)
+## Keyboard Shortcuts (Current)
 
 | Action | macOS | Windows/Linux |
 |--------|-------|---------------|
-| New Lane | `Cmd+Shift+N` | `Ctrl+Shift+N` |
-| Switch Lane | `Cmd+1-9` | `Ctrl+1-9` |
-| Command Palette | `Cmd+Shift+P` | `Ctrl+Shift+P` |
-| New Terminal | `Cmd+\`` | `Ctrl+\`` |
-| Split Horizontal | `Cmd+\` | `Ctrl+\` |
-| Split Vertical | `Cmd+Shift+\` | `Ctrl+Shift+\` |
-| Toggle Sidebar | `Cmd+B` | `Ctrl+B` |
-| Quick Open | `Cmd+P` | `Ctrl+P` |
-| Find in Files | `Cmd+Shift+F` | `Ctrl+Shift+F` |
-| Git Status | `Cmd+Shift+G` | `Ctrl+Shift+G` |
-| Start Review | `Cmd+Shift+R` | `Ctrl+Shift+R` |
+| Settings | Click gear icon | Click gear icon |
+| Shift+Enter (terminal) | `Shift+Enter` | `Shift+Enter` |
+| Toggle Sidebar | Click activity bar icon | Click activity bar icon |
 
 ---
 
-## Configuration File Format
+## Configuration
 
-```toml
-# ~/.config/codelane/config.toml
+### Lane Agent Settings (via UI)
+- Agent type selection (Claude Code, Aider, Shell)
+- Model selection for Claude agents
+- Custom environment variables
+- Working directory configuration
 
-[general]
-theme = "dark"
-font_family = "JetBrains Mono"
-font_size = 14
-tab_size = 4
-
-[terminal]
-shell = "/bin/zsh"  # auto-detect if not set
-scrollback_lines = 10000
-cursor_style = "block"
-
-[git]
-auto_fetch = true
-fetch_interval_minutes = 5
-show_untracked = true
-
-[ai]
-default_agent = "claude"
-explain_changes = true
-risk_assessment = true
-
-[review]
-checklist_enabled = true
-auto_categorize = true
-
-[plugins]
-enabled = ["github", "theme-catppuccin"]
-
-[keybindings]
-# Override defaults
-"cmd+k cmd+s" = "settings:keyboard_shortcuts"
-```
-
----
-
-## Lane Configuration
-
-```toml
-# .codelane/lane.toml (per-project)
-
-[lane]
-name = "My Project"
-working_directory = "."
-
-[terminal]
-shell = "/bin/bash"
-env = { NODE_ENV = "development" }
-
-[agent]
-default = "claude"
-args = ["--model", "opus"]
-
-[lsp]
-enabled = ["rust-analyzer", "typescript"]
-
-[tasks]
-# Task definitions
-[[tasks.items]]
-id = "1"
-title = "Implement user auth"
-status = "in_progress"
-priority = "high"
-```
+### Theme Persistence
+- Stored in localStorage (`codelane-theme`)
+- Applied on app load
+- Instant switching without reload
