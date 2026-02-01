@@ -1,13 +1,15 @@
 // Editor panel - orchestrates file tabs and viewer with lazy loading
+// State is managed per-lane via EditorStateManager
 
-import { createSignal, createEffect, createMemo, on, For, Show } from 'solid-js';
-import { invoke } from '@tauri-apps/api/core';
+import { createMemo, createEffect, on, For, Show } from 'solid-js';
 import { EditorTabs } from './EditorTabs';
 import { FileViewer } from './FileViewer';
-import type { OpenFile, EditorTab } from './types';
-import { detectLanguage } from './types';
+import type { EditorTab } from './types';
+import { editorStateManager } from '../../services/EditorStateManager';
 
 interface EditorPanelProps {
+  // Lane ID for scoping editor state
+  laneId: string;
   // Path of file to open (from file explorer)
   selectedFilePath?: string;
   // Callback when all files are closed
@@ -15,15 +17,15 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel(props: EditorPanelProps) {
-  // Open files state - tracks metadata for all open files
-  const [openFiles, setOpenFiles] = createSignal<Map<string, OpenFile>>(new Map());
-  const [activeFileId, setActiveFileId] = createSignal<string | null>(null);
-  // Track which files have been rendered (for lazy loading)
-  const [renderedFiles, setRenderedFiles] = createSignal<Set<string>>(new Set());
+  // Subscribe to state updates
+  const _ = editorStateManager.getUpdateSignal();
 
   // Derive tabs from open files
   const tabs = createMemo((): EditorTab[] => {
-    const files = openFiles();
+    // Access update signal for reactivity
+    editorStateManager.getUpdateSignal()();
+
+    const files = editorStateManager.getOpenFiles(props.laneId);
     return Array.from(files.values()).map((file) => ({
       id: file.id,
       path: file.path,
@@ -32,19 +34,19 @@ export function EditorPanel(props: EditorPanelProps) {
     }));
   });
 
-  // Get list of files to render (only files that have been activated at least once)
-  const filesToRender = createMemo(() => {
-    const files = openFiles();
-    const rendered = renderedFiles();
-    return Array.from(files.values()).filter((f) => rendered.has(f.id));
+  // Get active file ID
+  const activeFileId = createMemo(() => {
+    editorStateManager.getUpdateSignal()();
+    return editorStateManager.getActiveFileId(props.laneId);
   });
 
-  // Mark file as rendered when it becomes active
-  createEffect(() => {
-    const activeId = activeFileId();
-    if (activeId && !renderedFiles().has(activeId)) {
-      setRenderedFiles((prev) => new Set(prev).add(activeId));
-    }
+  // Get files to render (only files that have been activated)
+  const filesToRender = createMemo(() => {
+    editorStateManager.getUpdateSignal()();
+
+    const files = editorStateManager.getOpenFiles(props.laneId);
+    const rendered = editorStateManager.getRenderedFiles(props.laneId);
+    return Array.from(files.values()).filter((f) => rendered.has(f.id));
   });
 
   // Open file when selectedFilePath changes
@@ -53,132 +55,22 @@ export function EditorPanel(props: EditorPanelProps) {
       () => props.selectedFilePath,
       async (path) => {
         if (!path) return;
-        await openFile(path);
+        await editorStateManager.openFile(props.laneId, path);
       }
     )
   );
 
-  // Load file content when file becomes active and hasn't been loaded yet
-  createEffect(() => {
-    const activeId = activeFileId();
-    if (!activeId) return;
-
-    const file = openFiles().get(activeId);
-    if (file && file.content === null && !file.isLoading && !file.error) {
-      loadFileContent(activeId, file.path);
-    }
-  });
-
-  // Open a file (creates tab, doesn't load content until active)
-  const openFile = async (path: string) => {
-    // Check if already open
-    const existingFile = Array.from(openFiles().values()).find((f) => f.path === path);
-    if (existingFile) {
-      setActiveFileId(existingFile.id);
-      return;
-    }
-
-    // Create new file entry (content will be loaded lazily)
-    const id = crypto.randomUUID();
-    const name = path.split('/').pop() || 'Untitled';
-    const language = detectLanguage(name);
-
-    const newFile: OpenFile = {
-      id,
-      path,
-      name,
-      content: null,
-      isLoading: false,
-      isModified: false,
-      error: null,
-      language,
-    };
-
-    // Add to open files and set as active
-    setOpenFiles((prev) => {
-      const next = new Map(prev);
-      next.set(id, newFile);
-      return next;
-    });
-    setActiveFileId(id);
-  };
-
-  // Load file content
-  const loadFileContent = async (fileId: string, path: string) => {
-    // Set loading state
-    setOpenFiles((prev) => {
-      const next = new Map(prev);
-      const file = next.get(fileId);
-      if (file) {
-        next.set(fileId, { ...file, isLoading: true });
-      }
-      return next;
-    });
-
-    try {
-      const content = await invoke<string>('read_file', { path });
-
-      setOpenFiles((prev) => {
-        const next = new Map(prev);
-        const file = next.get(fileId);
-        if (file) {
-          next.set(fileId, {
-            ...file,
-            content,
-            isLoading: false,
-          });
-        }
-        return next;
-      });
-    } catch (err) {
-      console.error('Failed to read file:', err);
-
-      setOpenFiles((prev) => {
-        const next = new Map(prev);
-        const file = next.get(fileId);
-        if (file) {
-          next.set(fileId, {
-            ...file,
-            isLoading: false,
-            error: err instanceof Error ? err.message : 'Failed to read file',
-          });
-        }
-        return next;
-      });
-    }
-  };
-
   // Close a file
   const closeFile = (fileId: string) => {
-    setOpenFiles((prev) => {
-      const next = new Map(prev);
-      next.delete(fileId);
-
-      // If closing active file, switch to another
-      if (activeFileId() === fileId) {
-        const remaining = Array.from(next.keys());
-        if (remaining.length > 0) {
-          setActiveFileId(remaining[remaining.length - 1]);
-        } else {
-          setActiveFileId(null);
-          props.onAllFilesClosed?.();
-        }
-      }
-
-      return next;
-    });
-
-    // Remove from rendered files
-    setRenderedFiles((prev) => {
-      const next = new Set(prev);
-      next.delete(fileId);
-      return next;
-    });
+    const noFilesRemaining = editorStateManager.closeFile(props.laneId, fileId);
+    if (noFilesRemaining) {
+      props.onAllFilesClosed?.();
+    }
   };
 
   // Select a tab
   const selectTab = (tabId: string) => {
-    setActiveFileId(tabId);
+    editorStateManager.setActiveFile(props.laneId, tabId);
   };
 
   return (

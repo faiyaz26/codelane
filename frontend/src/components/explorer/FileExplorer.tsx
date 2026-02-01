@@ -4,10 +4,11 @@ import { invoke } from '@tauri-apps/api/core';
 interface FileEntry {
   name: string;
   path: string;
-  isDirectory: boolean;
-  isHidden: boolean;
-  size: number;
-  modified: number;
+  is_dir: boolean;
+  is_file: boolean;
+  is_symlink: boolean;
+  size: number | null;
+  modified: number | null;
 }
 
 interface FileExplorerProps {
@@ -43,13 +44,13 @@ export function FileExplorer(props: FileExplorerProps) {
 
       // Sort: directories first, then alphabetically
       const sorted = entries.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
+        if (a.is_dir && !b.is_dir) return -1;
+        if (!a.is_dir && b.is_dir) return 1;
         return a.name.localeCompare(b.name);
       });
 
-      // Filter hidden files
-      const filtered = sorted.filter((e) => !e.isHidden);
+      // Filter hidden files (files starting with .)
+      const filtered = sorted.filter((e) => !e.name.startsWith('.'));
 
       setRootNodes(
         filtered.map((entry) => ({
@@ -67,8 +68,8 @@ export function FileExplorer(props: FileExplorerProps) {
     }
   };
 
-  const toggleNode = async (node: TreeNode, path: string[]) => {
-    if (!node.entry.isDirectory) {
+  const toggleNode = async (node: TreeNode, path: number[]) => {
+    if (!node.entry.is_dir) {
       // File selected
       setSelectedPath(node.entry.path);
       props.onFileSelect?.(node.entry.path);
@@ -87,12 +88,12 @@ export function FileExplorer(props: FileExplorerProps) {
         const entries = await invoke<FileEntry[]>('list_directory', { path: node.entry.path });
 
         const sorted = entries.sort((a, b) => {
-          if (a.isDirectory && !b.isDirectory) return -1;
-          if (!a.isDirectory && b.isDirectory) return 1;
+          if (a.is_dir && !b.is_dir) return -1;
+          if (!a.is_dir && b.is_dir) return 1;
           return a.name.localeCompare(b.name);
         });
 
-        const filtered = sorted.filter((e) => !e.isHidden);
+        const filtered = sorted.filter((e) => !e.name.startsWith('.'));
 
         const children = filtered.map((entry) => ({
           entry,
@@ -266,7 +267,7 @@ function FileTreeItem(props: FileTreeItemProps) {
   const isSelected = () => props.selectedPath === props.node.entry.path;
 
   const getFileIcon = (entry: FileEntry) => {
-    if (entry.isDirectory) {
+    if (entry.is_dir) {
       return props.node.isExpanded ? (
         <svg class="w-4 h-4 text-zed-accent-yellow" fill="currentColor" viewBox="0 0 24 24">
           <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2z" />
@@ -324,7 +325,7 @@ function FileTreeItem(props: FileTreeItemProps) {
         onClick={() => props.onToggle(props.node, props.path)}
       >
         {/* Expand/collapse arrow for directories */}
-        <Show when={props.node.entry.isDirectory}>
+        <Show when={props.node.entry.is_dir}>
           <svg
             class={`w-3 h-3 text-zed-text-tertiary transition-transform ${props.node.isExpanded ? 'rotate-90' : ''}`}
             fill="none"
@@ -334,7 +335,7 @@ function FileTreeItem(props: FileTreeItemProps) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </Show>
-        <Show when={!props.node.entry.isDirectory}>
+        <Show when={!props.node.entry.is_dir}>
           <span class="w-3" />
         </Show>
 

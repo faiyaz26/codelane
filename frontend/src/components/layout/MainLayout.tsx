@@ -7,6 +7,7 @@ import { FileExplorer } from '../explorer/FileExplorer';
 import { TerminalView } from '../TerminalView';
 import { TabPanel } from '../tabs/TabPanel';
 import { ProcessMonitor } from '../ProcessMonitor';
+import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
 interface MainLayoutProps {
@@ -26,12 +27,46 @@ export function MainLayout(props: MainLayoutProps) {
   const [activeView, setActiveView] = createSignal<ActivityView>('explorer');
   const [sidebarWidth, setSidebarWidth] = createSignal(260);
   const [agentPanelWidth, setAgentPanelWidth] = createSignal<number | null>(null); // null = use 50%
-  const [selectedFile, setSelectedFile] = createSignal<string | undefined>(undefined);
+  // Track selected file per lane
+  const [selectedFiles, setSelectedFiles] = createSignal<Map<string, string>>(new Map());
   const [isResizingSidebar, setIsResizingSidebar] = createSignal(false);
   const [isResizingAgent, setIsResizingAgent] = createSignal(false);
 
   const activeLane = createMemo(() => {
     return props.lanes.find((l) => l.id === props.activeLaneId);
+  });
+
+  // Get selected file for current lane
+  const selectedFile = createMemo(() => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return undefined;
+    return selectedFiles().get(laneId);
+  });
+
+  // Set selected file for current lane
+  const setSelectedFile = (path: string | undefined) => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return;
+
+    setSelectedFiles((prev) => {
+      const next = new Map(prev);
+      if (path) {
+        next.set(laneId, path);
+      } else {
+        next.delete(laneId);
+      }
+      return next;
+    });
+  };
+
+  // Check if editor should be shown (has open files OR a file is being selected)
+  const showEditor = createMemo(() => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return false;
+    // Access update signal for reactivity
+    editorStateManager.getUpdateSignal()();
+    // Show editor if there are open files OR a file is being selected
+    return editorStateManager.hasOpenFiles(laneId) || selectedFile() !== undefined;
   });
 
   // Sidebar resize handler
@@ -181,19 +216,20 @@ export function MainLayout(props: MainLayoutProps) {
           <div class="flex-1 flex flex-col overflow-hidden min-w-0">
             {/* Top Row: Editor and Agent side by side */}
             <div class="flex-1 flex overflow-hidden">
-              {/* Editor Area - Only show when file selected */}
-              <Show when={selectedFile()}>
+              {/* Editor Area - Only show when lane has open files */}
+              <Show when={showEditor() && props.activeLaneId}>
                 <div
                   class="flex flex-col overflow-hidden min-w-0"
                   style={{ flex: agentPanelWidth() === null ? '1' : '1' }}
                 >
                   <EditorPanel
+                    laneId={props.activeLaneId!}
                     selectedFilePath={selectedFile()}
                     onAllFilesClosed={() => setSelectedFile(undefined)}
                   />
                 </div>
 
-                {/* Agent Panel Resize Handle - Only show when file selected */}
+                {/* Agent Panel Resize Handle - Only show when editor is visible */}
                 <div
                   class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
                     isResizingAgent() ? 'bg-zed-accent-blue' : ''
@@ -205,14 +241,14 @@ export function MainLayout(props: MainLayoutProps) {
               {/* Agent Terminal Panel - Full width when no file, 50% or custom width when file selected */}
               <div
                 class={`flex flex-col overflow-hidden ${
-                  selectedFile()
+                  showEditor()
                     ? agentPanelWidth() === null
                       ? 'flex-1 border-l border-zed-border-subtle'  // 50% split
                       : 'flex-shrink-0 border-l border-zed-border-subtle'  // custom width
                     : 'flex-1'  // no file - full width
                 }`}
                 style={{
-                  width: selectedFile() && agentPanelWidth() !== null ? `${agentPanelWidth()}px` : 'auto'
+                  width: showEditor() && agentPanelWidth() !== null ? `${agentPanelWidth()}px` : 'auto'
                 }}
               >
             {/* Agent Terminal Header */}
