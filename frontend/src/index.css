@@ -172,3 +172,48 @@
 .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: #0b93f6;
 }
+
+/* Shiki syntax highlighting styles */
+.shiki-container {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  height: 100%;
+}
+
+.shiki-container pre.shiki {
+  margin: 0;
+  padding: 8px 0;
+  background-color: var(--zed-bg-surface) !important;
+  overflow-x: auto;
+  height: 100%;
+}
+
+.shiki-container code {
+  display: block;
+  counter-reset: line;
+}
+
+.shiki-container code .line {
+  display: inline-block;
+  width: 100%;
+  padding: 0 16px 0 0;
+  line-height: 1.5;
+}
+
+.shiki-container code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3.5em;
+  margin-right: 1em;
+  padding-right: 0.75em;
+  text-align: right;
+  color: #4B5563;
+  border-right: 1px solid #252525;
+  user-select: none;
+}
+
+.shiki-container code .line:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}

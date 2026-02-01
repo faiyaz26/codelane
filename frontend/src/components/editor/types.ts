@@ -126,3 +126,45 @@ export function getLanguageDisplayName(language: string): string {
 
   return displayNames[language] || language.charAt(0).toUpperCase() + language.slice(1);
 }
+
+// Map our language IDs to Shiki language IDs
+export function getShikiLanguage(language: string): string {
+  const shikiMap: Record<string, string> = {
+    'javascript': 'javascript',
+    'javascriptreact': 'jsx',
+    'typescript': 'typescript',
+    'typescriptreact': 'tsx',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'sass',
+    'less': 'less',
+    'json': 'json',
+    'yaml': 'yaml',
+    'xml': 'xml',
+    'toml': 'toml',
+    'rust': 'rust',
+    'python': 'python',
+    'go': 'go',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'csharp': 'csharp',
+    'ruby': 'ruby',
+    'php': 'php',
+    'swift': 'swift',
+    'kotlin': 'kotlin',
+    'scala': 'scala',
+    'shell': 'shellscript',
+    'markdown': 'markdown',
+    'plaintext': 'text',
+    'dotenv': 'dotenv',
+    'gitignore': 'text',
+    'dockerfile': 'dockerfile',
+    'sql': 'sql',
+    'makefile': 'makefile',
+    'cmake': 'cmake',
+  };
+
+  return shikiMap[language] || 'text';
+}

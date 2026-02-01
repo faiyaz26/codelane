@@ -1,24 +1,95 @@
-// File viewer component - displays file content with line numbers
+// File viewer component - displays file content with Shiki syntax highlighting
 
-import { createMemo, For, Show } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
-import { getLanguageDisplayName } from './types';
+import { getLanguageDisplayName, getShikiLanguage } from './types';
+
+// Singleton highlighter instance
+let highlighterPromise: Promise<Highlighter> | null = null;
+const loadedLanguages = new Set<string>();
+
+// Get or create the highlighter
+async function getHighlighter(): Promise<Highlighter> {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighter({
+      themes: ['github-dark-default'],
+      langs: [], // Start with no languages, load on demand
+    });
+  }
+  return highlighterPromise;
+}
+
+// Ensure a language is loaded
+async function ensureLanguageLoaded(highlighter: Highlighter, lang: string): Promise<string> {
+  // Check if it's a valid bundled language
+  const validLangs = [
+    'javascript', 'jsx', 'typescript', 'tsx', 'html', 'css', 'scss', 'sass', 'less',
+    'json', 'yaml', 'xml', 'toml', 'rust', 'python', 'go', 'java', 'c', 'cpp',
+    'csharp', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'shellscript', 'markdown',
+    'sql', 'dockerfile', 'makefile', 'cmake', 'dotenv', 'text'
+  ];
+
+  const targetLang = validLangs.includes(lang) ? lang : 'text';
+
+  if (!loadedLanguages.has(targetLang) && targetLang !== 'text') {
+    try {
+      await highlighter.loadLanguage(targetLang as BundledLanguage);
+      loadedLanguages.add(targetLang);
+    } catch (e) {
+      console.warn(`Failed to load language: ${targetLang}, falling back to text`);
+      return 'text';
+    }
+  }
+
+  return targetLang;
+}
 
 interface FileViewerProps {
   file: OpenFile | null;
 }
 
 export function FileViewer(props: FileViewerProps) {
-  // Split content into lines
-  const lines = createMemo(() => {
-    if (!props.file?.content) return [];
-    return props.file.content.split('\n');
-  });
+  const [highlightedHtml, setHighlightedHtml] = createSignal<string>('');
+  const [isHighlighting, setIsHighlighting] = createSignal(false);
+  let codeContainerRef: HTMLDivElement | undefined;
 
-  // Calculate line number width based on total lines
-  const lineNumberWidth = createMemo(() => {
-    const numLines = lines().length;
-    return Math.max(3, String(numLines).length);
+  // Highlight code when file content changes
+  createEffect(() => {
+    const file = props.file;
+    if (!file || file.isLoading || file.error || file.content === null) {
+      setHighlightedHtml('');
+      return;
+    }
+
+    const content = file.content;
+    const language = getShikiLanguage(file.language);
+
+    setIsHighlighting(true);
+
+    (async () => {
+      try {
+        const highlighter = await getHighlighter();
+        const loadedLang = await ensureLanguageLoaded(highlighter, language);
+
+        const html = highlighter.codeToHtml(content, {
+          lang: loadedLang,
+          theme: 'github-dark-default',
+        });
+
+        setHighlightedHtml(html);
+      } catch (err) {
+        console.error('Highlighting failed:', err);
+        // Fallback to plain text with escaped HTML
+        const escaped = content
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        setHighlightedHtml(`<pre class="shiki"><code>${escaped}</code></pre>`);
+      } finally {
+        setIsHighlighting(false);
+      }
+    })();
   });
 
   return (
@@ -96,43 +167,35 @@ export function FileViewer(props: FileViewerProps) {
             <span class="truncate">{props.file!.path}</span>
           </div>
           <div class="flex items-center gap-4 text-zed-text-disabled flex-shrink-0">
-            <span>{lines().length} lines</span>
+            <span>{props.file!.content?.split('\n').length || 0} lines</span>
             <span>{getLanguageDisplayName(props.file!.language)}</span>
           </div>
         </div>
 
         {/* Code view */}
-        <div class="flex-1 overflow-auto font-mono text-sm">
-          <div class="min-w-full">
-            <Show
-              when={lines().length > 0}
-              fallback={
-                <div class="p-4 text-zed-text-tertiary italic">Empty file</div>
-              }
-            >
-              <table class="w-full border-collapse">
-                <tbody>
-                  <For each={lines()}>
-                    {(line, index) => (
-                      <tr class="hover:bg-zed-bg-hover/50 group">
-                        {/* Line number */}
-                        <td
-                          class="px-4 py-0 text-right text-zed-text-disabled select-none border-r border-zed-border-subtle bg-zed-bg-panel/50 sticky left-0"
-                          style={{ width: `${lineNumberWidth() + 2}ch` }}
-                        >
-                          {index() + 1}
-                        </td>
-                        {/* Line content */}
-                        <td class="px-4 py-0 whitespace-pre text-zed-text-primary">
-                          {line || ' '}
-                        </td>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </Show>
-          </div>
+        <div class="flex-1 overflow-auto">
+          <Show
+            when={!isHighlighting() && highlightedHtml()}
+            fallback={
+              <div class="p-4 flex items-center gap-2 text-zed-text-tertiary">
+                <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <span class="text-sm">Highlighting...</span>
+              </div>
+            }
+          >
+            <div
+              ref={codeContainerRef}
+              class="shiki-container text-sm"
+              innerHTML={highlightedHtml()}
+            />
+          </Show>
         </div>
       </Show>
     </div>
