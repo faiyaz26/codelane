@@ -43,7 +43,7 @@ export function TopBar(props: TopBarProps) {
       </Show>
 
       {/* Lane Tabs */}
-      <div class="flex-1 flex items-center h-full overflow-x-auto">
+      <div class="flex-1 flex items-center h-full overflow-x-auto ml-px">
         <For each={props.lanes}>
           {(lane) => (
             <div

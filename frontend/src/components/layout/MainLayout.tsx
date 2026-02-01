@@ -172,7 +172,7 @@ export function MainLayout(props: MainLayoutProps) {
         >
           {/* Collapsed Sidebar Handle */}
           <Show when={sidebarCollapsed()}>
-            <div class="flex flex-col bg-zed-bg-panel border-r border-zed-border-subtle">
+            <div class="w-6 flex flex-col bg-zed-bg-panel border-r border-zed-border-subtle">
               {/* Expand button aligned with Agent Terminal header */}
               <div class="h-10 flex items-center justify-center">
                 <button

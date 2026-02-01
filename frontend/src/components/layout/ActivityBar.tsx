@@ -92,7 +92,7 @@ function ActivityIcon(props: { icon: string; class?: string }) {
 
 export function ActivityBar(props: ActivityBarProps) {
   return (
-    <div class="w-12 bg-zed-bg-panel border-r border-zed-border-subtle flex flex-col">
+    <div class="w-14 bg-zed-bg-panel border-r border-zed-border-subtle flex flex-col">
       {/* Top Activity Icons */}
       <div class="flex-1 flex flex-col items-center pt-2 gap-1">
         <For each={ACTIVITY_ITEMS}>
