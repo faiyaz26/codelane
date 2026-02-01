@@ -25,7 +25,7 @@ interface MainLayoutProps {
 export function MainLayout(props: MainLayoutProps) {
   const [activeView, setActiveView] = createSignal<ActivityView>('explorer');
   const [sidebarWidth, setSidebarWidth] = createSignal(260);
-  const [agentPanelWidth, setAgentPanelWidth] = createSignal(400);
+  const [agentPanelWidth, setAgentPanelWidth] = createSignal<number | null>(null); // null = use 50%
   const [selectedFile, setSelectedFile] = createSignal<string | undefined>(undefined);
   const [isResizingSidebar, setIsResizingSidebar] = createSignal(false);
   const [isResizingAgent, setIsResizingAgent] = createSignal(false);
@@ -64,12 +64,14 @@ export function MainLayout(props: MainLayoutProps) {
     setIsResizingAgent(true);
 
     const startX = e.clientX;
-    const startWidth = agentPanelWidth();
+    // Get current width from element if using 50% default
+    const agentPanel = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+    const startWidth = agentPanelWidth() ?? agentPanel?.offsetWidth ?? 400;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = startX - e.clientX;
-      const newWidth = Math.max(300, Math.min(600, startWidth + delta));
-      setAgentPanelWidth(newWidth);
+      const newWidth = Math.max(300, Math.min(800, startWidth + delta));
+      setAgentPanelWidth(newWidth); // User has customized, now use fixed width
     };
 
     const handleMouseUp = () => {
@@ -175,40 +177,41 @@ export function MainLayout(props: MainLayoutProps) {
             onMouseDown={handleSidebarResizeStart}
           />
 
-          {/* Center Area (Editor + Bottom Panel) */}
+          {/* Main Content Area (Editor + Agent on top, Bottom Panel below) */}
           <div class="flex-1 flex flex-col overflow-hidden min-w-0">
-            {/* Editor Area */}
-            <div class="flex-1 overflow-hidden">
-              <EditorPlaceholder selectedFile={selectedFile()} />
-            </div>
+            {/* Top Row: Editor and Agent side by side */}
+            <div class="flex-1 flex overflow-hidden">
+              {/* Editor Area - Only show when file selected */}
+              <Show when={selectedFile()}>
+                <div
+                  class="flex flex-col overflow-hidden min-w-0"
+                  style={{ flex: agentPanelWidth() === null ? '1' : '1' }}
+                >
+                  <EditorPlaceholder selectedFile={selectedFile()} />
+                </div>
 
-            {/* Bottom Panel (Terminal Tabs) */}
-            <For each={Array.from(props.initializedLanes)}>
-              {(laneId) => {
-                const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+                {/* Agent Panel Resize Handle - Only show when file selected */}
+                <div
+                  class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
+                    isResizingAgent() ? 'bg-zed-accent-blue' : ''
+                  }`}
+                  onMouseDown={handleAgentResizeStart}
+                />
+              </Show>
 
-                return (
-                  <Show when={lane() && lane()!.id === props.activeLaneId}>
-                    <TabPanel laneId={lane()!.id} workingDir={lane()!.workingDir} />
-                  </Show>
-                );
-              }}
-            </For>
-          </div>
-
-          {/* Agent Panel Resize Handle */}
-          <div
-            class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
-              isResizingAgent() ? 'bg-zed-accent-blue' : ''
-            }`}
-            onMouseDown={handleAgentResizeStart}
-          />
-
-          {/* Agent Terminal Panel (Right Side) */}
-          <div
-            class="flex-shrink-0 flex flex-col overflow-hidden border-l border-zed-border-subtle"
-            style={{ width: `${agentPanelWidth()}px` }}
-          >
+              {/* Agent Terminal Panel - Full width when no file, 50% or custom width when file selected */}
+              <div
+                class={`flex flex-col overflow-hidden ${
+                  selectedFile()
+                    ? agentPanelWidth() === null
+                      ? 'flex-1 border-l border-zed-border-subtle'  // 50% split
+                      : 'flex-shrink-0 border-l border-zed-border-subtle'  // custom width
+                    : 'flex-1'  // no file - full width
+                }`}
+                style={{
+                  width: selectedFile() && agentPanelWidth() !== null ? `${agentPanelWidth()}px` : 'auto'
+                }}
+              >
             {/* Agent Terminal Header */}
             <div class="h-10 border-b border-zed-border-subtle bg-zed-bg-panel px-4 flex items-center justify-between flex-shrink-0">
               <h3 class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
@@ -235,6 +238,21 @@ export function MainLayout(props: MainLayoutProps) {
                 )}
               </Show>
             </div>
+          </div>
+            </div>
+
+            {/* Bottom Panel (Terminal Tabs) - Spans full width below Editor + Agent */}
+            <For each={Array.from(props.initializedLanes)}>
+              {(laneId) => {
+                const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+
+                return (
+                  <Show when={lane() && lane()!.id === props.activeLaneId}>
+                    <TabPanel laneId={lane()!.id} workingDir={lane()!.workingDir} />
+                  </Show>
+                );
+              }}
+            </For>
           </div>
         </Show>
       </div>
