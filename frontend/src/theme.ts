@@ -2,6 +2,104 @@
  * Zed-inspired theme constants and utilities
  */
 
+import type { ITheme } from '@xterm/xterm';
+import { themeManager, type ThemeId } from './services/ThemeManager';
+
+// Terminal themes for each app theme
+const TERMINAL_THEMES: Record<ThemeId, ITheme> = {
+  dark: {
+    background: '#111111',
+    foreground: '#e6e6e6',
+    cursor: '#0b93f6',
+    cursorAccent: '#111111',
+    selectionBackground: '#252525',
+    selectionForeground: '#e6e6e6',
+    // ANSI colors
+    black: '#1a1a1a',
+    red: '#f23c3c',
+    green: '#26d97f',
+    yellow: '#f5c249',
+    blue: '#0b93f6',
+    magenta: '#b88ef2',
+    cyan: '#26d9d9',
+    white: '#e6e6e6',
+    brightBlack: '#4e4e4e',
+    brightRed: '#ff5252',
+    brightGreen: '#3dff95',
+    brightYellow: '#ffd65e',
+    brightBlue: '#3da8ff',
+    brightMagenta: '#d1a3ff',
+    brightCyan: '#3dffff',
+    brightWhite: '#ffffff',
+  },
+  'zed-dark': {
+    background: '#2f343e',
+    foreground: '#dce0e5',
+    cursor: '#74ade8',
+    cursorAccent: '#2f343e',
+    selectionBackground: '#4d5566',
+    selectionForeground: '#dce0e5',
+    // ANSI colors - warmer tones matching Zed
+    black: '#282c33',
+    red: '#d07277',
+    green: '#a1c181',
+    yellow: '#dfc184',
+    blue: '#74ade8',
+    magenta: '#b477cf',
+    cyan: '#56b6c2',
+    white: '#dce0e5',
+    brightBlack: '#5c6370',
+    brightRed: '#e06c75',
+    brightGreen: '#98c379',
+    brightYellow: '#e5c07b',
+    brightBlue: '#61afef',
+    brightMagenta: '#c678dd',
+    brightCyan: '#56b6c2',
+    brightWhite: '#ffffff',
+  },
+  light: {
+    background: '#f8f9fa',
+    foreground: '#202124',
+    cursor: '#1a73e8',
+    cursorAccent: '#f8f9fa',
+    selectionBackground: '#c2dbff',
+    selectionForeground: '#202124',
+    // ANSI colors - adjusted for light background
+    black: '#202124',
+    red: '#d93025',
+    green: '#188038',
+    yellow: '#f9ab00',
+    blue: '#1a73e8',
+    magenta: '#9334e6',
+    cyan: '#007b83',
+    white: '#f8f9fa',
+    brightBlack: '#5f6368',
+    brightRed: '#ea4335',
+    brightGreen: '#34a853',
+    brightYellow: '#fbbc04',
+    brightBlue: '#4285f4',
+    brightMagenta: '#a142f4',
+    brightCyan: '#24c1e0',
+    brightWhite: '#ffffff',
+  },
+};
+
+/**
+ * Get the terminal theme for the current app theme
+ */
+export function getTerminalTheme(): ITheme {
+  const currentTheme = themeManager.getTheme()();
+  return TERMINAL_THEMES[currentTheme];
+}
+
+/**
+ * Get the terminal theme for a specific theme ID
+ */
+export function getTerminalThemeById(themeId: ThemeId): ITheme {
+  return TERMINAL_THEMES[themeId];
+}
+
+// Legacy ZED_THEME for backwards compatibility (dark theme values)
 export const ZED_THEME = {
   // Backgrounds
   bg: {

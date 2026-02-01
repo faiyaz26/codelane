@@ -1,10 +1,11 @@
-import { onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount, createEffect } from 'solid-js';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import { spawn, type PtyHandle } from '../services/PortablePty';
-import { ZED_THEME } from '../theme';
+import { getTerminalTheme } from '../theme';
+import { themeManager } from '../services/ThemeManager';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
-import { createTerminal, createFitAddon, attachKeyHandlers } from '../lib/terminal-utils';
+import { createTerminal, createFitAddon, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
@@ -23,6 +24,14 @@ export function TerminalView(props: TerminalViewProps) {
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
   let pty: PtyHandle | undefined;
+
+  // Watch for theme changes and update terminal
+  createEffect(() => {
+    const currentTheme = themeManager.getTheme()(); // Subscribe to theme changes
+    if (terminal) {
+      updateTerminalTheme(terminal);
+    }
+  });
 
   onMount(async () => {
     console.log('[TerminalView] Mounting laneId:', props.laneId);
@@ -217,10 +226,7 @@ export function TerminalView(props: TerminalViewProps) {
   return (
     <div
       ref={containerRef}
-      class="w-full h-full"
-      style={{
-        background: ZED_THEME.bg.panel,
-      }}
+      class="w-full h-full bg-zed-bg-panel"
     />
   );
 }

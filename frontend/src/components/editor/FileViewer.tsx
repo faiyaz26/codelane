@@ -4,16 +4,30 @@ import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage } from './types';
+import { themeManager, type ThemeId } from '../../services/ThemeManager';
 
 // Singleton highlighter instance
 let highlighterPromise: Promise<Highlighter> | null = null;
 const loadedLanguages = new Set<string>();
 
+// Map app themes to Shiki themes
+function getShikiTheme(themeId: ThemeId): string {
+  switch (themeId) {
+    case 'light':
+      return 'github-light-default';
+    case 'zed-dark':
+      return 'one-dark-pro';
+    case 'dark':
+    default:
+      return 'github-dark-default';
+  }
+}
+
 // Get or create the highlighter
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
-      themes: ['github-dark-default'],
+      themes: ['github-dark-default', 'github-light-default', 'one-dark-pro'],
       langs: [], // Start with no languages, load on demand
     });
   }
@@ -54,9 +68,11 @@ export function FileViewer(props: FileViewerProps) {
   const [isHighlighting, setIsHighlighting] = createSignal(false);
   let codeContainerRef: HTMLDivElement | undefined;
 
-  // Highlight code when file content changes
+  // Highlight code when file content or theme changes
   createEffect(() => {
     const file = props.file;
+    const currentTheme = themeManager.getTheme()(); // Subscribe to theme changes
+
     if (!file || file.isLoading || file.error || file.content === null) {
       setHighlightedHtml('');
       return;
@@ -64,6 +80,7 @@ export function FileViewer(props: FileViewerProps) {
 
     const content = file.content;
     const language = getShikiLanguage(file.language);
+    const shikiTheme = getShikiTheme(currentTheme);
 
     setIsHighlighting(true);
 
@@ -74,7 +91,7 @@ export function FileViewer(props: FileViewerProps) {
 
         const html = highlighter.codeToHtml(content, {
           lang: loadedLang,
-          theme: 'github-dark-default',
+          theme: shikiTheme,
         });
 
         setHighlightedHtml(html);

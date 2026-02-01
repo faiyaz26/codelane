@@ -161,7 +161,7 @@ export function MainLayout(props: MainLayoutProps) {
                   AI Orchestrator for Local Development. Create a lane to get started with your project.
                 </p>
                 <button
-                  class="px-6 py-2.5 bg-zed-accent-blue hover:bg-zed-accent-blueHover text-white rounded-md font-medium transition-colors"
+                  class="px-6 py-2.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white rounded-md font-medium transition-colors"
                   onClick={props.onNewLane}
                 >
                   Create Your First Lane

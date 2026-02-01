@@ -4,12 +4,14 @@
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { ZED_THEME } from '../theme';
+import { getTerminalTheme } from '../theme';
 
 /**
- * Creates a pre-configured xterm.js Terminal instance with Zed theme
+ * Creates a pre-configured xterm.js Terminal instance with current theme
  */
 export function createTerminal(): Terminal {
+  const theme = getTerminalTheme();
+
   return new Terminal({
     cursorBlink: false,
     cursorStyle: 'block',
@@ -17,39 +19,20 @@ export function createTerminal(): Terminal {
     fontSize: 13,
     lineHeight: 1.4,
     allowTransparency: false,
-    theme: {
-      background: ZED_THEME.bg.panel,
-      foreground: ZED_THEME.text.primary,
-      cursor: ZED_THEME.accent.blue,
-      cursorAccent: ZED_THEME.bg.panel,
-      selectionBackground: ZED_THEME.bg.active,
-      selectionForeground: ZED_THEME.text.primary,
-
-      // ANSI colors (normal)
-      black: ZED_THEME.terminal.black,
-      red: ZED_THEME.terminal.red,
-      green: ZED_THEME.terminal.green,
-      yellow: ZED_THEME.terminal.yellow,
-      blue: ZED_THEME.terminal.blue,
-      magenta: ZED_THEME.terminal.magenta,
-      cyan: ZED_THEME.terminal.cyan,
-      white: ZED_THEME.terminal.white,
-
-      // ANSI colors (bright)
-      brightBlack: ZED_THEME.terminal.brightBlack,
-      brightRed: ZED_THEME.terminal.brightRed,
-      brightGreen: ZED_THEME.terminal.brightGreen,
-      brightYellow: ZED_THEME.terminal.brightYellow,
-      brightBlue: ZED_THEME.terminal.brightBlue,
-      brightMagenta: ZED_THEME.terminal.brightMagenta,
-      brightCyan: ZED_THEME.terminal.brightCyan,
-      brightWhite: ZED_THEME.terminal.brightWhite,
-    },
+    theme,
     scrollback: 5000,
     convertEol: false,
     windowsMode: false,
     fastScrollModifier: 'shift',
   });
+}
+
+/**
+ * Updates a terminal's theme to match the current app theme
+ */
+export function updateTerminalTheme(terminal: Terminal): void {
+  const theme = getTerminalTheme();
+  terminal.options.theme = theme;
 }
 
 /**

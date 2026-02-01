@@ -5,7 +5,8 @@
  */
 
 import { onMount, onCleanup, createEffect } from 'solid-js';
-import { ZED_THEME } from '../../theme';
+import { themeManager } from '../../services/ThemeManager';
+import { updateTerminalTheme } from '../../lib/terminal-utils';
 import type { TerminalHandle } from '../../types/terminal';
 
 interface TerminalInstanceProps {
@@ -15,6 +16,14 @@ interface TerminalInstanceProps {
 export function TerminalInstance(props: TerminalInstanceProps) {
   let containerRef: HTMLDivElement | undefined;
   let resizeObserver: ResizeObserver | undefined;
+
+  // Watch for theme changes and update terminal
+  createEffect(() => {
+    const currentTheme = themeManager.getTheme()(); // Subscribe to theme changes
+    if (props.handle?.terminal) {
+      updateTerminalTheme(props.handle.terminal);
+    }
+  });
 
   onMount(() => {
     if (!containerRef) return;
@@ -68,10 +77,7 @@ export function TerminalInstance(props: TerminalInstanceProps) {
   return (
     <div
       ref={containerRef}
-      class="w-full h-full"
-      style={{
-        background: ZED_THEME.bg.panel,
-      }}
+      class="w-full h-full bg-zed-bg-panel"
     />
   );
 }
