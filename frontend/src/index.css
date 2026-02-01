@@ -102,6 +102,18 @@
   }
 }
 
+/* Custom utilities */
+@layer utilities {
+  /* Hide scrollbar but allow scrolling */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Component utilities */
 @layer components {
   .panel {

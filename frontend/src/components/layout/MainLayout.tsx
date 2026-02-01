@@ -2,7 +2,7 @@ import { createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { TopBar } from './TopBar';
 import { ActivityBar, type ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
-import { EditorPlaceholder } from './EditorPlaceholder';
+import { EditorPanel } from '../editor';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { TerminalView } from '../TerminalView';
 import { TabPanel } from '../tabs/TabPanel';
@@ -187,7 +187,10 @@ export function MainLayout(props: MainLayoutProps) {
                   class="flex flex-col overflow-hidden min-w-0"
                   style={{ flex: agentPanelWidth() === null ? '1' : '1' }}
                 >
-                  <EditorPlaceholder selectedFile={selectedFile()} />
+                  <EditorPanel
+                    selectedFilePath={selectedFile()}
+                    onAllFilesClosed={() => setSelectedFile(undefined)}
+                  />
                 </div>
 
                 {/* Agent Panel Resize Handle - Only show when file selected */}
