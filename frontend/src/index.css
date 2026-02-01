@@ -295,3 +295,103 @@
 .shiki-container code .line:hover {
   background-color: rgb(var(--zed-bg-hover));
 }
+
+/* Custom Shiki container with code folding */
+.shiki-container-custom {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 0;
+  background-color: rgb(var(--zed-bg-surface));
+  overflow-x: auto;
+  min-height: 100%;
+}
+
+.shiki-container-custom code {
+  display: block;
+}
+
+.shiki-container-custom .code-line {
+  display: flex;
+  align-items: stretch;
+  min-height: 1.5em;
+  padding-right: 16px;
+}
+
+.shiki-container-custom .code-line:hover {
+  background-color: rgb(var(--zed-bg-hover));
+}
+
+.shiki-container-custom .code-line.folded {
+  background-color: rgb(var(--zed-bg-hover) / 0.5);
+}
+
+/* Fold gutter */
+.shiki-container-custom .fold-gutter {
+  width: 1.5em;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.shiki-container-custom .fold-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  color: rgb(var(--zed-text-disabled));
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.shiki-container-custom .code-line:hover .fold-button,
+.shiki-container-custom .fold-button.is-folded {
+  opacity: 1;
+}
+
+.shiki-container-custom .fold-button:hover {
+  color: rgb(var(--zed-text-primary));
+}
+
+.shiki-container-custom .fold-button.is-folded {
+  color: rgb(var(--zed-accent-blue));
+}
+
+/* Line numbers */
+.shiki-container-custom .line-number {
+  width: 3em;
+  flex-shrink: 0;
+  padding-right: 0.75em;
+  text-align: right;
+  color: rgb(var(--zed-text-disabled));
+  border-right: 1px solid rgb(var(--zed-border-default));
+  user-select: none;
+  margin-right: 1em;
+}
+
+/* Line content */
+.shiki-container-custom .line-content {
+  flex: 1;
+  white-space: pre;
+}
+
+/* Fold indicator */
+.shiki-container-custom .fold-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5em;
+  padding: 0 0.5em;
+  font-size: 0.85em;
+  color: rgb(var(--zed-text-tertiary));
+  background-color: rgb(var(--zed-bg-active));
+  border-radius: 3px;
+  user-select: none;
+}

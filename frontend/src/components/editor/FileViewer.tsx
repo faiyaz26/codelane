@@ -1,6 +1,6 @@
-// File viewer component - displays file content with Shiki syntax highlighting
+// File viewer component - displays file content with Shiki syntax highlighting and code folding
 
-import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, For, Show } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage } from './types';
@@ -36,7 +36,6 @@ async function getHighlighter(): Promise<Highlighter> {
 
 // Ensure a language is loaded
 async function ensureLanguageLoaded(highlighter: Highlighter, lang: string): Promise<string> {
-  // Check if it's a valid bundled language
   const validLangs = [
     'javascript', 'jsx', 'typescript', 'tsx', 'html', 'css', 'scss', 'sass', 'less',
     'json', 'yaml', 'xml', 'toml', 'rust', 'python', 'go', 'java', 'c', 'cpp',
@@ -59,28 +58,265 @@ async function ensureLanguageLoaded(highlighter: Highlighter, lang: string): Pro
   return targetLang;
 }
 
+// Foldable region detection
+interface FoldRegion {
+  startLine: number; // 0-indexed
+  endLine: number;   // 0-indexed, inclusive
+}
+
+// Languages that use indentation-based folding
+const INDENTATION_LANGUAGES = new Set([
+  'python', 'yaml', 'yml', 'coffee', 'coffeescript', 'haml', 'slim', 'pug', 'jade'
+]);
+
+// Detect foldable regions based on brackets (for C-style languages)
+function detectBracketFoldRegions(content: string): FoldRegion[] {
+  const lines = content.split('\n');
+  const regions: FoldRegion[] = [];
+  const stack: { char: string; line: number }[] = [];
+
+  const openBrackets: Record<string, string> = {
+    '{': '}',
+    '[': ']',
+    '(': ')',
+  };
+
+  const closeBrackets: Record<string, string> = {
+    '}': '{',
+    ']': '[',
+    ')': '(',
+  };
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
+    let inString = false;
+    let stringChar = '';
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const prevChar = i > 0 ? line[i - 1] : '';
+
+      // Handle string detection (simplified)
+      if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (char === stringChar) {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (inString) continue;
+
+      // Skip line comments
+      if (char === '/' && line[i + 1] === '/') break;
+      if (char === '#') break; // Python/Ruby comments
+
+      if (openBrackets[char]) {
+        stack.push({ char, line: lineIdx });
+      } else if (closeBrackets[char]) {
+        const expected = closeBrackets[char];
+        for (let j = stack.length - 1; j >= 0; j--) {
+          if (stack[j].char === expected) {
+            const startLine = stack[j].line;
+            if (lineIdx > startLine) {
+              regions.push({ startLine, endLine: lineIdx });
+            }
+            stack.splice(j, 1);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return regions;
+}
+
+// Detect foldable regions based on indentation (for Python, YAML, etc.)
+function detectIndentationFoldRegions(content: string): FoldRegion[] {
+  const lines = content.split('\n');
+  const regions: FoldRegion[] = [];
+
+  // Get indentation level of a line (number of leading spaces/tabs)
+  const getIndent = (line: string): number => {
+    const match = line.match(/^(\s*)/);
+    if (!match) return 0;
+    // Convert tabs to 4 spaces for consistency
+    return match[1].replace(/\t/g, '    ').length;
+  };
+
+  // Check if line is empty or only whitespace/comments
+  const isEmptyOrComment = (line: string): boolean => {
+    const trimmed = line.trim();
+    return trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('//');
+  };
+
+  // Stack to track fold start points
+  const stack: { indent: number; line: number }[] = [];
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
+
+    // Skip empty lines and comments for indent calculation
+    if (isEmptyOrComment(line)) continue;
+
+    const currentIndent = getIndent(line);
+
+    // Close all regions that have higher or equal indentation
+    while (stack.length > 0 && stack[stack.length - 1].indent >= currentIndent) {
+      const startInfo = stack.pop()!;
+      // Find the last non-empty line before current
+      let endLine = lineIdx - 1;
+      while (endLine > startInfo.line && isEmptyOrComment(lines[endLine])) {
+        endLine--;
+      }
+      if (endLine > startInfo.line) {
+        regions.push({ startLine: startInfo.line, endLine });
+      }
+    }
+
+    // Check if next non-empty line has higher indentation (start of fold)
+    let nextNonEmptyIdx = lineIdx + 1;
+    while (nextNonEmptyIdx < lines.length && isEmptyOrComment(lines[nextNonEmptyIdx])) {
+      nextNonEmptyIdx++;
+    }
+
+    if (nextNonEmptyIdx < lines.length) {
+      const nextIndent = getIndent(lines[nextNonEmptyIdx]);
+      if (nextIndent > currentIndent) {
+        stack.push({ indent: currentIndent, line: lineIdx });
+      }
+    }
+  }
+
+  // Close any remaining open regions
+  while (stack.length > 0) {
+    const startInfo = stack.pop()!;
+    let endLine = lines.length - 1;
+    while (endLine > startInfo.line && isEmptyOrComment(lines[endLine])) {
+      endLine--;
+    }
+    if (endLine > startInfo.line) {
+      regions.push({ startLine: startInfo.line, endLine });
+    }
+  }
+
+  return regions;
+}
+
+// Main function to detect foldable regions based on language
+function detectFoldableRegions(content: string, language: string): FoldRegion[] {
+  const normalizedLang = language.toLowerCase();
+
+  let regions: FoldRegion[];
+
+  if (INDENTATION_LANGUAGES.has(normalizedLang)) {
+    // Use indentation-based folding for Python, YAML, etc.
+    regions = detectIndentationFoldRegions(content);
+  } else {
+    // Use bracket-based folding for C-style languages
+    regions = detectBracketFoldRegions(content);
+  }
+
+  // Sort by start line
+  regions.sort((a, b) => a.startLine - b.startLine);
+
+  return regions;
+}
+
+// Parse Shiki HTML output into lines
+function parseShikiHtml(html: string): string[] {
+  // Extract lines from Shiki output
+  const lineRegex = /<span class="line">(.*?)<\/span>/g;
+  const lines: string[] = [];
+  let match;
+
+  while ((match = lineRegex.exec(html)) !== null) {
+    lines.push(match[1]);
+  }
+
+  // If no lines found, try alternative parsing
+  if (lines.length === 0) {
+    const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/);
+    if (codeMatch) {
+      // Split by newlines if it's plain content
+      return codeMatch[1].split('\n');
+    }
+  }
+
+  return lines;
+}
+
 interface FileViewerProps {
   file: OpenFile | null;
 }
 
 export function FileViewer(props: FileViewerProps) {
-  const [highlightedHtml, setHighlightedHtml] = createSignal<string>('');
+  const [highlightedLines, setHighlightedLines] = createSignal<string[]>([]);
   const [isHighlighting, setIsHighlighting] = createSignal(false);
-  let codeContainerRef: HTMLDivElement | undefined;
+  const [foldRegions, setFoldRegions] = createSignal<FoldRegion[]>([]);
+  const [foldedLines, setFoldedLines] = createSignal<Set<number>>(new Set());
+
+  // Get fold region starting at a line
+  const getFoldRegionAt = (lineIdx: number): FoldRegion | undefined => {
+    return foldRegions().find(r => r.startLine === lineIdx);
+  };
+
+  // Check if a line is the start of a foldable region
+  const isFoldableStart = (lineIdx: number): boolean => {
+    return foldRegions().some(r => r.startLine === lineIdx);
+  };
+
+  // Check if a line is currently hidden due to folding
+  const isLineHidden = (lineIdx: number): boolean => {
+    const folded = foldedLines();
+    for (const region of foldRegions()) {
+      if (folded.has(region.startLine) && lineIdx > region.startLine && lineIdx <= region.endLine) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Check if a line is folded (the fold start line itself)
+  const isLineFolded = (lineIdx: number): boolean => {
+    return foldedLines().has(lineIdx);
+  };
+
+  // Toggle fold at line
+  const toggleFold = (lineIdx: number) => {
+    setFoldedLines(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(lineIdx)) {
+        newSet.delete(lineIdx);
+      } else {
+        newSet.add(lineIdx);
+      }
+      return newSet;
+    });
+  };
 
   // Highlight code when file content or theme changes
   createEffect(() => {
     const file = props.file;
-    const currentTheme = themeManager.getTheme()(); // Subscribe to theme changes
+    const currentTheme = themeManager.getTheme()();
 
     if (!file || file.isLoading || file.error || file.content === null) {
-      setHighlightedHtml('');
+      setHighlightedLines([]);
+      setFoldRegions([]);
+      setFoldedLines(new Set());
       return;
     }
 
     const content = file.content;
     const language = getShikiLanguage(file.language);
     const shikiTheme = getShikiTheme(currentTheme);
+
+    // Detect foldable regions based on language type
+    setFoldRegions(detectFoldableRegions(content, language));
+    setFoldedLines(new Set()); // Reset folds when file changes
 
     setIsHighlighting(true);
 
@@ -94,20 +330,47 @@ export function FileViewer(props: FileViewerProps) {
           theme: shikiTheme,
         });
 
-        setHighlightedHtml(html);
+        const lines = parseShikiHtml(html);
+        setHighlightedLines(lines);
       } catch (err) {
         console.error('Highlighting failed:', err);
-        // Fallback to plain text with escaped HTML
+        // Fallback to plain text
         const escaped = content
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
-        setHighlightedHtml(`<pre class="shiki"><code>${escaped}</code></pre>`);
+        setHighlightedLines(escaped.split('\n'));
       } finally {
         setIsHighlighting(false);
       }
     })();
   });
+
+  // Calculate visible lines with fold info
+  const visibleLines = createMemo(() => {
+    const lines = highlightedLines();
+    const result: { lineIdx: number; html: string; isFoldStart: boolean; isFolded: boolean }[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      if (isLineHidden(i)) continue;
+
+      result.push({
+        lineIdx: i,
+        html: lines[i],
+        isFoldStart: isFoldableStart(i),
+        isFolded: isLineFolded(i),
+      });
+    }
+
+    return result;
+  });
+
+  // Get the number of hidden lines for a folded region
+  const getHiddenLineCount = (lineIdx: number): number => {
+    const region = getFoldRegionAt(lineIdx);
+    if (!region) return 0;
+    return region.endLine - region.startLine;
+  };
 
   return (
     <div class="h-full flex flex-col bg-zed-bg-surface">
@@ -189,10 +452,10 @@ export function FileViewer(props: FileViewerProps) {
           </div>
         </div>
 
-        {/* Code view */}
+        {/* Code view with folding */}
         <div class="flex-1 overflow-auto">
           <Show
-            when={!isHighlighting() && highlightedHtml()}
+            when={!isHighlighting() && highlightedLines().length > 0}
             fallback={
               <div class="p-4 flex items-center gap-2 text-zed-text-tertiary">
                 <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
@@ -207,11 +470,45 @@ export function FileViewer(props: FileViewerProps) {
               </div>
             }
           >
-            <div
-              ref={codeContainerRef}
-              class="shiki-container text-sm"
-              innerHTML={highlightedHtml()}
-            />
+            <pre class="shiki-container-custom">
+              <code>
+                <For each={visibleLines()}>
+                  {(line) => (
+                    <div class="code-line group" classList={{ 'folded': line.isFolded }}>
+                      {/* Fold gutter */}
+                      <span class="fold-gutter">
+                        <Show when={line.isFoldStart}>
+                          <button
+                            class="fold-button"
+                            classList={{ 'is-folded': line.isFolded }}
+                            onClick={() => toggleFold(line.lineIdx)}
+                            title={line.isFolded ? 'Expand' : 'Collapse'}
+                          >
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <Show when={line.isFolded} fallback={
+                                <path d="M19 9l-7 7-7-7" />
+                              }>
+                                <path d="M9 5l7 7-7 7" />
+                              </Show>
+                            </svg>
+                          </button>
+                        </Show>
+                      </span>
+                      {/* Line number */}
+                      <span class="line-number">{line.lineIdx + 1}</span>
+                      {/* Line content */}
+                      <span class="line-content" innerHTML={line.html} />
+                      {/* Fold indicator */}
+                      <Show when={line.isFolded}>
+                        <span class="fold-indicator">
+                          ⋯ {getHiddenLineCount(line.lineIdx)} lines
+                        </span>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </code>
+            </pre>
           </Show>
         </div>
       </Show>

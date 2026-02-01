@@ -74,7 +74,7 @@
 - [x] Line hover highlighting
 - [x] Lazy language loading
 - [x] Multiple file support
-- [ ] Code folding
+- [x] Code folding
 - [ ] Search within file
 - [ ] Go to line
 
