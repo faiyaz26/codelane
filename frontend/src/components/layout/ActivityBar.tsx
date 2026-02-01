@@ -6,6 +6,8 @@ interface ActivityBarProps {
   activeView: ActivityView;
   onViewChange: (view: ActivityView) => void;
   onSettingsOpen: () => void;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 interface ActivityItem {
@@ -101,7 +103,18 @@ export function ActivityBar(props: ActivityBarProps) {
                   ? 'text-zed-text-primary'
                   : 'text-zed-text-tertiary hover:text-zed-text-secondary'
               }`}
-              onClick={() => props.onViewChange(item.id)}
+              onClick={() => {
+                if (props.activeView === item.id) {
+                  // Toggle sidebar if clicking on active view
+                  props.onToggleSidebar?.();
+                } else {
+                  // Switch to new view and expand if collapsed
+                  props.onViewChange(item.id);
+                  if (props.sidebarCollapsed) {
+                    props.onToggleSidebar?.();
+                  }
+                }
+              }}
               title={item.label}
             >
               {/* Active indicator */}

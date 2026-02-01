@@ -14,6 +14,8 @@ interface FileEntry {
 interface FileExplorerProps {
   workingDir: string;
   onFileSelect?: (path: string) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 interface TreeNode {
@@ -142,14 +144,18 @@ export function FileExplorer(props: FileExplorerProps) {
       {/* Header */}
       <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
         <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Explorer</span>
-        <button class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
-            />
+        <button
+          class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors p-0.5 rounded hover:bg-zed-bg-hover"
+          onClick={() => props.onToggleCollapse?.()}
+          title="Collapse explorer"
+        >
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </div>

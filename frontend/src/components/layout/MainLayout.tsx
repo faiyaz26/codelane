@@ -26,6 +26,7 @@ interface MainLayoutProps {
 export function MainLayout(props: MainLayoutProps) {
   const [activeView, setActiveView] = createSignal<ActivityView>('explorer');
   const [sidebarWidth, setSidebarWidth] = createSignal(260);
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
   const [agentPanelWidth, setAgentPanelWidth] = createSignal<number | null>(null); // null = use 50%
   // Track selected file per lane
   const [selectedFiles, setSelectedFiles] = createSignal<Map<string, string>>(new Map());
@@ -137,6 +138,8 @@ export function MainLayout(props: MainLayoutProps) {
           activeView={activeView()}
           onViewChange={setActiveView}
           onSettingsOpen={props.onSettingsOpen}
+          sidebarCollapsed={sidebarCollapsed()}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
         />
 
         <Show
@@ -167,50 +170,77 @@ export function MainLayout(props: MainLayoutProps) {
             </div>
           }
         >
-          {/* Sidebar (File Explorer) */}
-          <div
-            class="flex-shrink-0 bg-zed-bg-panel border-r border-zed-border-subtle overflow-hidden"
-            style={{ width: `${sidebarWidth()}px` }}
-          >
-            <Show when={activeView() === 'explorer' && activeLane()}>
-              <FileExplorer
-                workingDir={activeLane()!.workingDir}
-                onFileSelect={setSelectedFile}
-              />
-            </Show>
-            <Show when={activeView() === 'search'}>
-              <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                Search coming soon
+          {/* Collapsed Sidebar Handle */}
+          <Show when={sidebarCollapsed()}>
+            <div class="flex flex-col bg-zed-bg-panel border-r border-zed-border-subtle">
+              {/* Expand button aligned with Agent Terminal header */}
+              <div class="h-10 flex items-center justify-center">
+                <button
+                  class="p-1 text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Expand explorer"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-            </Show>
-            <Show when={activeView() === 'git'}>
-              <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                </svg>
-                Source Control coming soon
-              </div>
-            </Show>
-            <Show when={activeView() === 'extensions'}>
-              <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-                </svg>
-                Extensions coming soon
-              </div>
-            </Show>
-          </div>
+            </div>
+          </Show>
 
-          {/* Sidebar Resize Handle */}
-          <div
-            class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
-              isResizingSidebar() ? 'bg-zed-accent-blue' : ''
-            }`}
-            onMouseDown={handleSidebarResizeStart}
-          />
+          {/* Sidebar (File Explorer) */}
+          <Show when={!sidebarCollapsed()}>
+            <div
+              class="flex-shrink-0 bg-zed-bg-panel border-r border-zed-border-subtle overflow-hidden"
+              style={{ width: `${sidebarWidth()}px` }}
+            >
+              <Show when={activeView() === 'explorer' && activeLane()}>
+                <FileExplorer
+                  workingDir={activeLane()!.workingDir}
+                  onFileSelect={setSelectedFile}
+                  collapsed={sidebarCollapsed()}
+                  onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                />
+              </Show>
+              <Show when={activeView() === 'search'}>
+                <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Search coming soon
+                </div>
+              </Show>
+              <Show when={activeView() === 'git'}>
+                <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                  </svg>
+                  Source Control coming soon
+                </div>
+              </Show>
+              <Show when={activeView() === 'extensions'}>
+                <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                  </svg>
+                  Extensions coming soon
+                </div>
+              </Show>
+            </div>
+
+            {/* Sidebar Resize Handle */}
+            <div
+              class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
+                isResizingSidebar() ? 'bg-zed-accent-blue' : ''
+              }`}
+              onMouseDown={handleSidebarResizeStart}
+            />
+          </Show>
 
           {/* Main Content Area (Editor + Agent on top, Bottom Panel below) */}
           <div class="flex-1 flex flex-col overflow-hidden min-w-0">
