@@ -370,6 +370,7 @@ export function SearchPanel(props: SearchPanelProps) {
                 isRegex={isRegex()}
                 caseSensitive={caseSensitive()}
                 laneId={props.laneId}
+                totalFiles={displayInfo().totalFiles}
                 onToggle={() => handleFileToggle(fileResult.filePath)}
                 onMatchClick={handleMatchClick}
               />
@@ -400,6 +401,7 @@ interface FileResultGroupProps {
   isRegex: boolean;
   caseSensitive: boolean;
   laneId: string;
+  totalFiles: number;
   onToggle: () => void;
   onMatchClick: (match: SearchMatch) => void;
 }
@@ -415,9 +417,11 @@ function FileResultGroup(props: FileResultGroupProps) {
   };
 
   // Determine which matches to display
+  // Show all matches if: single-file search, expanded, or few matches
   const displayedMatches = () => {
     const all = props.fileResult.matches;
-    if (props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
+    const isSingleFileSearch = props.totalFiles === 1;
+    if (isSingleFileSearch || props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
       return all;
     }
     return all.slice(0, MATCHES_PER_FILE_PREVIEW);
@@ -425,7 +429,8 @@ function FileResultGroup(props: FileResultGroupProps) {
 
   const hiddenCount = () => {
     const all = props.fileResult.matches;
-    if (props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
+    const isSingleFileSearch = props.totalFiles === 1;
+    if (isSingleFileSearch || props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
       return 0;
     }
     return all.length - MATCHES_PER_FILE_PREVIEW;
