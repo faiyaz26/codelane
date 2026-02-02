@@ -20,9 +20,6 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel(props: EditorPanelProps) {
-  // Subscribe to state updates
-  const _ = editorStateManager.getUpdateSignal();
-
   // Modal state for unsaved changes confirmation
   const [pendingCloseFile, setPendingCloseFile] = createSignal<{ id: string; name: string } | null>(
     null
@@ -30,11 +27,8 @@ export function EditorPanel(props: EditorPanelProps) {
 
   // Derive tabs from open files
   const tabs = createMemo((): EditorTab[] => {
-    // Access update signal for reactivity
-    editorStateManager.getUpdateSignal()();
-
     const files = editorStateManager.getOpenFiles(props.laneId);
-    return Array.from(files.values()).map((file) => ({
+    return Object.values(files).map((file) => ({
       id: file.id,
       path: file.path,
       name: file.name,
@@ -44,24 +38,20 @@ export function EditorPanel(props: EditorPanelProps) {
 
   // Get active file ID
   const activeFileId = createMemo(() => {
-    editorStateManager.getUpdateSignal()();
     return editorStateManager.getActiveFileId(props.laneId);
   });
 
   // Get file IDs to render (only files that have been activated)
   // Using IDs instead of objects for stable identity tracking in For loop
   const fileIdsToRender = createMemo(() => {
-    editorStateManager.getUpdateSignal()();
-
     const files = editorStateManager.getOpenFiles(props.laneId);
     const rendered = editorStateManager.getRenderedFiles(props.laneId);
-    return Array.from(files.keys()).filter((id) => rendered.has(id));
+    return Object.keys(files).filter((id) => rendered.has(id));
   });
 
   // Get file by ID (reactive lookup)
   const getFile = (fileId: string) => {
-    editorStateManager.getUpdateSignal()();
-    return editorStateManager.getOpenFiles(props.laneId).get(fileId);
+    return editorStateManager.getOpenFiles(props.laneId)[fileId];
   };
 
   // Open file when selectedFilePath changes
@@ -79,7 +69,7 @@ export function EditorPanel(props: EditorPanelProps) {
   const closeFile = (fileId: string) => {
     // Check if file has unsaved changes
     const files = editorStateManager.getOpenFiles(props.laneId);
-    const file = files.get(fileId);
+    const file = files[fileId];
 
     if (file?.isModified) {
       // Show confirmation modal

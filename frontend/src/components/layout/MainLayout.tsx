@@ -56,14 +56,11 @@ export function MainLayout(props: MainLayoutProps) {
     const laneId = props.activeLaneId;
     if (!laneId) return null;
 
-    // Subscribe to updates
-    editorStateManager.getUpdateSignal()();
-
     const activeFileId = editorStateManager.getActiveFileId(laneId);
     if (!activeFileId) return null;
 
     const files = editorStateManager.getOpenFiles(laneId);
-    const file = files.get(activeFileId);
+    const file = files[activeFileId];
     if (!file) return null;
 
     // Transform to only what StatusBar needs
