@@ -354,25 +354,35 @@ export function MainLayout(props: MainLayoutProps) {
 
             {/* Agent Terminal Content */}
             <div class="flex-1 overflow-hidden bg-zed-bg-surface">
-              <Show when={activeLane()}>
-                {(lane) => (
-                  <Show when={lane()} keyed>
-                    {(laneData) => (
-                      <TerminalView
-                        laneId={laneData.id}
-                        cwd={laneData.workingDir}
-                        onTerminalReady={(terminalId) => {
-                          props.onTerminalReady?.(laneData.id, terminalId);
-                        }}
-                        onTerminalExit={() => {
-                          props.onTerminalExit?.(laneData.id);
-                        }}
-                        onAgentFailed={props.onAgentFailed}
-                      />
-                    )}
-                  </Show>
-                )}
-              </Show>
+              <For each={Array.from(props.initializedLanes)}>
+                {(laneId) => {
+                  const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+                  const isActive = createMemo(() => props.activeLaneId === laneId);
+
+                  return (
+                    <Show when={lane()}>
+                      {(laneData) => (
+                        <div
+                          class="w-full h-full"
+                          style={{ display: isActive() ? 'block' : 'none' }}
+                        >
+                          <TerminalView
+                            laneId={laneData().id}
+                            cwd={laneData().workingDir}
+                            onTerminalReady={(terminalId) => {
+                              props.onTerminalReady?.(laneData().id, terminalId);
+                            }}
+                            onTerminalExit={() => {
+                              props.onTerminalExit?.(laneData().id);
+                            }}
+                            onAgentFailed={props.onAgentFailed}
+                          />
+                        </div>
+                      )}
+                    </Show>
+                  );
+                }}
+              </For>
             </div>
           </div>
             </div>
