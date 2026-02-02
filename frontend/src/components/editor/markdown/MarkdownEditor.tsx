@@ -1,7 +1,7 @@
 // Markdown Editor - TipTap-based WYSIWYG editor with live preview
 // Refactored for clean architecture with modular hooks
 
-import { createSignal, onMount, onCleanup, Show, createEffect } from 'solid-js';
+import { createSignal, onMount, onCleanup, Show, createEffect, createMemo } from 'solid-js';
 import type { Editor } from '@tiptap/core';
 import type { OpenFile } from '../types';
 import { FloatingToolbar } from './FloatingToolbar';
@@ -61,6 +61,99 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   // Shiki syntax highlighting for source mode
   const highlightedSource = useShikiHighlighter({
     content: sourceContent,
+  });
+
+  // Add search match highlighting to source view
+  const highlightedSourceWithMatches = createMemo(() => {
+    let html = highlightedSource();
+    const highlight = props.file.highlightMatch;
+
+    if (!highlight || mode() !== 'source') return html;
+
+    // Validate match data
+    if (highlight.line < 1 || highlight.column < 0 || !highlight.text) {
+      return html;
+    }
+
+    // Split HTML into lines
+    const lines = html.split('\n');
+    const lineIdx = highlight.line - 1; // Convert to 0-indexed
+
+    if (lineIdx < 0 || lineIdx >= lines.length) {
+      return html;
+    }
+
+    // Get the line to highlight
+    let lineHtml = lines[lineIdx];
+
+    // Extract text content to find match position
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = lineHtml;
+    const textContent = tempDiv.textContent || '';
+
+    // Validate column is within bounds
+    if (highlight.column < 0 || highlight.column >= textContent.length) {
+      return html;
+    }
+
+    // Find and wrap the match in the HTML
+    const startCol = highlight.column;
+    const endCol = Math.min(startCol + highlight.text.length, textContent.length);
+
+    // Simple approach: inject highlight span at the right position in the HTML
+    let result = '';
+    let htmlIdx = 0;
+    let textIdx = 0;
+    let highlightAdded = false;
+
+    while (htmlIdx < lineHtml.length) {
+      // Add highlight span when we reach the start position
+      if (!highlightAdded && textIdx === startCol) {
+        result += '<span class="search-match search-match-current">';
+        highlightAdded = true;
+      }
+
+      // Close highlight span when we reach the end position
+      if (highlightAdded && textIdx === endCol) {
+        result += '</span>';
+        highlightAdded = false;
+      }
+
+      // Process HTML character by character
+      if (lineHtml[htmlIdx] === '<') {
+        // Skip HTML tag
+        const tagEnd = lineHtml.indexOf('>', htmlIdx);
+        if (tagEnd !== -1) {
+          result += lineHtml.substring(htmlIdx, tagEnd + 1);
+          htmlIdx = tagEnd + 1;
+        } else {
+          result += lineHtml[htmlIdx++];
+        }
+      } else if (lineHtml[htmlIdx] === '&') {
+        // Handle HTML entities
+        const entityEnd = lineHtml.indexOf(';', htmlIdx);
+        if (entityEnd !== -1 && entityEnd - htmlIdx < 10) {
+          result += lineHtml.substring(htmlIdx, entityEnd + 1);
+          htmlIdx = entityEnd + 1;
+          textIdx++;
+        } else {
+          result += lineHtml[htmlIdx++];
+          textIdx++;
+        }
+      } else {
+        result += lineHtml[htmlIdx++];
+        textIdx++;
+      }
+    }
+
+    // Close highlight span if still open
+    if (highlightAdded) {
+      result += '</span>';
+    }
+
+    // Replace the line in the HTML
+    lines[lineIdx] = result;
+    return lines.join('\n');
   });
 
   // Save functionality hook
@@ -264,7 +357,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             <pre
               ref={highlightContainerRef}
               class="source-highlight-layer"
-              innerHTML={highlightedSource()}
+              innerHTML={highlightedSourceWithMatches()}
             />
             {/* Textarea for input (foreground layer - transparent text) */}
             <textarea
