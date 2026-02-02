@@ -52,6 +52,8 @@ interface LaneSearchState {
   query: string;
   isRegex: boolean;
   caseSensitive: boolean;
+  includePattern: string;
+  excludePattern: string;
   isSearching: boolean;
   results: Map<string, FileSearchResults>;
   totalMatches: number;
@@ -160,6 +162,8 @@ class SearchStateManager {
         query: '',
         isRegex: false,
         caseSensitive: false,
+        includePattern: '',
+        excludePattern: '',
         isSearching: false,
         results: new Map(),
         totalMatches: 0,
@@ -205,14 +209,19 @@ class SearchStateManager {
         fileResults = {
           filePath,
           fileName,
-          matches: [],
+          matches: [match], // Start with this match
           isCollapsed: false,
           isExpanded: result.isSubSearch, // Auto-expand for file-specific searches
         };
         state.results.set(filePath, fileResults);
+      } else {
+        // Create new object with new matches array to ensure reactivity
+        const newFileResults: FileSearchResults = {
+          ...fileResults,
+          matches: [...fileResults.matches, match]
+        };
+        state.results.set(filePath, newFileResults);
       }
-
-      fileResults.matches.push(match);
     }
 
     // Only update totals for main search, not sub-searches
@@ -299,8 +308,10 @@ class SearchStateManager {
     state.totalFiles = 0;
     state.error = null;
     state.query = query;
-    state.isRegex = options.isRegex ?? false;
-    state.caseSensitive = options.caseSensitive ?? false;
+    state.isRegex = options.isRegex ?? state.isRegex;
+    state.caseSensitive = options.caseSensitive ?? state.caseSensitive;
+    state.includePattern = options.includePattern ?? state.includePattern;
+    state.excludePattern = options.excludePattern ?? state.excludePattern;
     state.isSearching = true;
     state.fileLimit = INITIAL_FILE_LIMIT;
     state.truncated = false;
@@ -403,7 +414,12 @@ class SearchStateManager {
 
     const fileResults = state.results.get(filePath);
     if (fileResults) {
-      fileResults.isExpanded = !fileResults.isExpanded;
+      // Create a new object to ensure reactivity
+      const newFileResults: FileSearchResults = {
+        ...fileResults,
+        isExpanded: !fileResults.isExpanded
+      };
+      state.results.set(filePath, newFileResults);
       this.triggerUpdate();
     }
   }
@@ -425,9 +441,13 @@ class SearchStateManager {
     for (const filePath of filePaths) {
       const fileResult = state.results.get(filePath);
       if (fileResult) {
-        // Clear existing matches - we'll replace with full results
-        fileResult.matches = [];
-        fileResult.isExpanded = true;
+        // Create new object with cleared matches and expanded state
+        const newFileResult: FileSearchResults = {
+          ...fileResult,
+          matches: [],
+          isExpanded: true
+        };
+        state.results.set(filePath, newFileResult);
       }
     }
     this.triggerUpdate();
@@ -458,6 +478,8 @@ class SearchStateManager {
     query: string;
     isRegex: boolean;
     caseSensitive: boolean;
+    includePattern: string;
+    excludePattern: string;
     isSearching: boolean;
     totalMatches: number;
     totalFiles: number;
@@ -473,6 +495,8 @@ class SearchStateManager {
         query: '',
         isRegex: false,
         caseSensitive: false,
+        includePattern: '',
+        excludePattern: '',
         isSearching: false,
         totalMatches: 0,
         totalFiles: 0,
@@ -485,6 +509,8 @@ class SearchStateManager {
       query: state.query,
       isRegex: state.isRegex,
       caseSensitive: state.caseSensitive,
+      includePattern: state.includePattern,
+      excludePattern: state.excludePattern,
       isSearching: state.isSearching,
       totalMatches: state.totalMatches,
       totalFiles: state.totalFiles,
@@ -500,7 +526,12 @@ class SearchStateManager {
 
     const fileResults = state.results.get(filePath);
     if (fileResults) {
-      fileResults.isCollapsed = !fileResults.isCollapsed;
+      // Create a new object to ensure reactivity
+      const newFileResults: FileSearchResults = {
+        ...fileResults,
+        isCollapsed: !fileResults.isCollapsed
+      };
+      state.results.set(filePath, newFileResults);
       this.triggerUpdate();
     }
   }
@@ -531,13 +562,19 @@ class SearchStateManager {
   }
 
   // Update search options without triggering search
-  updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean }): void {
+  updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean; includePattern?: string; excludePattern?: string }): void {
     const state = this.getOrCreateLaneState(laneId);
     if (options.isRegex !== undefined) {
       state.isRegex = options.isRegex;
     }
     if (options.caseSensitive !== undefined) {
       state.caseSensitive = options.caseSensitive;
+    }
+    if (options.includePattern !== undefined) {
+      state.includePattern = options.includePattern;
+    }
+    if (options.excludePattern !== undefined) {
+      state.excludePattern = options.excludePattern;
     }
     this.triggerUpdate();
   }

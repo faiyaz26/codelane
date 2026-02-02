@@ -28,6 +28,8 @@ export function SearchPanel(props: SearchPanelProps) {
       query: '',
       isRegex: false,
       caseSensitive: false,
+      includePattern: '',
+      excludePattern: '',
       isSearching: false,
       totalMatches: 0,
       totalFiles: 0,
@@ -43,6 +45,8 @@ export function SearchPanel(props: SearchPanelProps) {
   const query = () => searchState().query;
   const isRegex = () => searchState().isRegex;
   const caseSensitive = () => searchState().caseSensitive;
+  const includePattern = () => searchState().includePattern;
+  const excludePattern = () => searchState().excludePattern;
 
   // Get reactive results - only if mounted
   const results = createMemo(() => {
@@ -69,6 +73,8 @@ export function SearchPanel(props: SearchPanelProps) {
       searchStateManager.startSearch(props.laneId, props.workingDir, searchQuery, {
         isRegex: isRegex(),
         caseSensitive: caseSensitive(),
+        includePattern: includePattern() || undefined,
+        excludePattern: excludePattern() || undefined,
       });
     }, 300);
   };
@@ -92,6 +98,23 @@ export function SearchPanel(props: SearchPanelProps) {
   const handleCaseToggle = () => {
     const newValue = !caseSensitive();
     searchStateManager.updateOptions(props.laneId, { caseSensitive: newValue });
+    if (query().trim()) {
+      triggerSearch(query());
+    }
+  };
+
+  // Handle pattern changes
+  const handleIncludePatternChange = (e: InputEvent) => {
+    const value = (e.target as HTMLInputElement).value;
+    searchStateManager.updateOptions(props.laneId, { includePattern: value });
+    if (query().trim()) {
+      triggerSearch(query());
+    }
+  };
+
+  const handleExcludePatternChange = (e: InputEvent) => {
+    const value = (e.target as HTMLInputElement).value;
+    searchStateManager.updateOptions(props.laneId, { excludePattern: value });
     if (query().trim()) {
       triggerSearch(query());
     }
@@ -201,6 +224,28 @@ export function SearchPanel(props: SearchPanelProps) {
               .*
             </button>
           </div>
+        </div>
+
+        {/* File Pattern Filters */}
+        <div class="mt-2 space-y-1.5">
+          <input
+            type="text"
+            value={includePattern()}
+            onInput={handleIncludePatternChange}
+            placeholder="Files to include (e.g., *.ts, src/**)"
+            class="w-full px-2 py-1 text-xs bg-zed-bg-surface border border-zed-border-subtle rounded focus:outline-none focus:border-zed-accent-blue text-zed-text-primary placeholder:text-zed-text-disabled"
+            autocomplete="off"
+            spellcheck={false}
+          />
+          <input
+            type="text"
+            value={excludePattern()}
+            onInput={handleExcludePatternChange}
+            placeholder="Files to exclude (e.g., *.test.ts, node_modules/**)"
+            class="w-full px-2 py-1 text-xs bg-zed-bg-surface border border-zed-border-subtle rounded focus:outline-none focus:border-zed-accent-blue text-zed-text-primary placeholder:text-zed-text-disabled"
+            autocomplete="off"
+            spellcheck={false}
+          />
         </div>
 
         {/* Search Stats */}
@@ -325,7 +370,6 @@ export function SearchPanel(props: SearchPanelProps) {
                 isRegex={isRegex()}
                 caseSensitive={caseSensitive()}
                 laneId={props.laneId}
-                truncated={searchState().truncated}
                 onToggle={() => handleFileToggle(fileResult.filePath)}
                 onMatchClick={handleMatchClick}
               />
@@ -356,13 +400,11 @@ interface FileResultGroupProps {
   isRegex: boolean;
   caseSensitive: boolean;
   laneId: string;
-  truncated: boolean;
   onToggle: () => void;
   onMatchClick: (match: SearchMatch) => void;
 }
 
 function FileResultGroup(props: FileResultGroupProps) {
-  const [isLoadingMore, setIsLoadingMore] = createSignal(false);
 
   const relativePath = () => {
     const fullPath = props.fileResult.filePath;
@@ -389,29 +431,18 @@ function FileResultGroup(props: FileResultGroupProps) {
     return all.length - MATCHES_PER_FILE_PREVIEW;
   };
 
-  const handleExpandToggle = (e: MouseEvent) => {
+  // Search only this file by setting include pattern
+  const handleShowAllMatches = (e: MouseEvent) => {
     e.stopPropagation();
-    searchStateManager.toggleFileExpanded(props.laneId, props.fileResult.filePath);
-  };
-
-  // Search only this file to get all matches (when search was truncated)
-  const handleSearchInFile = async (e: MouseEvent) => {
-    e.stopPropagation();
-    setIsLoadingMore(true);
-    try {
-      await searchStateManager.searchInFiles(
-        props.laneId,
-        props.workingDir,
-        props.query,
-        [props.fileResult.filePath],
-        {
-          isRegex: props.isRegex,
-          caseSensitive: props.caseSensitive,
-        }
-      );
-    } finally {
-      setIsLoadingMore(false);
-    }
+    // Set include pattern to this file and trigger new search
+    searchStateManager.updateOptions(props.laneId, {
+      includePattern: props.fileResult.filePath
+    });
+    searchStateManager.startSearch(props.laneId, props.workingDir, props.query, {
+      isRegex: props.isRegex,
+      caseSensitive: props.caseSensitive,
+      includePattern: props.fileResult.filePath,
+    });
   };
 
   const getFileIcon = (fileName: string) => {
@@ -518,46 +549,10 @@ function FileResultGroup(props: FileResultGroupProps) {
           <Show when={hiddenCount() > 0}>
             <button
               class="w-full px-3 py-1 text-xs text-zed-accent-blue hover:text-zed-accent-blue-hover hover:bg-zed-bg-hover transition-colors text-left pl-12 flex items-center gap-1"
-              onClick={props.truncated ? handleSearchInFile : handleExpandToggle}
-              disabled={isLoadingMore()}
-              title={props.truncated ? "Search only this file to find all matches" : "Show more matches"}
+              onClick={handleShowAllMatches}
+              title="Search only this file to see all matches"
             >
-              <Show when={isLoadingMore()} fallback={
-                <>
-                  +{hiddenCount()} more
-                  <Show when={props.truncated}>
-                    <span class="text-zed-text-disabled ml-1">(search file)</span>
-                  </Show>
-                </>
-              }>
-                <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24">
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                    fill="none"
-                  />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Searching file...
-              </Show>
-            </button>
-          </Show>
-
-          {/* Collapse option when expanded */}
-          <Show when={props.fileResult.isExpanded && props.fileResult.matches.length > MATCHES_PER_FILE_PREVIEW}>
-            <button
-              class="w-full px-3 py-1 text-xs text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover transition-colors text-left pl-12"
-              onClick={handleExpandToggle}
-            >
-              Show less
+              +{hiddenCount()} more <span class="text-zed-text-disabled">(search this file)</span>
             </button>
           </Show>
         </div>
