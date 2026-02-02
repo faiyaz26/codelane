@@ -119,6 +119,7 @@ pub struct SearchErrorPayload {
 /// * `query` - Search query (plain text or regex)
 /// * `is_regex` - Whether to treat query as regex
 /// * `case_sensitive` - Whether search is case sensitive
+/// * `match_word` - Whether to match whole words only (adds word boundaries)
 /// * `include_pattern` - Optional glob pattern to include files (e.g., "*.ts")
 /// * `exclude_pattern` - Optional glob pattern to exclude files
 /// * `max_matches` - Maximum number of matches to return (default: 1000, 0 = unlimited)
@@ -134,6 +135,7 @@ pub async fn search_start(
     query: String,
     is_regex: Option<bool>,
     case_sensitive: Option<bool>,
+    match_word: Option<bool>,
     include_pattern: Option<String>,
     exclude_pattern: Option<String>,
     max_matches: Option<u32>,
@@ -142,14 +144,16 @@ pub async fn search_start(
     let search_id = uuid::Uuid::new_v4().to_string();
     let is_regex = is_regex.unwrap_or(false);
     let case_sensitive = case_sensitive.unwrap_or(false);
+    let match_word = match_word.unwrap_or(false);
     let max_matches = max_matches.unwrap_or(DEFAULT_MAX_MATCHES);
 
     tracing::info!(
-        "Starting search '{}' in {} (regex={}, case_sensitive={}, max_matches={}, file_paths={:?})",
+        "Starting search '{}' in {} (regex={}, case_sensitive={}, match_word={}, max_matches={}, file_paths={:?})",
         query,
         root_path,
         is_regex,
         case_sensitive,
+        match_word,
         max_matches,
         file_paths.as_ref().map(|p| p.len())
     );
@@ -179,18 +183,31 @@ pub async fn search_start(
 
     // Build regex pattern
     let pattern = if is_regex {
-        if case_sensitive {
-            Regex::new(&query)
+        let base_pattern = &query;
+        let pattern_with_word = if match_word {
+            format!(r"\b{}\b", base_pattern)
         } else {
-            Regex::new(&format!("(?i){}", query))
+            base_pattern.to_string()
+        };
+
+        if case_sensitive {
+            Regex::new(&pattern_with_word)
+        } else {
+            Regex::new(&format!("(?i){}", pattern_with_word))
         }
     } else {
         // Escape special regex characters for literal search
         let escaped = regex::escape(&query);
-        if case_sensitive {
-            Regex::new(&escaped)
+        let pattern_with_word = if match_word {
+            format!(r"\b{}\b", escaped)
         } else {
-            Regex::new(&format!("(?i){}", escaped))
+            escaped
+        };
+
+        if case_sensitive {
+            Regex::new(&pattern_with_word)
+        } else {
+            Regex::new(&format!("(?i){}", pattern_with_word))
         }
     };
 

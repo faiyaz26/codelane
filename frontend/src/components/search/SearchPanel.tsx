@@ -28,6 +28,7 @@ export function SearchPanel(props: SearchPanelProps) {
       query: '',
       isRegex: false,
       caseSensitive: false,
+      matchWord: false,
       includePattern: '',
       excludePattern: '',
       isSearching: false,
@@ -45,6 +46,7 @@ export function SearchPanel(props: SearchPanelProps) {
   const query = () => searchState().query;
   const isRegex = () => searchState().isRegex;
   const caseSensitive = () => searchState().caseSensitive;
+  const matchWord = () => searchState().matchWord;
   const includePattern = () => searchState().includePattern;
   const excludePattern = () => searchState().excludePattern;
 
@@ -73,6 +75,7 @@ export function SearchPanel(props: SearchPanelProps) {
       searchStateManager.startSearch(props.laneId, props.workingDir, searchQuery, {
         isRegex: isRegex(),
         caseSensitive: caseSensitive(),
+        matchWord: matchWord(),
         includePattern: includePattern() || undefined,
         excludePattern: excludePattern() || undefined,
       });
@@ -98,6 +101,14 @@ export function SearchPanel(props: SearchPanelProps) {
   const handleCaseToggle = () => {
     const newValue = !caseSensitive();
     searchStateManager.updateOptions(props.laneId, { caseSensitive: newValue });
+    if (query().trim()) {
+      triggerSearch(query());
+    }
+  };
+
+  const handleMatchWordToggle = () => {
+    const newValue = !matchWord();
+    searchStateManager.updateOptions(props.laneId, { matchWord: newValue });
     if (query().trim()) {
       triggerSearch(query());
     }
@@ -211,6 +222,17 @@ export function SearchPanel(props: SearchPanelProps) {
               title="Match Case"
             >
               Aa
+            </button>
+            <button
+              class={`p-1 rounded text-xs font-mono transition-colors ${
+                matchWord()
+                  ? 'bg-zed-accent-blue/20 text-zed-accent-blue'
+                  : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover'
+              }`}
+              onClick={handleMatchWordToggle}
+              title="Match Whole Word"
+            >
+              W
             </button>
             <button
               class={`p-1 rounded text-xs font-mono transition-colors ${
@@ -369,6 +391,7 @@ export function SearchPanel(props: SearchPanelProps) {
                 query={query()}
                 isRegex={isRegex()}
                 caseSensitive={caseSensitive()}
+                matchWord={matchWord()}
                 laneId={props.laneId}
                 showAllMatches={!searchState().truncated}
                 onToggle={() => handleFileToggle(fileResult.filePath)}
@@ -400,6 +423,7 @@ interface FileResultGroupProps {
   query: string;
   isRegex: boolean;
   caseSensitive: boolean;
+  matchWord: boolean;
   laneId: string;
   showAllMatches: boolean; // If true, show all matches; if false, show preview
   onToggle: () => void;
@@ -446,6 +470,7 @@ function FileResultGroup(props: FileResultGroupProps) {
     searchStateManager.startSearch(props.laneId, props.workingDir, props.query, {
       isRegex: props.isRegex,
       caseSensitive: props.caseSensitive,
+      matchWord: props.matchWord,
       filePaths: [props.fileResult.filePath],
     });
   };

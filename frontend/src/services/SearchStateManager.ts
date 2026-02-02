@@ -52,6 +52,7 @@ interface LaneSearchState {
   query: string;
   isRegex: boolean;
   caseSensitive: boolean;
+  matchWord: boolean;
   includePattern: string;
   excludePattern: string;
   isSearching: boolean;
@@ -162,6 +163,7 @@ class SearchStateManager {
         query: '',
         isRegex: false,
         caseSensitive: false,
+        matchWord: false,
         includePattern: '',
         excludePattern: '',
         isSearching: false,
@@ -310,6 +312,7 @@ class SearchStateManager {
     state.query = query;
     state.isRegex = options.isRegex ?? state.isRegex;
     state.caseSensitive = options.caseSensitive ?? state.caseSensitive;
+    state.matchWord = options.matchWord ?? state.matchWord;
     state.includePattern = options.includePattern ?? state.includePattern;
     state.excludePattern = options.excludePattern ?? state.excludePattern;
     state.isSearching = true;
@@ -325,6 +328,7 @@ class SearchStateManager {
         query,
         isRegex: options.isRegex ?? false,
         caseSensitive: options.caseSensitive ?? false,
+        matchWord: options.matchWord ?? false,
         includePattern: options.includePattern,
         excludePattern: options.excludePattern,
         maxMatches: options.maxMatches,
@@ -478,6 +482,7 @@ class SearchStateManager {
     query: string;
     isRegex: boolean;
     caseSensitive: boolean;
+    matchWord: boolean;
     includePattern: string;
     excludePattern: string;
     isSearching: boolean;
@@ -495,6 +500,7 @@ class SearchStateManager {
         query: '',
         isRegex: false,
         caseSensitive: false,
+        matchWord: false,
         includePattern: '',
         excludePattern: '',
         isSearching: false,
@@ -509,6 +515,7 @@ class SearchStateManager {
       query: state.query,
       isRegex: state.isRegex,
       caseSensitive: state.caseSensitive,
+      matchWord: state.matchWord,
       includePattern: state.includePattern,
       excludePattern: state.excludePattern,
       isSearching: state.isSearching,
@@ -562,13 +569,16 @@ class SearchStateManager {
   }
 
   // Update search options without triggering search
-  updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean; includePattern?: string; excludePattern?: string }): void {
+  updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean; matchWord?: boolean; includePattern?: string; excludePattern?: string }): void {
     const state = this.getOrCreateLaneState(laneId);
     if (options.isRegex !== undefined) {
       state.isRegex = options.isRegex;
     }
     if (options.caseSensitive !== undefined) {
       state.caseSensitive = options.caseSensitive;
+    }
+    if (options.matchWord !== undefined) {
+      state.matchWord = options.matchWord;
     }
     if (options.includePattern !== undefined) {
       state.includePattern = options.includePattern;
