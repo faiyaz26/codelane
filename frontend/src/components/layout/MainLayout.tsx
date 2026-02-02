@@ -356,16 +356,16 @@ export function MainLayout(props: MainLayoutProps) {
             <div class="flex-1 overflow-hidden bg-zed-bg-surface">
               <Show when={activeLane()}>
                 {(lane) => (
-                  <Show when={lane()}>
+                  <Show when={lane()} keyed>
                     {(laneData) => (
                       <TerminalView
-                        laneId={laneData().id}
-                        cwd={laneData().workingDir}
+                        laneId={laneData.id}
+                        cwd={laneData.workingDir}
                         onTerminalReady={(terminalId) => {
-                          props.onTerminalReady?.(laneData().id, terminalId);
+                          props.onTerminalReady?.(laneData.id, terminalId);
                         }}
                         onTerminalExit={() => {
-                          props.onTerminalExit?.(laneData().id);
+                          props.onTerminalExit?.(laneData.id);
                         }}
                         onAgentFailed={props.onAgentFailed}
                       />
