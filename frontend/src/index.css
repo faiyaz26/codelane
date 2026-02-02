@@ -314,9 +314,10 @@
 
 .shiki-container-custom .code-line {
   display: flex;
-  align-items: stretch;
-  min-height: 1.5em;
+  align-items: center;
+  height: 20px; /* Must match LINE_HEIGHT in FileViewer.tsx for virtualization */
   padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .shiki-container-custom .code-line:hover {

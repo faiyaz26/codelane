@@ -403,6 +403,11 @@ function parseShikiHtml(html: string): string[] {
   return lines;
 }
 
+// ============ VIRTUALIZATION ============
+
+const LINE_HEIGHT = 20; // pixels per line (matches CSS)
+const OVERSCAN = 20; // extra lines to render above/below viewport
+
 // ============ COMPONENT ============
 
 interface FileViewerProps {
@@ -424,6 +429,10 @@ export function FileViewer(props: FileViewerProps) {
   const [caseSensitive, setCaseSensitive] = createSignal(false);
   const [currentMatchIdx, setCurrentMatchIdx] = createSignal(0);
   const [searchError, setSearchError] = createSignal<string | null>(null);
+
+  // Virtualization state
+  const [scrollTop, setScrollTop] = createSignal(0);
+  const [viewportHeight, setViewportHeight] = createSignal(600);
 
   let searchInputRef: HTMLInputElement | undefined;
   let codeContainerRef: HTMLDivElement | undefined;
@@ -519,11 +528,18 @@ export function FileViewer(props: FileViewerProps) {
       }
     }
 
-    // Scroll to the line
+    // Find the display index of the line (accounting for hidden lines)
     setTimeout(() => {
-      const lineEl = codeContainerRef?.querySelector(`[data-line="${match.lineIdx}"]`);
-      if (lineEl) {
-        lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const all = allDisplayableLines();
+      const lineData = all.find(l => l.lineIdx === match.lineIdx);
+
+      if (lineData && codeContainerRef) {
+        // Calculate scroll position to center the line in viewport
+        const targetScrollTop = (lineData.displayIdx * LINE_HEIGHT) - (viewportHeight() / 2) + (LINE_HEIGHT / 2);
+        codeContainerRef.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth',
+        });
       }
     }, 50);
   };
@@ -580,6 +596,30 @@ export function FileViewer(props: FileViewerProps) {
 
   onCleanup(() => {
     window.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Handle scroll for virtualization
+  const handleScroll = () => {
+    if (codeContainerRef) {
+      setScrollTop(codeContainerRef.scrollTop);
+    }
+  };
+
+  // Update viewport height on mount and resize
+  onMount(() => {
+    const updateViewportHeight = () => {
+      if (codeContainerRef) {
+        setViewportHeight(codeContainerRef.clientHeight);
+      }
+    };
+
+    updateViewportHeight();
+    const resizeObserver = new ResizeObserver(updateViewportHeight);
+    if (codeContainerRef) {
+      resizeObserver.observe(codeContainerRef);
+    }
+
+    onCleanup(() => resizeObserver.disconnect());
   });
 
   // Reset match index when matches change
@@ -647,33 +687,66 @@ export function FileViewer(props: FileViewerProps) {
     })();
   });
 
-  // Calculate visible lines with fold info and search highlights
-  const visibleLines = createMemo(() => {
+  // Calculate all displayable lines (not hidden by folds)
+  const allDisplayableLines = createMemo(() => {
     const lines = highlightedLines();
-    const matches = searchMatches();
-    const matchIdx = currentMatchIdx();
-    const result: { lineIdx: number; html: string; isFoldStart: boolean; isFolded: boolean; hasMatch: boolean }[] = [];
+    const result: { lineIdx: number; displayIdx: number; html: string; isFoldStart: boolean; isFolded: boolean }[] = [];
 
+    let displayIdx = 0;
     for (let i = 0; i < lines.length; i++) {
       if (isLineHidden(i)) continue;
 
-      let html = lines[i];
-
-      // Apply search highlighting
-      if (matches.length > 0) {
-        html = highlightMatchesInHtml(html, matches, i, matchIdx, matches);
-      }
-
       result.push({
         lineIdx: i,
-        html,
+        displayIdx,
+        html: lines[i],
         isFoldStart: isFoldableStart(i),
         isFolded: isLineFolded(i),
-        hasMatch: matches.some(m => m.lineIdx === i),
       });
+      displayIdx++;
     }
 
     return result;
+  });
+
+  // Total height for virtual scroll container
+  const totalHeight = createMemo(() => allDisplayableLines().length * LINE_HEIGHT);
+
+  // Calculate visible range based on scroll position
+  const visibleRange = createMemo(() => {
+    const top = scrollTop();
+    const height = viewportHeight();
+
+    const startIdx = Math.max(0, Math.floor(top / LINE_HEIGHT) - OVERSCAN);
+    const endIdx = Math.min(
+      allDisplayableLines().length,
+      Math.ceil((top + height) / LINE_HEIGHT) + OVERSCAN
+    );
+
+    return { startIdx, endIdx };
+  });
+
+  // Get only the lines in the visible range with search highlighting
+  const visibleLines = createMemo(() => {
+    const all = allDisplayableLines();
+    const { startIdx, endIdx } = visibleRange();
+    const matches = searchMatches();
+    const matchIdx = currentMatchIdx();
+
+    return all.slice(startIdx, endIdx).map((line) => {
+      let html = line.html;
+
+      // Apply search highlighting
+      if (matches.length > 0) {
+        html = highlightMatchesInHtml(html, matches, line.lineIdx, matchIdx, matches);
+      }
+
+      return {
+        ...line,
+        html,
+        hasMatch: matches.some(m => m.lineIdx === line.lineIdx),
+      };
+    });
   });
 
   return (
@@ -860,8 +933,8 @@ export function FileViewer(props: FileViewerProps) {
           </div>
         </div>
 
-        {/* Code view with folding */}
-        <div class="flex-1 overflow-auto" ref={codeContainerRef}>
+        {/* Code view with folding - virtualized */}
+        <div class="flex-1 overflow-auto" ref={codeContainerRef} onScroll={handleScroll}>
           <Show
             when={!isHighlighting() && highlightedLines().length > 0}
             fallback={
@@ -878,47 +951,47 @@ export function FileViewer(props: FileViewerProps) {
               </div>
             }
           >
-            <pre class="shiki-container-custom">
-              <code>
-                <For each={visibleLines()}>
-                  {(line) => (
-                    <div
-                      class="code-line group"
-                      classList={{ 'folded': line.isFolded }}
-                      data-line={line.lineIdx}
-                    >
-                      {/* Fold gutter */}
-                      <span class="fold-gutter">
-                        <Show when={line.isFoldStart}>
-                          <button
-                            class="fold-button"
-                            classList={{ 'is-folded': line.isFolded }}
-                            onClick={() => toggleFold(line.lineIdx)}
-                            title={line.isFolded ? 'Expand' : 'Collapse'}
-                          >
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <Show when={line.isFolded} fallback={<path d="M19 9l-7 7-7-7" />}>
-                                <path d="M9 5l7 7-7 7" />
-                              </Show>
-                            </svg>
-                          </button>
-                        </Show>
-                      </span>
-                      {/* Line number */}
-                      <span class="line-number">{line.lineIdx + 1}</span>
-                      {/* Line content */}
-                      <span class="line-content" innerHTML={line.html} />
-                      {/* Fold indicator */}
-                      <Show when={line.isFolded}>
-                        <span class="fold-indicator">
-                          ⋯ {getHiddenLineCount(line.lineIdx)} lines
-                        </span>
+            {/* Virtual scroll container */}
+            <div class="shiki-container-custom relative" style={{ height: `${totalHeight()}px` }}>
+              <For each={visibleLines()}>
+                {(line) => (
+                  <div
+                    class="code-line group absolute left-0 right-0"
+                    classList={{ 'folded': line.isFolded }}
+                    data-line={line.lineIdx}
+                    style={{ top: `${line.displayIdx * LINE_HEIGHT}px`, height: `${LINE_HEIGHT}px` }}
+                  >
+                    {/* Fold gutter */}
+                    <span class="fold-gutter">
+                      <Show when={line.isFoldStart}>
+                        <button
+                          class="fold-button"
+                          classList={{ 'is-folded': line.isFolded }}
+                          onClick={() => toggleFold(line.lineIdx)}
+                          title={line.isFolded ? 'Expand' : 'Collapse'}
+                        >
+                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <Show when={line.isFolded} fallback={<path d="M19 9l-7 7-7-7" />}>
+                              <path d="M9 5l7 7-7 7" />
+                            </Show>
+                          </svg>
+                        </button>
                       </Show>
-                    </div>
-                  )}
-                </For>
-              </code>
-            </pre>
+                    </span>
+                    {/* Line number */}
+                    <span class="line-number">{line.lineIdx + 1}</span>
+                    {/* Line content */}
+                    <span class="line-content" innerHTML={line.html} />
+                    {/* Fold indicator */}
+                    <Show when={line.isFolded}>
+                      <span class="fold-indicator">
+                        ⋯ {getHiddenLineCount(line.lineIdx)} lines
+                      </span>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </div>
           </Show>
         </div>
       </Show>
