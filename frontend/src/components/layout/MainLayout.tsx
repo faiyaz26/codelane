@@ -26,7 +26,8 @@ interface MainLayoutProps {
 }
 
 export function MainLayout(props: MainLayoutProps) {
-  const [activeView, setActiveView] = createSignal<ActivityView>('explorer');
+  // Track active view per lane
+  const [laneActiveViews, setLaneActiveViews] = createSignal<Map<string, ActivityView>>(new Map());
   const [sidebarWidth, setSidebarWidth] = createSignal(260);
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
   const [agentPanelWidth, setAgentPanelWidth] = createSignal<number | null>(null); // null = use 50%
@@ -38,6 +39,24 @@ export function MainLayout(props: MainLayoutProps) {
   const activeLane = createMemo(() => {
     return props.lanes.find((l) => l.id === props.activeLaneId);
   });
+
+  // Get active view for current lane (defaults to 'explorer')
+  const activeView = createMemo(() => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return 'explorer';
+    return laneActiveViews().get(laneId) || 'explorer';
+  });
+
+  // Set active view for current lane
+  const setActiveView = (view: ActivityView) => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return;
+    setLaneActiveViews((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(laneId, view);
+      return newMap;
+    });
+  };
 
   // Clear highlights when switching away from search view
   createEffect(() => {
