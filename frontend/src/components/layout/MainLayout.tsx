@@ -249,35 +249,33 @@ export function MainLayout(props: MainLayoutProps) {
               style={{ width: `${sidebarWidth()}px` }}
             >
               <Show when={activeView() === ActivityView.Explorer && activeLane()}>
-                {(lane) => {
-                  const laneData = lane();
-                  if (!laneData) return null;
-
-                  return (
-                    <FileExplorer
-                      workingDir={laneData.workingDir}
-                      onFileSelect={setSelectedFile}
-                      collapsed={sidebarCollapsed()}
-                      onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                    />
-                  );
-                }}
+                {(lane) => (
+                  <Show when={lane()}>
+                    {(laneData) => (
+                      <FileExplorer
+                        workingDir={laneData().workingDir}
+                        onFileSelect={setSelectedFile}
+                        collapsed={sidebarCollapsed()}
+                        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                      />
+                    )}
+                  </Show>
+                )}
               </Show>
               <Show when={activeView() === ActivityView.Search && activeLane()}>
-                {(lane) => {
-                  const laneData = lane();
-                  if (!laneData) return null;
-
-                  return (
-                    <SearchPanel
-                      workingDir={laneData.workingDir}
-                      laneId={laneData.id}
-                      onFileOpen={(path, line, match) => {
-                        editorStateManager.openFileAtLine(laneData.id, path, line, match);
-                      }}
-                    />
-                  );
-                }}
+                {(lane) => (
+                  <Show when={lane()}>
+                    {(laneData) => (
+                      <SearchPanel
+                        workingDir={laneData().workingDir}
+                        laneId={laneData().id}
+                        onFileOpen={(path, line, match) => {
+                          editorStateManager.openFileAtLine(laneData().id, path, line, match);
+                        }}
+                      />
+                    )}
+                  </Show>
+                )}
               </Show>
               <Show when={activeView() === ActivityView.Git}>
                 <div class="p-4 text-center text-zed-text-tertiary text-sm">
@@ -357,24 +355,23 @@ export function MainLayout(props: MainLayoutProps) {
             {/* Agent Terminal Content */}
             <div class="flex-1 overflow-hidden bg-zed-bg-surface">
               <Show when={activeLane()}>
-                {(lane) => {
-                  const laneData = lane();
-                  if (!laneData) return null;
-
-                  return (
-                    <TerminalView
-                      laneId={laneData.id}
-                      cwd={laneData.workingDir}
-                      onTerminalReady={(terminalId) => {
-                        props.onTerminalReady?.(laneData.id, terminalId);
-                      }}
-                      onTerminalExit={() => {
-                        props.onTerminalExit?.(laneData.id);
-                      }}
-                      onAgentFailed={props.onAgentFailed}
-                    />
-                  );
-                }}
+                {(lane) => (
+                  <Show when={lane()}>
+                    {(laneData) => (
+                      <TerminalView
+                        laneId={laneData().id}
+                        cwd={laneData().workingDir}
+                        onTerminalReady={(terminalId) => {
+                          props.onTerminalReady?.(laneData().id, terminalId);
+                        }}
+                        onTerminalExit={() => {
+                          props.onTerminalExit?.(laneData().id);
+                        }}
+                        onAgentFailed={props.onAgentFailed}
+                      />
+                    )}
+                  </Show>
+                )}
               </Show>
             </div>
           </div>
@@ -386,13 +383,10 @@ export function MainLayout(props: MainLayoutProps) {
                 const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
 
                 return (
-                  <Show when={lane()}>
-                    {(laneData) => {
-                      const data = laneData();
-                      if (!data || data.id !== props.activeLaneId) return null;
-
-                      return <TabPanel laneId={data.id} workingDir={data.workingDir} />;
-                    }}
+                  <Show when={lane() && lane()!.id === props.activeLaneId}>
+                    {(laneData) => (
+                      <TabPanel laneId={laneData().id} workingDir={laneData().workingDir} />
+                    )}
                   </Show>
                 );
               }}
