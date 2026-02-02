@@ -176,7 +176,7 @@ class EditorStateManager {
     await this.loadFileContent(laneId, id, path);
   }
 
-  // Clear scroll-to-line target after scrolling
+  // Clear scroll-to-line target after scrolling (keep highlight for user reference)
   clearScrollToLine(laneId: string, fileId: string): void {
     const state = this.laneStates.get(laneId);
     if (!state) return;

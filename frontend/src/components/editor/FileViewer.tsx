@@ -246,6 +246,9 @@ function highlightMatchesInHtml(
   currentMatchIdx: number,
   allMatches: SearchMatch[]
 ): string {
+  // Early validation
+  if (!html || !matches || matches.length === 0) return html;
+
   const lineMatches = matches.filter(m => m.lineIdx === lineIdx);
   if (lineMatches.length === 0) return html;
 
@@ -255,23 +258,34 @@ function highlightMatchesInHtml(
   tempDiv.innerHTML = html;
   const textContent = tempDiv.textContent || '';
 
+  // Validate that matches are within text bounds
+  const validMatches = lineMatches.filter(
+    m => m.startCol >= 0 && m.startCol < textContent.length && m.endCol <= textContent.length
+  );
+  if (validMatches.length === 0) return html;
+
   // Build result by processing character by character
   let result = '';
   let htmlIdx = 0;
   let textIdx = 0;
 
-  // Sort matches by position
-  const sortedMatches = [...lineMatches].sort((a, b) => a.startCol - b.startCol);
+  // Sort matches by position and remove overlapping matches
+  const sortedMatches = [...validMatches].sort((a, b) => a.startCol - b.startCol);
 
   for (const match of sortedMatches) {
+    // Skip if match would overlap with previous match
+    if (match.startCol < textIdx) continue;
+
     // Find the global index of this match
     const globalIdx = allMatches.findIndex(
       m => m.lineIdx === match.lineIdx && m.startCol === match.startCol
     );
     const isCurrent = globalIdx === currentMatchIdx;
 
-    // Advance to match start
-    while (textIdx < match.startCol && htmlIdx < html.length) {
+    // Advance to match start (with safety limit to prevent infinite loops)
+    let safetyCounter = 0;
+    const MAX_ITERATIONS = html.length * 2;
+    while (textIdx < match.startCol && htmlIdx < html.length && safetyCounter++ < MAX_ITERATIONS) {
       if (html[htmlIdx] === '<') {
         // Skip HTML tag
         const tagEnd = html.indexOf('>', htmlIdx);
@@ -302,8 +316,9 @@ function highlightMatchesInHtml(
     const highlightClass = isCurrent ? 'search-match search-match-current' : 'search-match';
     result += `<span class="${highlightClass}">`;
 
-    // Add match content
-    while (textIdx < match.endCol && htmlIdx < html.length) {
+    // Add match content (with safety limit)
+    safetyCounter = 0;
+    while (textIdx < match.endCol && htmlIdx < html.length && safetyCounter++ < MAX_ITERATIONS) {
       if (html[htmlIdx] === '<') {
         const tagEnd = html.indexOf('>', htmlIdx);
         if (tagEnd !== -1) {
@@ -329,10 +344,18 @@ function highlightMatchesInHtml(
     }
 
     result += '</span>';
+
+    // Check if we hit safety limit
+    if (safetyCounter >= MAX_ITERATIONS) {
+      console.warn('Highlight loop safety limit reached - possible infinite loop detected');
+      return html; // Return original HTML to avoid corrupting display
+    }
   }
 
   // Add remaining content
-  result += html.substring(htmlIdx);
+  if (htmlIdx < html.length) {
+    result += html.substring(htmlIdx);
+  }
 
   return result;
 }
@@ -777,49 +800,94 @@ export function FileViewer(props: FileViewerProps) {
     return { startIdx, endIdx };
   });
 
+  // Convert project search highlight to SearchMatch format (memoized)
+  const projectSearchMatch = createMemo((): SearchMatch | null => {
+    const file = props.file;
+    const highlight = file?.highlightMatch;
+
+    if (!highlight) return null;
+
+    // Validate match data
+    if (highlight.line < 1 || highlight.column < 0 || !highlight.text) {
+      console.warn('Invalid highlight match data:', highlight);
+      return null;
+    }
+
+    // Convert to 0-indexed
+    const lineIdx = highlight.line - 1;
+    const lines = rawLines();
+
+    // Validate line exists
+    if (lineIdx < 0 || lineIdx >= lines.length) {
+      console.warn('Highlight line out of bounds:', lineIdx, 'total lines:', lines.length);
+      return null;
+    }
+
+    const lineContent = lines[lineIdx];
+    const startCol = highlight.column;
+
+    // Validate column is within line bounds
+    if (startCol < 0 || startCol >= lineContent.length) {
+      console.warn('Highlight column out of bounds:', startCol, 'line length:', lineContent.length);
+      return null;
+    }
+
+    // Calculate end column, clamping to line length
+    const endCol = Math.min(startCol + highlight.text.length, lineContent.length);
+
+    return {
+      lineIdx,
+      startCol,
+      endCol,
+      text: highlight.text,
+    };
+  });
+
+  // Create a Set of line indices that have matches for O(1) lookup
+  const matchLineIndices = createMemo(() => {
+    const indices = new Set<number>();
+    const matches = searchMatches();
+    const projectMatch = projectSearchMatch();
+
+    for (const match of matches) {
+      indices.add(match.lineIdx);
+    }
+
+    if (projectMatch) {
+      indices.add(projectMatch.lineIdx);
+    }
+
+    return indices;
+  });
+
   // Get only the lines in the visible range with search highlighting
   const visibleLines = createMemo(() => {
     const all = allDisplayableLines();
     const { startIdx, endIdx } = visibleRange();
     const matches = searchMatches();
     const matchIdx = currentMatchIdx();
-    const file = props.file;
-
-    // Check if there's a project search highlight to apply
-    const projectSearchMatch = file?.highlightMatch;
-    let projectSearchMatchObject: SearchMatch | null = null;
-
-    if (projectSearchMatch) {
-      // Convert project search match to in-file SearchMatch format
-      const lineIdx = projectSearchMatch.line - 1; // Convert to 0-indexed
-      const startCol = projectSearchMatch.column;
-      const endCol = startCol + projectSearchMatch.text.length;
-
-      projectSearchMatchObject = {
-        lineIdx,
-        startCol,
-        endCol,
-        text: projectSearchMatch.text,
-      };
-    }
+    const projectMatch = projectSearchMatch();
+    const matchLines = matchLineIndices();
 
     return all.slice(startIdx, endIdx).map((line) => {
       let html = line.html;
 
-      // Apply in-file search highlighting
-      if (matches.length > 0) {
-        html = highlightMatchesInHtml(html, matches, line.lineIdx, matchIdx, matches);
-      }
-      // Apply project search highlighting (as current match)
-      else if (projectSearchMatchObject && projectSearchMatchObject.lineIdx === line.lineIdx) {
-        html = highlightMatchesInHtml(html, [projectSearchMatchObject], line.lineIdx, 0, [projectSearchMatchObject]);
+      // Only apply highlighting if this line has matches (fast check)
+      if (matchLines.has(line.lineIdx)) {
+        // Apply in-file search highlighting
+        if (matches.length > 0) {
+          html = highlightMatchesInHtml(html, matches, line.lineIdx, matchIdx, matches);
+        }
+        // Apply project search highlighting (as current match)
+        else if (projectMatch && projectMatch.lineIdx === line.lineIdx) {
+          html = highlightMatchesInHtml(html, [projectMatch], line.lineIdx, 0, [projectMatch]);
+        }
       }
 
       return {
         ...line,
         html,
-        hasMatch: matches.some(m => m.lineIdx === line.lineIdx) ||
-                  (projectSearchMatchObject?.lineIdx === line.lineIdx),
+        hasMatch: matchLines.has(line.lineIdx),
       };
     });
   });
