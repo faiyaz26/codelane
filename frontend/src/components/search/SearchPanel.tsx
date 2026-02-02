@@ -1,0 +1,469 @@
+import { createSignal, createEffect, For, Show, onCleanup, createMemo, onMount } from 'solid-js';
+import {
+  searchStateManager,
+  type FileSearchResults,
+  type SearchMatch,
+} from '../../services/SearchStateManager';
+
+interface SearchPanelProps {
+  workingDir: string;
+  laneId: string;
+  onFileOpen: (path: string, line: number) => void;
+}
+
+export function SearchPanel(props: SearchPanelProps) {
+  const [query, setQuery] = createSignal('');
+  const [isRegex, setIsRegex] = createSignal(false);
+  const [caseSensitive, setCaseSensitive] = createSignal(false);
+  const [isMounted, setIsMounted] = createSignal(false);
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let inputRef: HTMLInputElement | undefined;
+
+  // Track mount state to prevent updates after unmount
+  onMount(() => setIsMounted(true));
+  onCleanup(() => setIsMounted(false));
+
+  // Get reactive search state - only if mounted
+  const searchState = createMemo(() => {
+    if (!isMounted()) return {
+      query: '',
+      isRegex: false,
+      caseSensitive: false,
+      isSearching: false,
+      totalMatches: 0,
+      totalFiles: 0,
+      error: null,
+    };
+    // Subscribe to updates
+    searchStateManager.getUpdateSignal()();
+    return searchStateManager.getSearchState(props.laneId);
+  });
+
+  // Get reactive results - only if mounted
+  const results = createMemo(() => {
+    if (!isMounted()) return [];
+    // Subscribe to updates
+    searchStateManager.getUpdateSignal()();
+    return searchStateManager.getResults(props.laneId);
+  });
+
+  // Debounced search
+  const triggerSearch = (searchQuery: string) => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    debounceTimer = setTimeout(() => {
+      searchStateManager.startSearch(props.laneId, props.workingDir, searchQuery, {
+        isRegex: isRegex(),
+        caseSensitive: caseSensitive(),
+      });
+    }, 300);
+  };
+
+  // Handle input change
+  const handleInputChange = (e: InputEvent) => {
+    const value = (e.target as HTMLInputElement).value;
+    setQuery(value);
+    triggerSearch(value);
+  };
+
+  // Handle toggle changes - re-trigger search
+  const handleRegexToggle = () => {
+    setIsRegex(!isRegex());
+    if (query().trim()) {
+      triggerSearch(query());
+    }
+  };
+
+  const handleCaseToggle = () => {
+    setCaseSensitive(!caseSensitive());
+    if (query().trim()) {
+      triggerSearch(query());
+    }
+  };
+
+  // Cancel search
+  const handleCancel = () => {
+    searchStateManager.cancelSearch(props.laneId);
+  };
+
+  // Clear search
+  const handleClear = () => {
+    setQuery('');
+    searchStateManager.clearResults(props.laneId);
+  };
+
+  // Toggle file collapse
+  const handleFileToggle = (filePath: string) => {
+    searchStateManager.toggleFileCollapse(props.laneId, filePath);
+  };
+
+  // Click on match
+  const handleMatchClick = (match: SearchMatch) => {
+    props.onFileOpen(match.file_path, match.line_number);
+  };
+
+  // Focus input on mount
+  createEffect(() => {
+    if (inputRef) {
+      inputRef.focus();
+    }
+  });
+
+  // Cleanup - cancel debounce and any ongoing search
+  onCleanup(() => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    // Cancel any ongoing search to prevent state updates after unmount
+    searchStateManager.cancelSearch(props.laneId);
+  });
+
+  // Get relative path from working dir
+  const getRelativePath = (fullPath: string) => {
+    if (fullPath.startsWith(props.workingDir)) {
+      return fullPath.slice(props.workingDir.length + 1);
+    }
+    return fullPath;
+  };
+
+  return (
+    <div class="h-full flex flex-col bg-zed-bg-panel">
+      {/* Header */}
+      <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
+        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">
+          Search
+        </span>
+      </div>
+
+      {/* Search Input */}
+      <div class="p-3 border-b border-zed-border-subtle">
+        <div class="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query()}
+            onInput={handleInputChange}
+            placeholder="Search files..."
+            class="w-full px-3 py-1.5 pr-20 text-sm bg-zed-bg-surface border border-zed-border-subtle rounded focus:outline-none focus:border-zed-accent-blue text-zed-text-primary placeholder:text-zed-text-disabled"
+          />
+
+          {/* Toggle buttons inside input */}
+          <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <button
+              class={`p-1 rounded text-xs font-mono transition-colors ${
+                caseSensitive()
+                  ? 'bg-zed-accent-blue/20 text-zed-accent-blue'
+                  : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover'
+              }`}
+              onClick={handleCaseToggle}
+              title="Match Case"
+            >
+              Aa
+            </button>
+            <button
+              class={`p-1 rounded text-xs font-mono transition-colors ${
+                isRegex()
+                  ? 'bg-zed-accent-blue/20 text-zed-accent-blue'
+                  : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover'
+              }`}
+              onClick={handleRegexToggle}
+              title="Use Regular Expression"
+            >
+              .*
+            </button>
+          </div>
+        </div>
+
+        {/* Search Stats */}
+        <div class="mt-2 flex items-center justify-between text-xs text-zed-text-tertiary">
+          <Show
+            when={searchState().isSearching}
+            fallback={
+              <Show when={query().trim()}>
+                <span>
+                  {searchState().totalMatches} results in {searchState().totalFiles} files
+                </span>
+              </Show>
+            }
+          >
+            <span class="flex items-center gap-2">
+              <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                  fill="none"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Searching...
+            </span>
+          </Show>
+
+          <div class="flex items-center gap-2">
+            <Show when={searchState().isSearching}>
+              <button
+                class="text-zed-text-tertiary hover:text-zed-accent-red transition-colors"
+                onClick={handleCancel}
+                title="Cancel search"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </Show>
+            <Show when={query().trim() && !searchState().isSearching}>
+              <button
+                class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors"
+                onClick={handleClear}
+                title="Clear search"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </Show>
+          </div>
+        </div>
+      </div>
+
+      {/* Error State */}
+      <Show when={searchState().error}>
+        <div class="px-4 py-3 text-sm text-zed-accent-red bg-zed-accent-red/10 border-b border-zed-border-subtle">
+          {searchState().error}
+        </div>
+      </Show>
+
+      {/* Results */}
+      <div class="flex-1 overflow-auto">
+        <Show
+          when={results().length > 0}
+          fallback={
+            <Show when={query().trim() && !searchState().isSearching}>
+              <div class="px-4 py-8 text-center text-xs text-zed-text-tertiary">
+                <svg
+                  class="w-8 h-8 mx-auto mb-2 opacity-50"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <p>No results found</p>
+                <p class="text-zed-text-disabled mt-1">Try a different search term</p>
+              </div>
+            </Show>
+          }
+        >
+          <For each={results()}>
+            {(fileResult) => (
+              <FileResultGroup
+                fileResult={fileResult}
+                workingDir={props.workingDir}
+                query={query()}
+                isRegex={isRegex()}
+                caseSensitive={caseSensitive()}
+                onToggle={() => handleFileToggle(fileResult.filePath)}
+                onMatchClick={handleMatchClick}
+              />
+            )}
+          </For>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+interface FileResultGroupProps {
+  fileResult: FileSearchResults;
+  workingDir: string;
+  query: string;
+  isRegex: boolean;
+  caseSensitive: boolean;
+  onToggle: () => void;
+  onMatchClick: (match: SearchMatch) => void;
+}
+
+function FileResultGroup(props: FileResultGroupProps) {
+  const relativePath = () => {
+    const fullPath = props.fileResult.filePath;
+    if (fullPath.startsWith(props.workingDir)) {
+      return fullPath.slice(props.workingDir.length + 1);
+    }
+    return fullPath;
+  };
+
+  const getFileIcon = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+
+    if (['ts', 'tsx'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-accent-blue text-xs font-bold flex items-center justify-center">
+          TS
+        </span>
+      );
+    }
+    if (['js', 'jsx'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-accent-yellow text-xs font-bold flex items-center justify-center">
+          JS
+        </span>
+      );
+    }
+    if (['rs'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-accent-orange text-xs font-bold flex items-center justify-center">
+          Rs
+        </span>
+      );
+    }
+    if (['json'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-accent-yellow text-xs font-bold flex items-center justify-center">
+          {'{}'}
+        </span>
+      );
+    }
+    if (['md'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-text-secondary text-xs font-bold flex items-center justify-center">
+          M
+        </span>
+      );
+    }
+    if (['css', 'scss'].includes(ext || '')) {
+      return (
+        <span class="w-4 h-4 text-zed-accent-purple text-xs font-bold flex items-center justify-center">
+          #
+        </span>
+      );
+    }
+
+    return (
+      <svg class="w-4 h-4 text-zed-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+      </svg>
+    );
+  };
+
+  return (
+    <div class="border-b border-zed-border-subtle">
+      {/* File Header */}
+      <button
+        class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-zed-bg-hover transition-colors"
+        onClick={props.onToggle}
+      >
+        <svg
+          class={`w-3 h-3 text-zed-text-tertiary transition-transform ${
+            props.fileResult.isCollapsed ? '' : 'rotate-90'
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+
+        {getFileIcon(props.fileResult.fileName)}
+
+        <span class="flex-1 text-sm text-zed-text-primary truncate">{relativePath()}</span>
+
+        <span class="text-xs text-zed-text-tertiary px-1.5 py-0.5 bg-zed-bg-surface rounded">
+          {props.fileResult.matches.length}
+        </span>
+      </button>
+
+      {/* Matches */}
+      <Show when={!props.fileResult.isCollapsed}>
+        <div class="pb-1">
+          <For each={props.fileResult.matches}>
+            {(match) => (
+              <MatchLine
+                match={match}
+                query={props.query}
+                isRegex={props.isRegex}
+                caseSensitive={props.caseSensitive}
+                onClick={() => props.onMatchClick(match)}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+interface MatchLineProps {
+  match: SearchMatch;
+  query: string;
+  isRegex: boolean;
+  caseSensitive: boolean;
+  onClick: () => void;
+}
+
+function MatchLine(props: MatchLineProps) {
+  // Highlight the match in the line content
+  const highlightedContent = () => {
+    const line = props.match.line_content;
+    const matchText = props.match.match_text;
+    const column = props.match.column;
+
+    // Split into before, match, and after
+    const before = line.slice(0, column);
+    const after = line.slice(column + matchText.length);
+
+    return { before, match: matchText, after };
+  };
+
+  return (
+    <button
+      class="w-full flex items-start gap-2 px-3 py-0.5 text-left hover:bg-zed-bg-hover transition-colors group"
+      onClick={props.onClick}
+    >
+      {/* Line number */}
+      <span class="w-8 text-right text-xs text-zed-text-disabled font-mono flex-shrink-0">
+        {props.match.line_number}
+      </span>
+
+      {/* Line content with highlight */}
+      <span class="flex-1 text-xs font-mono text-zed-text-secondary truncate">
+        <span>{highlightedContent().before}</span>
+        <span class="bg-zed-accent-yellow/30 text-zed-accent-yellow font-medium">
+          {highlightedContent().match}
+        </span>
+        <span>{highlightedContent().after}</span>
+      </span>
+    </button>
+  );
+}

@@ -8,6 +8,7 @@ pub mod settings;
 pub mod db;
 pub mod process;
 pub mod terminal;
+pub mod search;
 mod git;
 mod fs;
 
@@ -37,6 +38,8 @@ pub fn run() {
         .manage(settings::SettingsState::new())
         // Manage terminal state
         .manage(terminal::TerminalState::new())
+        // Manage search state
+        .manage(search::SearchState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Database commands
@@ -80,6 +83,9 @@ pub fn run() {
             terminal::get_terminal_info,
             terminal::list_terminals,
             terminal::get_terminal_pid_by_lane,
+            // Search commands
+            search::search_start,
+            search::search_cancel,
         ])
         // Window setup
         .setup(|app| {

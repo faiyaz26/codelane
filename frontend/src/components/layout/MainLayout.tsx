@@ -4,6 +4,7 @@ import { ActivityBar, type ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
 import { EditorPanel } from '../editor';
 import { FileExplorer } from '../explorer/FileExplorer';
+import { SearchPanel } from '../search';
 import { TerminalView } from '../TerminalView';
 import { TabPanel } from '../tabs/TabPanel';
 import { ProcessMonitor } from '../ProcessMonitor';
@@ -229,13 +230,14 @@ export function MainLayout(props: MainLayoutProps) {
                   onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
                 />
               </Show>
-              <Show when={activeView() === 'search'}>
-                <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  Search coming soon
-                </div>
+              <Show when={activeView() === 'search' && activeLane()}>
+                <SearchPanel
+                  workingDir={activeLane()!.workingDir}
+                  laneId={activeLane()!.id}
+                  onFileOpen={(path, line) => {
+                    editorStateManager.openFileAtLine(activeLane()!.id, path, line);
+                  }}
+                />
               </Show>
               <Show when={activeView() === 'git'}>
                 <div class="p-4 text-center text-zed-text-tertiary text-sm">

@@ -43,6 +43,10 @@ dirs = "5.0"
 chrono = "0.4"
 sysinfo = "0.32"
 
+# Search (gitignore-aware file walking + regex)
+ignore = "0.4"
+regex = "1"
+
 # Internal crates (for Tauri commands)
 codelane-terminal = { path = "../crates/codelane-terminal" }
 codelane-git = { path = "../crates/codelane-git" }

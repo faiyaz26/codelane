@@ -9,6 +9,7 @@ export interface OpenFile {
   isModified: boolean;
   error: string | null;
   language: string;
+  scrollToLine?: number; // Line number to scroll to after loading (1-indexed)
 }
 
 // Check if a file is a markdown file

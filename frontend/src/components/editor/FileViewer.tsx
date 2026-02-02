@@ -6,6 +6,7 @@ import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './types';
 import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
+import { editorStateManager } from '../../services/EditorStateManager';
 import { MarkdownEditor } from './markdown';
 
 // Singleton highlighter instance
@@ -639,6 +640,48 @@ export function FileViewer(props: FileViewerProps) {
     }
   });
 
+  // Scroll to line from search results
+  createEffect(() => {
+    // Check highlighting state first (this creates the dependency)
+    const highlighting = isHighlighting();
+
+    // Then check file props
+    const file = props.file;
+    const laneId = props.laneId;
+
+    // Early exit if no file or no scroll target
+    if (!file || !laneId) return;
+    if (file.isLoading || !file.content) return;
+    if (file.scrollToLine === undefined) return;
+
+    // Wait for highlighting to complete before scrolling
+    if (highlighting) return;
+
+    // Capture all values needed in the async callback
+    const targetLine = file.scrollToLine;
+    const fileId = file.id;
+    const capturedLaneId = laneId;
+
+    // Calculate scroll position (0-indexed internally, but scrollToLine is 1-indexed)
+    const lineIndex = Math.max(0, targetLine - 1);
+    const scrollPosition = lineIndex * LINE_HEIGHT;
+
+    // Scroll with a small delay to ensure DOM is updated
+    requestAnimationFrame(() => {
+      if (codeContainerRef) {
+        // Center the line in viewport
+        const viewportCenter = viewportHeight() / 2;
+        codeContainerRef.scrollTo({
+          top: Math.max(0, scrollPosition - viewportCenter),
+          behavior: 'smooth',
+        });
+      }
+
+      // Clear the scroll target after scrolling (use captured values)
+      editorStateManager.clearScrollToLine(capturedLaneId, fileId);
+    });
+  });
+
   // Highlight code when file content or theme changes
   createEffect(() => {
     const file = props.file;
@@ -911,8 +954,12 @@ export function FileViewer(props: FileViewerProps) {
       </Show>
 
       {/* Markdown file - use dedicated editor */}
-      <Show when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name)}>
-        <MarkdownEditor file={props.file!} laneId={props.laneId} />
+      {/* keyed=true ensures component is recreated if file identity changes */}
+      <Show
+        when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name) ? props.file : undefined}
+        keyed
+      >
+        {(file) => <MarkdownEditor file={file} laneId={props.laneId} />}
       </Show>
 
       {/* Non-markdown file content */}

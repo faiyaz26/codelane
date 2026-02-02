@@ -1,32 +1,14 @@
 // Markdown Editor - TipTap-based WYSIWYG editor with live preview
+// Refactored for clean architecture with modular hooks
 
-import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
-import { invoke } from '@tauri-apps/api/core';
-import { createHighlighter, type Highlighter } from 'shiki';
-import { Editor } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
-import { Markdown } from 'tiptap-markdown';
-import CodeBlockShiki from 'tiptap-extension-code-block-shiki';
+import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import type { Editor } from '@tiptap/core';
 import type { OpenFile } from '../types';
 import { FloatingToolbar } from './FloatingToolbar';
 import { editorStateManager } from '../../../services/EditorStateManager';
 import { editorSettingsManager } from '../../../services/EditorSettingsManager';
-import { themeManager, getShikiTheme, getAllShikiThemes } from '../../../services/ThemeManager';
+import { useShikiHighlighter, createTipTapEditor, useMarkdownSave, type TipTapEditorInstance } from './hooks';
 import './markdown-editor.css';
-
-// Shiki highlighter singleton
-let highlighterPromise: Promise<Highlighter> | null = null;
-
-async function getHighlighter(): Promise<Highlighter> {
-  if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: getAllShikiThemes(),
-      langs: ['markdown'],
-    });
-  }
-  return highlighterPromise;
-}
 
 interface MarkdownEditorProps {
   file: OpenFile;
@@ -35,64 +17,73 @@ interface MarkdownEditorProps {
   onSave?: (content: string) => void;
 }
 
-// Normalize content for comparison (trim whitespace, normalize line endings)
-function normalizeForComparison(content: string): string {
-  return content
-    .replace(/\r\n/g, '\n') // Normalize line endings
-    .replace(/\n+$/, '') // Remove trailing newlines
-    .trim();
-}
-
 export function MarkdownEditor(props: MarkdownEditorProps) {
-  // Use default mode from settings
+  // Mode toggle: preview (WYSIWYG) or source (raw markdown)
   const [mode, setMode] = createSignal<'preview' | 'source'>(
     editorSettingsManager.getMarkdownDefaultMode()
   );
+
+  // Source mode state
   const [sourceContent, setSourceContent] = createSignal(props.file.content || '');
-  const [isModified, setIsModified] = createSignal(false);
-  const [isSaving, setIsSaving] = createSignal(false);
-  const [saveError, setSaveError] = createSignal<string | null>(null);
+
+  // Floating toolbar state
   const [showToolbar, setShowToolbar] = createSignal(false);
   const [toolbarPosition, setToolbarPosition] = createSignal({ x: 0, y: 0 });
-  const [editorInstance, setEditorInstance] = createSignal<Editor | null>(null);
-  const [highlightedSource, setHighlightedSource] = createSignal('');
-  const [isEditorReady, setIsEditorReady] = createSignal(false);
 
+  // DOM refs
   let editorRef: HTMLDivElement | undefined;
   let sourceTextareaRef: HTMLTextAreaElement | undefined;
   let highlightContainerRef: HTMLPreElement | undefined;
 
-  // Highlight source content with Shiki
-  createEffect(() => {
-    const content = sourceContent();
-    const currentTheme = themeManager.getTheme()();
+  // TipTap editor instance (created after mount when ref is available)
+  let tipTapEditor: TipTapEditorInstance | null = null;
 
-    if (!content) {
-      setHighlightedSource('');
+  // Shiki syntax highlighting for source mode
+  const highlightedSource = useShikiHighlighter({
+    content: sourceContent,
+  });
+
+  // Save functionality hook
+  const saveManager = useMarkdownSave({
+    laneId: props.laneId,
+    fileId: props.file.id,
+    filePath: props.file.path,
+    getContent: () => {
+      if (mode() === 'source') {
+        return sourceContent();
+      }
+      return tipTapEditor?.getMarkdown() || sourceContent();
+    },
+    onSaveComplete: (content) => {
+      props.onSave?.(content);
+    },
+    onModifiedChange: (modified) => {
+      props.onModifiedChange?.(modified);
+    },
+  });
+
+  // Handle content changes from TipTap
+  const handleTipTapContentChange = (markdown: string) => {
+    if (mode() !== 'preview') return;
+    saveManager.updateModifiedState(markdown);
+  };
+
+  // Handle selection changes for floating toolbar
+  const handleSelectionChange = (editor: Editor, hasSelection: boolean, coords?: { x: number; y: number }) => {
+    if (mode() !== 'preview') {
+      setShowToolbar(false);
       return;
     }
 
-    (async () => {
-      try {
-        const highlighter = await getHighlighter();
-        const html = highlighter.codeToHtml(content, {
-          lang: 'markdown',
-          theme: getShikiTheme(currentTheme),
-        });
-        setHighlightedSource(html);
-      } catch (err) {
-        console.error('Failed to highlight markdown:', err);
-        // Fallback to escaped HTML
-        const escaped = content
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        setHighlightedSource(`<pre><code>${escaped}</code></pre>`);
-      }
-    })();
-  });
+    if (hasSelection && coords) {
+      setToolbarPosition(coords);
+      setShowToolbar(true);
+    } else {
+      setShowToolbar(false);
+    }
+  };
 
-  // Sync scroll between textarea and highlight container
+  // Sync scroll between textarea and highlight container in source mode
   const handleSourceScroll = () => {
     if (sourceTextareaRef && highlightContainerRef) {
       highlightContainerRef.scrollTop = sourceTextareaRef.scrollTop;
@@ -100,160 +91,30 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
   };
 
-  // Original content for comparison (normalized after TipTap processes it)
-  let originalNormalizedContent = '';
-
-  // Check if content has changed from original
-  const checkIfModified = (currentContent: string): boolean => {
-    if (!isEditorReady()) return false;
-    return normalizeForComparison(currentContent) !== originalNormalizedContent;
+  // Handle source content changes
+  const handleSourceChange = (e: Event) => {
+    const value = (e.target as HTMLTextAreaElement).value;
+    setSourceContent(value);
+    saveManager.updateModifiedState(value);
   };
 
-  // Update modified state
-  const updateModifiedState = (currentContent: string) => {
-    const modified = checkIfModified(currentContent);
-    if (isModified() !== modified) {
-      setIsModified(modified);
-      props.onModifiedChange?.(modified);
-      if (props.laneId) {
-        editorStateManager.setFileModified(props.laneId, props.file.id, modified);
-      }
-    }
-  };
-
-  // Initialize TipTap editor after mount
-  onMount(() => {
-    if (!editorRef) return;
-
-    const ed = new Editor({
-      element: editorRef,
-      extensions: [
-        StarterKit.configure({
-          heading: {
-            levels: [1, 2, 3, 4, 5, 6],
-          },
-          // Disable default codeBlock, use CodeBlockShiki instead
-          codeBlock: false,
-        }),
-        // Shiki-powered syntax highlighting for code blocks
-        CodeBlockShiki.configure({
-          defaultLanguage: 'text',
-          defaultTheme: 'github-dark-default',
-          // Dual themes for light/dark mode support (requires CSS with --shiki-dark/--shiki-light vars)
-          themes: {
-            light: 'github-light-default',
-            dark: 'github-dark-default',
-          },
-        }),
-        Link.configure({
-          openOnClick: false,
-          HTMLAttributes: {
-            class: 'markdown-link',
-          },
-        }),
-        Markdown.configure({
-          html: true,
-          tightLists: true,
-          bulletListMarker: '-',
-          linkify: false,
-          breaks: false,
-          transformPastedText: true,
-          transformCopiedText: true,
-        }),
-      ],
-      content: props.file.content || '',
-      editorProps: {
-        attributes: {
-          class: 'markdown-editor',
-        },
-      },
-      onCreate: ({ editor }) => {
-        // Capture the normalized content AFTER TipTap has processed it
-        // This ensures we're comparing apples to apples
-        const processedContent = editor.storage.markdown.getMarkdown();
-        originalNormalizedContent = normalizeForComparison(processedContent);
-        setIsEditorReady(true);
-      },
-      onUpdate: ({ editor }) => {
-        // Only track changes in preview mode and after editor is ready
-        if (mode() !== 'preview' || !isEditorReady()) return;
-
-        const md = editor.storage.markdown.getMarkdown();
-        updateModifiedState(md);
-      },
-      onSelectionUpdate: ({ editor }) => {
-        // Only show toolbar in preview mode
-        if (mode() !== 'preview') {
-          setShowToolbar(false);
-          return;
-        }
-
-        const { from, to } = editor.state.selection;
-        const hasSelection = from !== to;
-
-        if (hasSelection && !editor.state.selection.empty) {
-          // Get selection coordinates for toolbar positioning
-          const coords = editor.view.coordsAtPos(from);
-          setToolbarPosition({
-            x: coords.left,
-            y: coords.top - 50,
-          });
-          setShowToolbar(true);
-        } else {
-          setShowToolbar(false);
-        }
-      },
-    });
-
-    setEditorInstance(ed);
-  });
-
-  // Save file
-  const saveFile = async () => {
-    if (!isModified() || isSaving()) return;
-
-    setIsSaving(true);
-    setSaveError(null);
-
-    try {
-      let contentToSave: string;
-      const ed = editorInstance();
-
-      if (mode() === 'source') {
-        contentToSave = sourceContent();
-      } else if (ed) {
-        // Use TipTap markdown extension to get markdown
-        contentToSave = ed.storage.markdown.getMarkdown();
-      } else {
-        contentToSave = sourceContent();
-      }
-
-      await invoke('write_file', {
-        path: props.file.path,
-        contents: contentToSave,
-      });
-
-      // Update the original content to the saved content
-      originalNormalizedContent = normalizeForComparison(contentToSave);
-      setIsModified(false);
-      props.onModifiedChange?.(false);
-      props.onSave?.(contentToSave);
-      // Update state manager
-      if (props.laneId) {
-        editorStateManager.updateFileContent(props.laneId, props.file.id, contentToSave);
-      }
-    } catch (err) {
-      console.error('Failed to save file:', err);
-      setSaveError(err instanceof Error ? err.message : 'Failed to save file');
-    } finally {
-      setIsSaving(false);
+  // Toggle between preview and source mode
+  const toggleMode = () => {
+    if (mode() === 'preview') {
+      // Switching to source: get markdown from TipTap
+      const md = tipTapEditor?.getMarkdown() || '';
+      setSourceContent(md);
+      setMode('source');
+    } else {
+      // Switching to preview: set markdown content in TipTap
+      tipTapEditor?.setContent(sourceContent());
+      setMode('preview');
     }
   };
 
   // Handle keyboard shortcuts
   const handleKeyDown = (e: KeyboardEvent) => {
     // Prevent backspace from triggering browser back navigation
-    // when not in an editable element
     if (e.key === 'Backspace') {
       const target = e.target as HTMLElement;
       const isEditable = target.tagName === 'INPUT' ||
@@ -269,7 +130,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     // Cmd/Ctrl + S to save
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
-      saveFile();
+      saveManager.save();
       return;
     }
 
@@ -281,52 +142,49 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
   };
 
-  // Toggle between preview and source mode
-  const toggleMode = () => {
-    const ed = editorInstance();
-
-    if (mode() === 'preview' && ed) {
-      // Switching to source: get markdown from TipTap
-      const md = ed.storage.markdown.getMarkdown();
-      setSourceContent(md);
-      setMode('source');
-    } else {
-      // Switching to preview: set markdown content in TipTap
-      if (ed) {
-        // The Markdown extension handles parsing markdown content
-        ed.commands.setContent(sourceContent());
-      }
-      setMode('preview');
-    }
-  };
-
-  // Handle source content change
-  const handleSourceChange = (e: Event) => {
-    const value = (e.target as HTMLTextAreaElement).value;
-    setSourceContent(value);
-    updateModifiedState(value);
-  };
-
-  // Register keyboard listener and save callback
+  // Initialize TipTap editor after mount
   onMount(() => {
+    if (!editorRef) return;
+
+    tipTapEditor = createTipTapEditor({
+      element: editorRef,
+      content: props.file.content || '',
+      onReady: (_editor, normalizedContent) => {
+        // Set the original content for modification tracking
+        saveManager.setOriginalContent(normalizedContent);
+      },
+      onContentChange: handleTipTapContentChange,
+      onSelectionChange: handleSelectionChange,
+    });
+
+    // Register keyboard listener
     window.addEventListener('keydown', handleKeyDown);
+
     // Register save callback so EditorPanel can trigger save
-    if (props.laneId) {
-      editorStateManager.registerSaveCallback(props.laneId, props.file.id, saveFile);
+    if (props.laneId && props.file.id) {
+      editorStateManager.registerSaveCallback(props.laneId, props.file.id, saveManager.save);
     }
   });
 
+  // Cleanup
   onCleanup(() => {
+    // Destroy TipTap FIRST to prevent any callbacks firing during disposal
+    if (tipTapEditor) {
+      tipTapEditor.destroy();
+      tipTapEditor = null;
+    }
+
+    // Remove keyboard listener
     window.removeEventListener('keydown', handleKeyDown);
+
     // Unregister save callback
-    if (props.laneId) {
+    if (props.laneId && props.file.id) {
       editorStateManager.unregisterSaveCallback(props.laneId, props.file.id);
     }
-    const ed = editorInstance();
-    if (ed) {
-      ed.destroy();
-    }
   });
+
+  // Get editor for toolbar (safe accessor)
+  const getEditor = () => tipTapEditor?.editor() || null;
 
   return (
     <div class="h-full flex flex-col bg-zed-bg-surface relative">
@@ -352,11 +210,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           </div>
 
           {/* Save status */}
-          <Show when={isSaving()}>
+          <Show when={saveManager.isSaving()}>
             <span class="text-zed-text-tertiary">Saving...</span>
           </Show>
-          <Show when={saveError()}>
-            <span class="text-zed-accent-red" title={saveError()!}>Save failed</span>
+          <Show when={saveManager.saveError()}>
+            <span class="text-zed-accent-red" title={saveManager.saveError()!}>Save failed</span>
           </Show>
         </div>
       </div>
@@ -371,9 +229,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         />
 
         {/* Floating toolbar */}
-        <Show when={showToolbar() && mode() === 'preview' && editorInstance()}>
+        <Show when={showToolbar() && mode() === 'preview' && getEditor()}>
           <FloatingToolbar
-            editor={editorInstance()!}
+            editor={getEditor()!}
             position={toolbarPosition()}
             onClose={() => setShowToolbar(false)}
           />

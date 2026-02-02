@@ -179,14 +179,14 @@ export function EditorPanel(props: EditorPanelProps) {
               // Look up file reactively - getFile returns undefined if file was closed
               const file = () => getFile(fileId);
               return (
-                <Show when={file()}>
+                <Show when={file()} keyed>
                   {(f) => (
                     <div
                       class="absolute inset-0"
                       style={{ display: fileId === activeFileId() ? 'block' : 'none' }}
                       data-file-id={fileId}
                     >
-                      <FileViewer file={f()} laneId={props.laneId} />
+                      <FileViewer file={f} laneId={props.laneId} />
                     </div>
                   )}
                 </Show>

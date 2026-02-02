@@ -12,13 +12,22 @@ interface LaneEditorState {
   saveCallbacks: Map<string, () => Promise<void>>;
 }
 
+// Create signals in a root context to prevent disposal issues
+let _currentLaneId: ReturnType<typeof createSignal<string | null>>;
+let _updateTrigger: ReturnType<typeof createSignal<number>>;
+
+createRoot(() => {
+  _currentLaneId = createSignal<string | null>(null);
+  _updateTrigger = createSignal(0);
+});
+
 class EditorStateManager {
   // State per lane
   private laneStates = new Map<string, LaneEditorState>();
 
-  // Reactive signals for current lane (for UI updates)
-  private currentLaneId = createSignal<string | null>(null);
-  private updateTrigger = createSignal(0);
+  // Reference the root-owned signals
+  private currentLaneId = _currentLaneId;
+  private updateTrigger = _updateTrigger;
 
   // Get or create state for a lane
   private getOrCreateLaneState(laneId: string): LaneEditorState {
@@ -112,6 +121,61 @@ class EditorStateManager {
 
     // Load content
     await this.loadFileContent(laneId, id, path);
+  }
+
+  // Open a file at a specific line number (for search results)
+  async openFileAtLine(laneId: string, path: string, line: number): Promise<void> {
+    const state = this.getOrCreateLaneState(laneId);
+
+    // Check if already open
+    const existingFile = Array.from(state.openFiles.values()).find((f) => f.path === path);
+    if (existingFile) {
+      // File is already open, just set the scroll target and activate it
+      state.openFiles.set(existingFile.id, { ...existingFile, scrollToLine: line });
+      state.activeFileId = existingFile.id;
+      if (!state.renderedFiles.has(existingFile.id)) {
+        state.renderedFiles.add(existingFile.id);
+      }
+      this.triggerUpdate();
+      return;
+    }
+
+    // Create new file entry with scroll target
+    const id = crypto.randomUUID();
+    const name = path.split('/').pop() || 'Untitled';
+    const language = detectLanguage(name);
+
+    const newFile: OpenFile = {
+      id,
+      path,
+      name,
+      content: null,
+      isLoading: false,
+      isModified: false,
+      error: null,
+      language,
+      scrollToLine: line,
+    };
+
+    state.openFiles.set(id, newFile);
+    state.activeFileId = id;
+    state.renderedFiles.add(id);
+    this.triggerUpdate();
+
+    // Load content
+    await this.loadFileContent(laneId, id, path);
+  }
+
+  // Clear scroll-to-line target after scrolling
+  clearScrollToLine(laneId: string, fileId: string): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    const file = state.openFiles.get(fileId);
+    if (file && file.scrollToLine !== undefined) {
+      state.openFiles.set(fileId, { ...file, scrollToLine: undefined });
+      this.triggerUpdate();
+    }
   }
 
   // Load file content
