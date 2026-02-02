@@ -134,22 +134,31 @@
 }
 
 /* Shiki code block overrides */
-.markdown-editor .shiki {
+.markdown-editor .shiki,
+.markdown-editor pre.shiki,
+.markdown-editor pre[class*="shiki"] {
   margin: 1em 0;
   border-radius: 6px;
   padding: 16px !important;
   background-color: rgb(var(--zed-bg-panel)) !important;
   border: 1px solid rgb(var(--zed-border-default));
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* Shiki dual theme support - use dark colors by default */
-.markdown-editor .shiki span {
+.markdown-editor .shiki,
+.markdown-editor .shiki span,
+.markdown-editor pre[class*="shiki"] span {
   color: var(--shiki-dark) !important;
   background-color: var(--shiki-dark-bg) !important;
 }
 
 /* Use light colors when in light theme */
-.light .markdown-editor .shiki span {
+.light .markdown-editor .shiki,
+.light .markdown-editor .shiki span,
+.light .markdown-editor pre[class*="shiki"] span {
   color: var(--shiki-light) !important;
   background-color: var(--shiki-light-bg) !important;
 }

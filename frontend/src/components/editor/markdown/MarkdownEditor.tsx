@@ -138,8 +138,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         // Shiki-powered syntax highlighting for code blocks
         CodeBlockShiki.configure({
           defaultLanguage: 'text',
-          // Use dual themes for light/dark mode support
-          defaultTheme: {
+          defaultTheme: 'github-dark-default',
+          // Dual themes for light/dark mode support (requires CSS with --shiki-dark/--shiki-light vars)
+          themes: {
             light: 'github-light-default',
             dark: 'github-dark-default',
           },
