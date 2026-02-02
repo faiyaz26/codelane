@@ -21,6 +21,8 @@ export interface FileSearchResults {
   fileName: string;
   matches: SearchMatch[];
   isCollapsed: boolean;
+  /** Whether all matches are shown or just preview */
+  isExpanded: boolean;
 }
 
 /** Search options */
@@ -29,11 +31,24 @@ export interface SearchOptions {
   caseSensitive?: boolean;
   includePattern?: string;
   excludePattern?: string;
+  /** Specific files or directories to search (absolute paths) */
+  filePaths?: string[];
+  /** Maximum matches to return (0 = unlimited, default: 1000) */
+  maxMatches?: number;
 }
+
+/** Initial display limit for files */
+const INITIAL_FILE_LIMIT = 20;
+/** How many more files to load on "Load More" */
+const LOAD_MORE_FILES = 20;
+/** How many matches to show per file initially */
+export const MATCHES_PER_FILE_PREVIEW = 3;
 
 /** Search state for a single lane */
 interface LaneSearchState {
   searchId: string | null;
+  /** Additional search IDs for file-specific sub-searches */
+  subSearchIds: Set<string>;
   query: string;
   isRegex: boolean;
   caseSensitive: boolean;
@@ -42,6 +57,10 @@ interface LaneSearchState {
   totalMatches: number;
   totalFiles: number;
   error: string | null;
+  /** Current file display limit for pagination */
+  fileLimit: number;
+  /** Whether results were truncated by backend limit */
+  truncated: boolean;
 }
 
 /** Payload for search result events */
@@ -57,6 +76,7 @@ interface SearchCompletePayload {
   total_matches: number;
   total_files: number;
   cancelled: boolean;
+  truncated: boolean;
 }
 
 /** Payload for search error events */
@@ -136,6 +156,7 @@ class SearchStateManager {
     if (!state) {
       state = {
         searchId: null,
+        subSearchIds: new Set(),
         query: '',
         isRegex: false,
         caseSensitive: false,
@@ -144,17 +165,22 @@ class SearchStateManager {
         totalMatches: 0,
         totalFiles: 0,
         error: null,
+        fileLimit: INITIAL_FILE_LIMIT,
+        truncated: false,
       };
       this.laneStates.set(laneId, state);
     }
     return state;
   }
 
-  // Find lane by search ID
-  private findLaneBySearchId(searchId: string): string | null {
+  // Find lane by search ID (checks main search and sub-searches)
+  private findLaneBySearchId(searchId: string): { laneId: string; isSubSearch: boolean } | null {
     for (const [laneId, state] of this.laneStates.entries()) {
       if (state.searchId === searchId) {
-        return laneId;
+        return { laneId, isSubSearch: false };
+      }
+      if (state.subSearchIds.has(searchId)) {
+        return { laneId, isSubSearch: true };
       }
     }
     return null;
@@ -162,10 +188,10 @@ class SearchStateManager {
 
   // Handle incoming search results
   private handleSearchResult(payload: SearchResultPayload) {
-    const laneId = this.findLaneBySearchId(payload.search_id);
-    if (!laneId) return;
+    const result = this.findLaneBySearchId(payload.search_id);
+    if (!result) return;
 
-    const state = this.laneStates.get(laneId);
+    const state = this.laneStates.get(result.laneId);
     if (!state) return;
 
     // Group matches by file
@@ -181,6 +207,7 @@ class SearchStateManager {
           fileName,
           matches: [],
           isCollapsed: false,
+          isExpanded: result.isSubSearch, // Auto-expand for file-specific searches
         };
         state.results.set(filePath, fileResults);
       }
@@ -188,43 +215,61 @@ class SearchStateManager {
       fileResults.matches.push(match);
     }
 
-    state.totalMatches += payload.matches.length;
-    state.totalFiles = payload.files_searched;
+    // Only update totals for main search, not sub-searches
+    if (!result.isSubSearch) {
+      state.totalMatches += payload.matches.length;
+      state.totalFiles = payload.files_searched;
+    }
 
     this.triggerUpdate();
   }
 
   // Handle search complete
   private handleSearchComplete(payload: SearchCompletePayload) {
-    const laneId = this.findLaneBySearchId(payload.search_id);
-    if (!laneId) return;
+    const result = this.findLaneBySearchId(payload.search_id);
+    if (!result) return;
 
-    const state = this.laneStates.get(laneId);
+    const state = this.laneStates.get(result.laneId);
     if (!state) return;
 
-    state.isSearching = false;
-    state.totalMatches = payload.total_matches;
-    state.totalFiles = payload.total_files;
+    if (result.isSubSearch) {
+      // Remove completed sub-search from tracking
+      state.subSearchIds.delete(payload.search_id);
+      console.log(
+        `[SearchStateManager] File-specific search complete: ${payload.total_matches} matches`
+      );
+    } else {
+      // Main search complete
+      state.isSearching = false;
+      state.totalMatches = payload.total_matches;
+      state.totalFiles = payload.total_files;
+      state.truncated = payload.truncated;
 
-    console.log(
-      `[SearchStateManager] Search complete: ${payload.total_matches} matches in ${payload.total_files} files`
-    );
+      console.log(
+        `[SearchStateManager] Search complete: ${payload.total_matches} matches in ${payload.total_files} files (truncated=${payload.truncated})`
+      );
+    }
 
     this.triggerUpdate();
   }
 
   // Handle search error
   private handleSearchError(payload: SearchErrorPayload) {
-    const laneId = this.findLaneBySearchId(payload.search_id);
-    if (!laneId) return;
+    const result = this.findLaneBySearchId(payload.search_id);
+    if (!result) return;
 
-    const state = this.laneStates.get(laneId);
+    const state = this.laneStates.get(result.laneId);
     if (!state) return;
 
-    state.isSearching = false;
-    state.error = payload.message;
-
-    console.error('[SearchStateManager] Search error:', payload.message);
+    if (result.isSubSearch) {
+      // Remove failed sub-search from tracking
+      state.subSearchIds.delete(payload.search_id);
+      console.error('[SearchStateManager] File-specific search error:', payload.message);
+    } else {
+      state.isSearching = false;
+      state.error = payload.message;
+      console.error('[SearchStateManager] Search error:', payload.message);
+    }
 
     this.triggerUpdate();
   }
@@ -257,6 +302,8 @@ class SearchStateManager {
     state.isRegex = options.isRegex ?? false;
     state.caseSensitive = options.caseSensitive ?? false;
     state.isSearching = true;
+    state.fileLimit = INITIAL_FILE_LIMIT;
+    state.truncated = false;
 
     this.triggerUpdate();
 
@@ -269,6 +316,8 @@ class SearchStateManager {
         caseSensitive: options.caseSensitive ?? false,
         includePattern: options.includePattern,
         excludePattern: options.excludePattern,
+        maxMatches: options.maxMatches,
+        filePaths: options.filePaths,
       });
 
       state.searchId = searchId;
@@ -298,7 +347,7 @@ class SearchStateManager {
     this.triggerUpdate();
   }
 
-  // Get search results for a lane
+  // Get search results for a lane (paginated by files)
   getResults(laneId: string): FileSearchResults[] {
     // Access trigger for reactivity
     this.updateTrigger[0]();
@@ -306,10 +355,102 @@ class SearchStateManager {
     const state = this.laneStates.get(laneId);
     if (!state) return [];
 
-    // Convert map to array, sorted by file path
-    return Array.from(state.results.values()).sort((a, b) =>
-      a.filePath.localeCompare(b.filePath)
+    // Convert map to array, sorted by number of matches (most matches first)
+    const allResults = Array.from(state.results.values()).sort((a, b) =>
+      b.matches.length - a.matches.length
     );
+
+    // Apply file limit
+    return allResults.slice(0, state.fileLimit);
+  }
+
+  // Get display info for pagination (file-based)
+  getDisplayInfo(laneId: string): {
+    displayedFiles: number;
+    totalFiles: number;
+    totalMatches: number;
+    hasMore: boolean;
+  } {
+    // Access trigger for reactivity
+    this.updateTrigger[0]();
+
+    const state = this.laneStates.get(laneId);
+    if (!state) return { displayedFiles: 0, totalFiles: 0, totalMatches: 0, hasMore: false };
+
+    const totalFiles = state.results.size;
+    const displayedFiles = Math.min(state.fileLimit, totalFiles);
+    return {
+      displayedFiles,
+      totalFiles,
+      totalMatches: state.totalMatches,
+      hasMore: totalFiles > state.fileLimit,
+    };
+  }
+
+  // Load more files
+  loadMore(laneId: string): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    state.fileLimit += LOAD_MORE_FILES;
+    this.triggerUpdate();
+  }
+
+  // Toggle expanded state for a file (show all matches vs preview)
+  toggleFileExpanded(laneId: string, filePath: string): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    const fileResults = state.results.get(filePath);
+    if (fileResults) {
+      fileResults.isExpanded = !fileResults.isExpanded;
+      this.triggerUpdate();
+    }
+  }
+
+  // Search within specific files only (useful for loading all matches in a file)
+  // Results are merged with existing results for those files
+  async searchInFiles(
+    laneId: string,
+    rootPath: string,
+    query: string,
+    filePaths: string[],
+    options: Omit<SearchOptions, 'filePaths' | 'maxMatches'> = {}
+  ): Promise<void> {
+    if (!query.trim() || filePaths.length === 0) return;
+
+    const state = this.getOrCreateLaneState(laneId);
+
+    // Mark files as loading by clearing old matches
+    for (const filePath of filePaths) {
+      const fileResult = state.results.get(filePath);
+      if (fileResult) {
+        // Clear existing matches - we'll replace with full results
+        fileResult.matches = [];
+        fileResult.isExpanded = true;
+      }
+    }
+    this.triggerUpdate();
+
+    try {
+      // Search with no limit for specific files
+      const searchId = await invoke<string>('search_start', {
+        rootPath,
+        query,
+        isRegex: options.isRegex ?? state.isRegex,
+        caseSensitive: options.caseSensitive ?? state.caseSensitive,
+        includePattern: options.includePattern,
+        excludePattern: options.excludePattern,
+        maxMatches: 0, // No limit for targeted search
+        filePaths,
+      });
+
+      // Track as sub-search so event handlers can route results correctly
+      state.subSearchIds.add(searchId);
+      console.log(`[SearchStateManager] Started file-specific search: ${searchId} for ${filePaths.length} files`);
+    } catch (error) {
+      console.error('[SearchStateManager] Failed to search in files:', error);
+    }
   }
 
   // Get search state for a lane
@@ -321,6 +462,7 @@ class SearchStateManager {
     totalMatches: number;
     totalFiles: number;
     error: string | null;
+    truncated: boolean;
   } {
     // Access trigger for reactivity
     this.updateTrigger[0]();
@@ -335,6 +477,7 @@ class SearchStateManager {
         totalMatches: 0,
         totalFiles: 0,
         error: null,
+        truncated: false,
       };
     }
 
@@ -346,6 +489,7 @@ class SearchStateManager {
       totalMatches: state.totalMatches,
       totalFiles: state.totalFiles,
       error: state.error,
+      truncated: state.truncated,
     };
   }
 
@@ -366,12 +510,15 @@ class SearchStateManager {
     const state = this.laneStates.get(laneId);
     if (state) {
       state.searchId = null;
+      state.subSearchIds.clear();
       state.query = '';
       state.results.clear();
       state.totalMatches = 0;
       state.totalFiles = 0;
       state.error = null;
       state.isSearching = false;
+      state.fileLimit = INITIAL_FILE_LIMIT;
+      state.truncated = false;
       this.triggerUpdate();
     }
   }

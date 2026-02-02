@@ -37,6 +37,9 @@ const BATCH_SIZE: usize = 50;
 /// Number of context lines before/after match
 const CONTEXT_LINES: usize = 2;
 
+/// Default maximum matches to return (0 = unlimited)
+const DEFAULT_MAX_MATCHES: u32 = 1000;
+
 /// State for managing active searches
 pub struct SearchState {
     searches: Mutex<HashMap<String, SearchInstance>>,
@@ -95,6 +98,8 @@ pub struct SearchCompletePayload {
     pub total_matches: u32,
     pub total_files: u32,
     pub cancelled: bool,
+    /// Whether results were truncated due to max_matches limit
+    pub truncated: bool,
 }
 
 /// Payload for search error events
@@ -116,6 +121,8 @@ pub struct SearchErrorPayload {
 /// * `case_sensitive` - Whether search is case sensitive
 /// * `include_pattern` - Optional glob pattern to include files (e.g., "*.ts")
 /// * `exclude_pattern` - Optional glob pattern to exclude files
+/// * `max_matches` - Maximum number of matches to return (default: 1000, 0 = unlimited)
+/// * `file_paths` - Optional list of specific files or directories to search (absolute paths)
 ///
 /// # Returns
 /// The search ID (UUID) on success
@@ -129,17 +136,22 @@ pub async fn search_start(
     case_sensitive: Option<bool>,
     include_pattern: Option<String>,
     exclude_pattern: Option<String>,
+    max_matches: Option<u32>,
+    file_paths: Option<Vec<String>>,
 ) -> Result<String, String> {
     let search_id = uuid::Uuid::new_v4().to_string();
     let is_regex = is_regex.unwrap_or(false);
     let case_sensitive = case_sensitive.unwrap_or(false);
+    let max_matches = max_matches.unwrap_or(DEFAULT_MAX_MATCHES);
 
     tracing::info!(
-        "Starting search '{}' in {} (regex={}, case_sensitive={})",
+        "Starting search '{}' in {} (regex={}, case_sensitive={}, max_matches={}, file_paths={:?})",
         query,
         root_path,
         is_regex,
-        case_sensitive
+        case_sensitive,
+        max_matches,
+        file_paths.as_ref().map(|p| p.len())
     );
 
     // Validate root path exists
@@ -190,6 +202,7 @@ pub async fn search_start(
     let app_clone = app.clone();
     let include = include_pattern.clone();
     let exclude = exclude_pattern.clone();
+    let paths = file_paths.clone();
 
     // Spawn search task
     tokio::spawn(async move {
@@ -201,6 +214,8 @@ pub async fn search_start(
             cancel_flag,
             include,
             exclude,
+            max_matches,
+            paths,
         )
         .await;
     });
@@ -243,10 +258,30 @@ async fn run_search(
     cancel_flag: Arc<AtomicBool>,
     include_pattern: Option<String>,
     exclude_pattern: Option<String>,
+    max_matches: u32,
+    file_paths: Option<Vec<String>>,
 ) {
     let mut matches_batch: Vec<SearchMatch> = Vec::with_capacity(BATCH_SIZE);
     let mut total_matches: u32 = 0;
     let mut files_searched: u32 = 0;
+    let mut truncated = false;
+
+    // Convert file_paths to a HashSet for fast lookup (canonicalize for reliable comparison)
+    let restricted_paths: Option<std::collections::HashSet<std::path::PathBuf>> =
+        file_paths.map(|paths| {
+            paths
+                .into_iter()
+                .filter_map(|p| {
+                    let path = std::path::PathBuf::from(&p);
+                    // Try to canonicalize, fall back to original path
+                    path.canonicalize().ok().or(Some(path))
+                })
+                .collect()
+        });
+
+    if let Some(ref restricted) = restricted_paths {
+        tracing::info!("Search restricted to {} paths: {:?}", restricted.len(), restricted);
+    }
 
     // Build the file walker with gitignore support
     let mut walker = WalkBuilder::new(&root_path);
@@ -284,10 +319,21 @@ async fn run_search(
 
     let walker = walker.build();
 
-    for entry in walker {
+    'outer: for entry in walker {
         // Check cancel flag
         if cancel_flag.load(Ordering::SeqCst) {
             tracing::info!("Search {} cancelled by user", search_id);
+            break;
+        }
+
+        // Check max matches limit (0 = unlimited)
+        if max_matches > 0 && total_matches >= max_matches {
+            truncated = true;
+            tracing::info!(
+                "Search {} reached max matches limit ({})",
+                search_id,
+                max_matches
+            );
             break;
         }
 
@@ -310,6 +356,20 @@ async fn run_search(
         }
 
         let path = entry.path();
+
+        // Check if file is in restricted paths (if specified)
+        if let Some(ref restricted) = restricted_paths {
+            // Canonicalize the entry path for reliable comparison
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            let path_matches = restricted.contains(&canonical_path)
+                || restricted.iter().any(|restricted_path| {
+                    // Check if restricted_path is a parent directory of path
+                    canonical_path.starts_with(restricted_path)
+                });
+            if !path_matches {
+                continue;
+            }
+        }
 
         // Check file size
         if let Ok(metadata) = path.metadata() {
@@ -336,6 +396,17 @@ async fn run_search(
                         },
                     );
                     matches_batch.clear();
+                }
+
+                // Check max matches limit after each match
+                if max_matches > 0 && total_matches >= max_matches {
+                    truncated = true;
+                    tracing::info!(
+                        "Search {} reached max matches limit ({})",
+                        search_id,
+                        max_matches
+                    );
+                    break 'outer;
                 }
             }
         }
@@ -364,15 +435,17 @@ async fn run_search(
             total_matches,
             total_files: files_searched,
             cancelled,
+            truncated,
         },
     );
 
     tracing::info!(
-        "Search {} complete: {} matches in {} files (cancelled={})",
+        "Search {} complete: {} matches in {} files (cancelled={}, truncated={})",
         search_id,
         total_matches,
         files_searched,
-        cancelled
+        cancelled,
+        truncated
     );
 }
 
