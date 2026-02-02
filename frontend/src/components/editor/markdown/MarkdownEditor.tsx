@@ -7,32 +7,21 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
+import CodeBlockShiki from 'tiptap-extension-code-block-shiki';
 import type { OpenFile } from '../types';
 import { FloatingToolbar } from './FloatingToolbar';
 import { editorStateManager } from '../../../services/EditorStateManager';
 import { editorSettingsManager } from '../../../services/EditorSettingsManager';
-import { themeManager, type ThemeId } from '../../../services/ThemeManager';
+import { themeManager, getShikiTheme, getAllShikiThemes } from '../../../services/ThemeManager';
 import './markdown-editor.css';
 
 // Shiki highlighter singleton
 let highlighterPromise: Promise<Highlighter> | null = null;
 
-function getShikiTheme(themeId: ThemeId): string {
-  switch (themeId) {
-    case 'light':
-      return 'github-light-default';
-    case 'zed-dark':
-      return 'one-dark-pro';
-    case 'dark':
-    default:
-      return 'github-dark-default';
-  }
-}
-
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
-      themes: ['github-dark-default', 'github-light-default', 'one-dark-pro'],
+      themes: getAllShikiThemes(),
       langs: ['markdown'],
     });
   }
@@ -143,10 +132,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           heading: {
             levels: [1, 2, 3, 4, 5, 6],
           },
-          codeBlock: {
-            HTMLAttributes: {
-              class: 'code-block',
-            },
+          // Disable default codeBlock, use CodeBlockShiki instead
+          codeBlock: false,
+        }),
+        // Shiki-powered syntax highlighting for code blocks
+        CodeBlockShiki.configure({
+          defaultLanguage: 'text',
+          // Use dual themes for light/dark mode support
+          defaultTheme: {
+            light: 'github-light-default',
+            dark: 'github-dark-default',
           },
         }),
         Link.configure({

@@ -8,6 +8,10 @@ export interface Theme {
   id: ThemeId;
   name: string;
   description: string;
+  // Shiki theme for syntax highlighting
+  shikiTheme: string;
+  // Whether this is a light or dark theme (for Shiki dual theme support)
+  isDark: boolean;
 }
 
 export const THEMES: Theme[] = [
@@ -15,18 +19,41 @@ export const THEMES: Theme[] = [
     id: 'dark',
     name: 'Dark',
     description: 'Default dark theme with deep blacks',
+    shikiTheme: 'github-dark-default',
+    isDark: true,
   },
   {
     id: 'zed-dark',
     name: 'Zed One Dark',
     description: 'Inspired by Zed Editor\'s One Dark theme',
+    shikiTheme: 'one-dark-pro',
+    isDark: true,
   },
   {
     id: 'light',
     name: 'Light',
     description: 'Clean light theme for bright environments',
+    shikiTheme: 'github-light-default',
+    isDark: false,
   },
 ];
+
+// Get all unique Shiki themes used by our themes (for preloading)
+export function getAllShikiThemes(): string[] {
+  return [...new Set(THEMES.map((t) => t.shikiTheme))];
+}
+
+// Get Shiki theme for a given app theme
+export function getShikiTheme(themeId: ThemeId): string {
+  const theme = THEMES.find((t) => t.id === themeId);
+  return theme?.shikiTheme || 'github-dark-default';
+}
+
+// Check if a theme is dark
+export function isThemeDark(themeId: ThemeId): boolean {
+  const theme = THEMES.find((t) => t.id === themeId);
+  return theme?.isDark ?? true;
+}
 
 const THEME_STORAGE_KEY = 'codelane-theme';
 

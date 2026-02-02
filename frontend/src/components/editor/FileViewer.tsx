@@ -4,7 +4,7 @@ import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup }
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './types';
-import { themeManager, type ThemeId } from '../../services/ThemeManager';
+import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
 import { MarkdownEditor } from './markdown';
 
@@ -12,24 +12,11 @@ import { MarkdownEditor } from './markdown';
 let highlighterPromise: Promise<Highlighter> | null = null;
 const loadedLanguages = new Set<string>();
 
-// Map app themes to Shiki themes
-function getShikiTheme(themeId: ThemeId): string {
-  switch (themeId) {
-    case 'light':
-      return 'github-light-default';
-    case 'zed-dark':
-      return 'one-dark-pro';
-    case 'dark':
-    default:
-      return 'github-dark-default';
-  }
-}
-
 // Get or create the highlighter
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
-      themes: ['github-dark-default', 'github-light-default', 'one-dark-pro'],
+      themes: getAllShikiThemes(),
       langs: [],
     });
   }

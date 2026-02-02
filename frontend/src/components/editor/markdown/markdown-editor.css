@@ -138,6 +138,20 @@
   margin: 1em 0;
   border-radius: 6px;
   padding: 16px !important;
+  background-color: rgb(var(--zed-bg-panel)) !important;
+  border: 1px solid rgb(var(--zed-border-default));
+}
+
+/* Shiki dual theme support - use dark colors by default */
+.markdown-editor .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+/* Use light colors when in light theme */
+.light .markdown-editor .shiki span {
+  color: var(--shiki-light) !important;
+  background-color: var(--shiki-light-bg) !important;
 }
 
 /* ============ BLOCKQUOTES ============ */
