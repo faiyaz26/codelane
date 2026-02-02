@@ -70,6 +70,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
     if (!highlight || mode() !== 'source') return html;
 
+    // Wait for content to be highlighted before attempting to add search highlights
+    if (!html || html.trim().length === 0) {
+      return html;
+    }
+
     // Validate match data
     if (highlight.line < 1 || highlight.column < 0 || !highlight.text) {
       return html;

@@ -812,6 +812,12 @@ export function FileViewer(props: FileViewerProps) {
 
     if (!highlight) return null;
 
+    // Wait for content to load before attempting to highlight
+    const lines = rawLines();
+    if (lines.length === 0) {
+      return null;
+    }
+
     // Validate match data
     if (highlight.line < 1 || highlight.column < 0 || !highlight.text) {
       console.warn('Invalid highlight match data:', highlight);
@@ -820,7 +826,6 @@ export function FileViewer(props: FileViewerProps) {
 
     // Convert to 0-indexed
     const lineIdx = highlight.line - 1;
-    const lines = rawLines();
 
     // Validate line exists
     if (lineIdx < 0 || lineIdx >= lines.length) {
