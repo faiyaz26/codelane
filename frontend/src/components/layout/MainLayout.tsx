@@ -383,9 +383,11 @@ export function MainLayout(props: MainLayoutProps) {
                 const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
 
                 return (
-                  <Show when={lane() && lane()!.id === props.activeLaneId}>
+                  <Show when={lane()}>
                     {(laneData) => (
-                      <TabPanel laneId={laneData().id} workingDir={laneData().workingDir} />
+                      <Show when={laneData().id === props.activeLaneId}>
+                        <TabPanel laneId={laneData().id} workingDir={laneData().workingDir} />
+                      </Show>
                     )}
                   </Show>
                 );
