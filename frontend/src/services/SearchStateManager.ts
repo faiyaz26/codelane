@@ -523,6 +523,25 @@ class SearchStateManager {
     }
   }
 
+  // Update query without triggering search (for controlled input)
+  updateQuery(laneId: string, query: string): void {
+    const state = this.getOrCreateLaneState(laneId);
+    state.query = query;
+    this.triggerUpdate();
+  }
+
+  // Update search options without triggering search
+  updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean }): void {
+    const state = this.getOrCreateLaneState(laneId);
+    if (options.isRegex !== undefined) {
+      state.isRegex = options.isRegex;
+    }
+    if (options.caseSensitive !== undefined) {
+      state.caseSensitive = options.caseSensitive;
+    }
+    this.triggerUpdate();
+  }
+
   // Dispose lane state
   disposeLane(laneId: string): void {
     const state = this.laneStates.get(laneId);

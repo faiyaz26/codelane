@@ -13,9 +13,6 @@ interface SearchPanelProps {
 }
 
 export function SearchPanel(props: SearchPanelProps) {
-  const [query, setQuery] = createSignal('');
-  const [isRegex, setIsRegex] = createSignal(false);
-  const [caseSensitive, setCaseSensitive] = createSignal(false);
   const [isMounted, setIsMounted] = createSignal(false);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -41,6 +38,11 @@ export function SearchPanel(props: SearchPanelProps) {
     searchStateManager.getUpdateSignal()();
     return searchStateManager.getSearchState(props.laneId);
   });
+
+  // Convenience accessors for state
+  const query = () => searchState().query;
+  const isRegex = () => searchState().isRegex;
+  const caseSensitive = () => searchState().caseSensitive;
 
   // Get reactive results - only if mounted
   const results = createMemo(() => {
@@ -74,20 +76,22 @@ export function SearchPanel(props: SearchPanelProps) {
   // Handle input change
   const handleInputChange = (e: InputEvent) => {
     const value = (e.target as HTMLInputElement).value;
-    setQuery(value);
+    searchStateManager.updateQuery(props.laneId, value);
     triggerSearch(value);
   };
 
   // Handle toggle changes - re-trigger search
   const handleRegexToggle = () => {
-    setIsRegex(!isRegex());
+    const newValue = !isRegex();
+    searchStateManager.updateOptions(props.laneId, { isRegex: newValue });
     if (query().trim()) {
       triggerSearch(query());
     }
   };
 
   const handleCaseToggle = () => {
-    setCaseSensitive(!caseSensitive());
+    const newValue = !caseSensitive();
+    searchStateManager.updateOptions(props.laneId, { caseSensitive: newValue });
     if (query().trim()) {
       triggerSearch(query());
     }
