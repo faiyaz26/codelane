@@ -79,19 +79,6 @@ class EditorStateManager {
     );
   }
 
-  // Helper: Update path index
-  private updatePathIndex(path: string, value: { laneId: string; fileId: string } | undefined) {
-    this.setStore(
-      produce((store) => {
-        if (value === undefined) {
-          delete store.pathIndex[path];
-        } else {
-          store.pathIndex[path] = value;
-        }
-      })
-    );
-  }
-
   // Initialize lane if it doesn't exist
   private ensureLane(laneId: string) {
     if (!this.store.lanes[laneId]) {
