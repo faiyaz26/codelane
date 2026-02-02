@@ -353,7 +353,7 @@ export function MainLayout(props: MainLayoutProps) {
             </div>
 
             {/* Agent Terminal Content */}
-            <div class="flex-1 overflow-hidden bg-zed-bg-surface">
+            <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
               <For each={Array.from(props.initializedLanes)}>
                 {(laneId) => {
                   const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
@@ -363,8 +363,12 @@ export function MainLayout(props: MainLayoutProps) {
                     <Show when={lane()}>
                       {(laneData) => (
                         <div
-                          class="w-full h-full"
-                          style={{ display: isActive() ? 'block' : 'none' }}
+                          class="absolute inset-0 transition-opacity duration-150"
+                          style={{
+                            opacity: isActive() ? '1' : '0',
+                            'pointer-events': isActive() ? 'auto' : 'none',
+                            'z-index': isActive() ? '1' : '0',
+                          }}
                         >
                           <TerminalView
                             laneId={laneData().id}
