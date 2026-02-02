@@ -662,17 +662,25 @@ export function FileViewer(props: FileViewerProps) {
     const fileId = file.id;
     const capturedLaneId = laneId;
 
-    // Calculate scroll position (0-indexed internally, but scrollToLine is 1-indexed)
+    // Find the display index of the line (accounting for hidden/folded lines)
+    // scrollToLine is 1-indexed, convert to 0-indexed lineIdx
     const lineIndex = Math.max(0, targetLine - 1);
-    const scrollPosition = lineIndex * LINE_HEIGHT;
+    const all = allDisplayableLines();
+    const lineData = all.find(l => l.lineIdx === lineIndex);
+
+    if (!lineData) {
+      // Line not found (might be folded or out of range), clear the scroll target
+      editorStateManager.clearScrollToLine(capturedLaneId, fileId);
+      return;
+    }
 
     // Scroll with a small delay to ensure DOM is updated
     requestAnimationFrame(() => {
       if (codeContainerRef) {
-        // Center the line in viewport
-        const viewportCenter = viewportHeight() / 2;
+        // Calculate scroll position to center the line in viewport
+        const targetScrollTop = (lineData.displayIdx * LINE_HEIGHT) - (viewportHeight() / 2) + (LINE_HEIGHT / 2);
         codeContainerRef.scrollTo({
-          top: Math.max(0, scrollPosition - viewportCenter),
+          top: Math.max(0, targetScrollTop),
           behavior: 'smooth',
         });
       }
