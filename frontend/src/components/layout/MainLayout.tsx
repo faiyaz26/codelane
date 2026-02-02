@@ -96,8 +96,6 @@ export function MainLayout(props: MainLayoutProps) {
   const showEditor = createMemo(() => {
     const laneId = props.activeLaneId;
     if (!laneId) return false;
-    // Access update signal for reactivity
-    editorStateManager.getUpdateSignal()();
     // Show editor if there are open files OR a file is being selected
     return editorStateManager.hasOpenFiles(laneId) || selectedFile() !== undefined;
   });
