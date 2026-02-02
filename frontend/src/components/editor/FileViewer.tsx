@@ -579,6 +579,11 @@ export function FileViewer(props: FileViewerProps) {
     setSearchOpen(false);
     setSearchQuery('');
     setCurrentMatchIdx(0);
+
+    // Clear project search highlights
+    if (props.file && props.laneId) {
+      editorStateManager.clearHighlight(props.laneId, props.file.id);
+    }
   };
 
   // Keyboard handler for global shortcuts

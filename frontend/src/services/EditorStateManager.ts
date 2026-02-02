@@ -188,6 +188,35 @@ class EditorStateManager {
     }
   }
 
+  // Clear highlight match for active file or all files in a lane
+  clearHighlight(laneId: string, fileId?: string): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    let updated = false;
+
+    if (fileId) {
+      // Clear highlight for specific file
+      const file = state.openFiles.get(fileId);
+      if (file && file.highlightMatch !== undefined) {
+        state.openFiles.set(fileId, { ...file, highlightMatch: undefined });
+        updated = true;
+      }
+    } else {
+      // Clear highlights for all files in the lane
+      for (const [id, file] of state.openFiles.entries()) {
+        if (file.highlightMatch !== undefined) {
+          state.openFiles.set(id, { ...file, highlightMatch: undefined });
+          updated = true;
+        }
+      }
+    }
+
+    if (updated) {
+      this.triggerUpdate();
+    }
+  }
+
   // Load file content
   private async loadFileContent(laneId: string, fileId: string, path: string): Promise<void> {
     const state = this.laneStates.get(laneId);

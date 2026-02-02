@@ -166,6 +166,10 @@ export function SearchPanel(props: SearchPanelProps) {
             onInput={handleInputChange}
             placeholder="Search files..."
             class="w-full px-3 py-1.5 pr-20 text-sm bg-zed-bg-surface border border-zed-border-subtle rounded focus:outline-none focus:border-zed-accent-blue text-zed-text-primary placeholder:text-zed-text-disabled"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck={false}
           />
 
           {/* Toggle buttons inside input */}

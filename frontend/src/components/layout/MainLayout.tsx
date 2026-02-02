@@ -39,6 +39,18 @@ export function MainLayout(props: MainLayoutProps) {
     return props.lanes.find((l) => l.id === props.activeLaneId);
   });
 
+  // Clear highlights when switching away from search view
+  createEffect(() => {
+    const view = activeView();
+    const lane = activeLane();
+
+    // Clear highlights when switching to explorer, git, or extensions
+    // (Keep highlights only in search view)
+    if (lane && view !== 'search') {
+      editorStateManager.clearHighlight(lane.id);
+    }
+  });
+
   // Get file info for status bar - only the data it needs
   const fileInfo = createMemo(() => {
     const laneId = props.activeLaneId;
