@@ -234,8 +234,8 @@ export function MainLayout(props: MainLayoutProps) {
                 <SearchPanel
                   workingDir={activeLane()!.workingDir}
                   laneId={activeLane()!.id}
-                  onFileOpen={(path, line) => {
-                    editorStateManager.openFileAtLine(activeLane()!.id, path, line);
+                  onFileOpen={(path, line, match) => {
+                    editorStateManager.openFileAtLine(activeLane()!.id, path, line, match);
                   }}
                 />
               </Show>

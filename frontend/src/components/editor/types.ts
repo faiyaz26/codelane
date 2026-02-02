@@ -10,6 +10,11 @@ export interface OpenFile {
   error: string | null;
   language: string;
   scrollToLine?: number; // Line number to scroll to after loading (1-indexed)
+  highlightMatch?: {
+    line: number; // 1-indexed
+    column: number;
+    text: string;
+  };
 }
 
 // Check if a file is a markdown file

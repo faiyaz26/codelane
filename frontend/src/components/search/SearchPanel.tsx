@@ -1,6 +1,7 @@
 import { createSignal, createEffect, For, Show, onCleanup, createMemo, onMount } from 'solid-js';
 import {
   searchStateManager,
+  MATCHES_PER_FILE_PREVIEW,
   type FileSearchResults,
   type SearchMatch,
 } from '../../services/SearchStateManager';
@@ -8,7 +9,7 @@ import {
 interface SearchPanelProps {
   workingDir: string;
   laneId: string;
-  onFileOpen: (path: string, line: number) => void;
+  onFileOpen: (path: string, line: number, match?: { column: number; text: string }) => void;
 }
 
 export function SearchPanel(props: SearchPanelProps) {
@@ -34,6 +35,7 @@ export function SearchPanel(props: SearchPanelProps) {
       totalMatches: 0,
       totalFiles: 0,
       error: null,
+      truncated: false,
     };
     // Subscribe to updates
     searchStateManager.getUpdateSignal()();
@@ -46,6 +48,13 @@ export function SearchPanel(props: SearchPanelProps) {
     // Subscribe to updates
     searchStateManager.getUpdateSignal()();
     return searchStateManager.getResults(props.laneId);
+  });
+
+  // Get pagination info
+  const displayInfo = createMemo(() => {
+    if (!isMounted()) return { displayedFiles: 0, totalFiles: 0, totalMatches: 0, hasMore: false };
+    searchStateManager.getUpdateSignal()();
+    return searchStateManager.getDisplayInfo(props.laneId);
   });
 
   // Debounced search
@@ -100,9 +109,17 @@ export function SearchPanel(props: SearchPanelProps) {
     searchStateManager.toggleFileCollapse(props.laneId, filePath);
   };
 
+  // Load more results
+  const handleLoadMore = () => {
+    searchStateManager.loadMore(props.laneId);
+  };
+
   // Click on match
   const handleMatchClick = (match: SearchMatch) => {
-    props.onFileOpen(match.file_path, match.line_number);
+    props.onFileOpen(match.file_path, match.line_number, {
+      column: match.column,
+      text: match.match_text,
+    });
   };
 
   // Focus input on mount
@@ -185,7 +202,10 @@ export function SearchPanel(props: SearchPanelProps) {
             fallback={
               <Show when={query().trim()}>
                 <span>
-                  {searchState().totalMatches} results in {searchState().totalFiles} files
+                  {displayInfo().totalMatches} results in {displayInfo().totalFiles} files
+                  <Show when={displayInfo().hasMore}>
+                    {' '}(showing {displayInfo().displayedFiles})
+                  </Show>
                 </span>
               </Show>
             }
@@ -255,6 +275,13 @@ export function SearchPanel(props: SearchPanelProps) {
         </div>
       </Show>
 
+      {/* Truncated Warning */}
+      <Show when={searchState().truncated && !searchState().isSearching}>
+        <div class="px-4 py-2 text-xs text-zed-accent-yellow bg-zed-accent-yellow/10 border-b border-zed-border-subtle">
+          Results limited to {searchState().totalMatches} matches. Try a more specific search.
+        </div>
+      </Show>
+
       {/* Results */}
       <div class="flex-1 overflow-auto">
         <Show
@@ -289,11 +316,25 @@ export function SearchPanel(props: SearchPanelProps) {
                 query={query()}
                 isRegex={isRegex()}
                 caseSensitive={caseSensitive()}
+                laneId={props.laneId}
+                truncated={searchState().truncated}
                 onToggle={() => handleFileToggle(fileResult.filePath)}
                 onMatchClick={handleMatchClick}
               />
             )}
           </For>
+
+          {/* Load More Button */}
+          <Show when={displayInfo().hasMore && !searchState().isSearching}>
+            <div class="p-3 border-t border-zed-border-subtle">
+              <button
+                class="w-full py-2 px-3 text-xs text-zed-text-secondary hover:text-zed-text-primary bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-subtle rounded transition-colors"
+                onClick={handleLoadMore}
+              >
+                Show More Files ({displayInfo().totalFiles - displayInfo().displayedFiles} more)
+              </button>
+            </div>
+          </Show>
         </Show>
       </div>
     </div>
@@ -306,17 +347,63 @@ interface FileResultGroupProps {
   query: string;
   isRegex: boolean;
   caseSensitive: boolean;
+  laneId: string;
+  truncated: boolean;
   onToggle: () => void;
   onMatchClick: (match: SearchMatch) => void;
 }
 
 function FileResultGroup(props: FileResultGroupProps) {
+  const [isLoadingMore, setIsLoadingMore] = createSignal(false);
+
   const relativePath = () => {
     const fullPath = props.fileResult.filePath;
     if (fullPath.startsWith(props.workingDir)) {
       return fullPath.slice(props.workingDir.length + 1);
     }
     return fullPath;
+  };
+
+  // Determine which matches to display
+  const displayedMatches = () => {
+    const all = props.fileResult.matches;
+    if (props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
+      return all;
+    }
+    return all.slice(0, MATCHES_PER_FILE_PREVIEW);
+  };
+
+  const hiddenCount = () => {
+    const all = props.fileResult.matches;
+    if (props.fileResult.isExpanded || all.length <= MATCHES_PER_FILE_PREVIEW) {
+      return 0;
+    }
+    return all.length - MATCHES_PER_FILE_PREVIEW;
+  };
+
+  const handleExpandToggle = (e: MouseEvent) => {
+    e.stopPropagation();
+    searchStateManager.toggleFileExpanded(props.laneId, props.fileResult.filePath);
+  };
+
+  // Search only this file to get all matches (when search was truncated)
+  const handleSearchInFile = async (e: MouseEvent) => {
+    e.stopPropagation();
+    setIsLoadingMore(true);
+    try {
+      await searchStateManager.searchInFiles(
+        props.laneId,
+        props.workingDir,
+        props.query,
+        [props.fileResult.filePath],
+        {
+          isRegex: props.isRegex,
+          caseSensitive: props.caseSensitive,
+        }
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   const getFileIcon = (fileName: string) => {
@@ -407,7 +494,7 @@ function FileResultGroup(props: FileResultGroupProps) {
       {/* Matches */}
       <Show when={!props.fileResult.isCollapsed}>
         <div class="pb-1">
-          <For each={props.fileResult.matches}>
+          <For each={displayedMatches()}>
             {(match) => (
               <MatchLine
                 match={match}
@@ -418,6 +505,53 @@ function FileResultGroup(props: FileResultGroupProps) {
               />
             )}
           </For>
+
+          {/* Show more matches in this file */}
+          <Show when={hiddenCount() > 0}>
+            <button
+              class="w-full px-3 py-1 text-xs text-zed-accent-blue hover:text-zed-accent-blue-hover hover:bg-zed-bg-hover transition-colors text-left pl-12 flex items-center gap-1"
+              onClick={props.truncated ? handleSearchInFile : handleExpandToggle}
+              disabled={isLoadingMore()}
+              title={props.truncated ? "Search only this file to find all matches" : "Show more matches"}
+            >
+              <Show when={isLoadingMore()} fallback={
+                <>
+                  +{hiddenCount()} more
+                  <Show when={props.truncated}>
+                    <span class="text-zed-text-disabled ml-1">(search file)</span>
+                  </Show>
+                </>
+              }>
+                <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24">
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                    fill="none"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Searching file...
+              </Show>
+            </button>
+          </Show>
+
+          {/* Collapse option when expanded */}
+          <Show when={props.fileResult.isExpanded && props.fileResult.matches.length > MATCHES_PER_FILE_PREVIEW}>
+            <button
+              class="w-full px-3 py-1 text-xs text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover transition-colors text-left pl-12"
+              onClick={handleExpandToggle}
+            >
+              Show less
+            </button>
+          </Show>
         </div>
       </Show>
     </div>

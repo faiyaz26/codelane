@@ -783,19 +783,43 @@ export function FileViewer(props: FileViewerProps) {
     const { startIdx, endIdx } = visibleRange();
     const matches = searchMatches();
     const matchIdx = currentMatchIdx();
+    const file = props.file;
+
+    // Check if there's a project search highlight to apply
+    const projectSearchMatch = file?.highlightMatch;
+    let projectSearchMatchObject: SearchMatch | null = null;
+
+    if (projectSearchMatch) {
+      // Convert project search match to in-file SearchMatch format
+      const lineIdx = projectSearchMatch.line - 1; // Convert to 0-indexed
+      const startCol = projectSearchMatch.column;
+      const endCol = startCol + projectSearchMatch.text.length;
+
+      projectSearchMatchObject = {
+        lineIdx,
+        startCol,
+        endCol,
+        text: projectSearchMatch.text,
+      };
+    }
 
     return all.slice(startIdx, endIdx).map((line) => {
       let html = line.html;
 
-      // Apply search highlighting
+      // Apply in-file search highlighting
       if (matches.length > 0) {
         html = highlightMatchesInHtml(html, matches, line.lineIdx, matchIdx, matches);
+      }
+      // Apply project search highlighting (as current match)
+      else if (projectSearchMatchObject && projectSearchMatchObject.lineIdx === line.lineIdx) {
+        html = highlightMatchesInHtml(html, [projectSearchMatchObject], line.lineIdx, 0, [projectSearchMatchObject]);
       }
 
       return {
         ...line,
         html,
-        hasMatch: matches.some(m => m.lineIdx === line.lineIdx),
+        hasMatch: matches.some(m => m.lineIdx === line.lineIdx) ||
+                  (projectSearchMatchObject?.lineIdx === line.lineIdx),
       };
     });
   });

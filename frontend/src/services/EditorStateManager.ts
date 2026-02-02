@@ -124,14 +124,23 @@ class EditorStateManager {
   }
 
   // Open a file at a specific line number (for search results)
-  async openFileAtLine(laneId: string, path: string, line: number): Promise<void> {
+  async openFileAtLine(
+    laneId: string,
+    path: string,
+    line: number,
+    match?: { column: number; text: string }
+  ): Promise<void> {
     const state = this.getOrCreateLaneState(laneId);
 
     // Check if already open
     const existingFile = Array.from(state.openFiles.values()).find((f) => f.path === path);
     if (existingFile) {
       // File is already open, just set the scroll target and activate it
-      state.openFiles.set(existingFile.id, { ...existingFile, scrollToLine: line });
+      state.openFiles.set(existingFile.id, {
+        ...existingFile,
+        scrollToLine: line,
+        highlightMatch: match ? { line, column: match.column, text: match.text } : undefined,
+      });
       state.activeFileId = existingFile.id;
       if (!state.renderedFiles.has(existingFile.id)) {
         state.renderedFiles.add(existingFile.id);
@@ -155,6 +164,7 @@ class EditorStateManager {
       error: null,
       language,
       scrollToLine: line,
+      highlightMatch: match ? { line, column: match.column, text: match.text } : undefined,
     };
 
     state.openFiles.set(id, newFile);
