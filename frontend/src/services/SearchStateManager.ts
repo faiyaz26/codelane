@@ -179,6 +179,28 @@ class SearchStateManager {
     return state;
   }
 
+  // Helper: Update state properties and trigger update
+  private updateState(laneId: string, updater: (state: LaneSearchState) => void) {
+    const state = this.laneStates.get(laneId);
+    if (state) {
+      updater(state);
+      this.triggerUpdate();
+    }
+  }
+
+  // Helper: Update file results and trigger update (ensures reactivity with new object)
+  private updateFileResults(laneId: string, filePath: string, updates: Partial<FileSearchResults>) {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    const fileResults = state.results.get(filePath);
+    if (fileResults) {
+      const newFileResults: FileSearchResults = { ...fileResults, ...updates };
+      state.results.set(filePath, newFileResults);
+      this.triggerUpdate();
+    }
+  }
+
   // Find lane by search ID (checks main search and sub-searches)
   private findLaneBySearchId(searchId: string): { laneId: string; isSubSearch: boolean } | null {
     for (const [laneId, state] of this.laneStates.entries()) {
@@ -240,28 +262,25 @@ class SearchStateManager {
     const result = this.findLaneBySearchId(payload.search_id);
     if (!result) return;
 
-    const state = this.laneStates.get(result.laneId);
-    if (!state) return;
+    this.updateState(result.laneId, (state) => {
+      if (result.isSubSearch) {
+        // Remove completed sub-search from tracking
+        state.subSearchIds.delete(payload.search_id);
+        console.log(
+          `[SearchStateManager] File-specific search complete: ${payload.total_matches} matches`
+        );
+      } else {
+        // Main search complete
+        state.isSearching = false;
+        state.totalMatches = payload.total_matches;
+        state.totalFiles = payload.total_files;
+        state.truncated = payload.truncated;
 
-    if (result.isSubSearch) {
-      // Remove completed sub-search from tracking
-      state.subSearchIds.delete(payload.search_id);
-      console.log(
-        `[SearchStateManager] File-specific search complete: ${payload.total_matches} matches`
-      );
-    } else {
-      // Main search complete
-      state.isSearching = false;
-      state.totalMatches = payload.total_matches;
-      state.totalFiles = payload.total_files;
-      state.truncated = payload.truncated;
-
-      console.log(
-        `[SearchStateManager] Search complete: ${payload.total_matches} matches in ${payload.total_files} files (truncated=${payload.truncated})`
-      );
-    }
-
-    this.triggerUpdate();
+        console.log(
+          `[SearchStateManager] Search complete: ${payload.total_matches} matches in ${payload.total_files} files (truncated=${payload.truncated})`
+        );
+      }
+    });
   }
 
   // Handle search error
@@ -269,20 +288,17 @@ class SearchStateManager {
     const result = this.findLaneBySearchId(payload.search_id);
     if (!result) return;
 
-    const state = this.laneStates.get(result.laneId);
-    if (!state) return;
-
-    if (result.isSubSearch) {
-      // Remove failed sub-search from tracking
-      state.subSearchIds.delete(payload.search_id);
-      console.error('[SearchStateManager] File-specific search error:', payload.message);
-    } else {
-      state.isSearching = false;
-      state.error = payload.message;
-      console.error('[SearchStateManager] Search error:', payload.message);
-    }
-
-    this.triggerUpdate();
+    this.updateState(result.laneId, (state) => {
+      if (result.isSubSearch) {
+        // Remove failed sub-search from tracking
+        state.subSearchIds.delete(payload.search_id);
+        console.error('[SearchStateManager] File-specific search error:', payload.message);
+      } else {
+        state.isSearching = false;
+        state.error = payload.message;
+        console.error('[SearchStateManager] Search error:', payload.message);
+      }
+    });
   }
 
   // Start a new search
@@ -353,13 +369,13 @@ class SearchStateManager {
 
     try {
       await invoke('search_cancel', { searchId: state.searchId });
-      state.isSearching = false;
       console.log(`[SearchStateManager] Search cancelled: ${state.searchId}`);
+      this.updateState(laneId, (state) => {
+        state.isSearching = false;
+      });
     } catch (error) {
       console.error('[SearchStateManager] Failed to cancel search:', error);
     }
-
-    this.triggerUpdate();
   }
 
   // Get search results for a lane (paginated by files)
@@ -404,11 +420,9 @@ class SearchStateManager {
 
   // Load more files
   loadMore(laneId: string): void {
-    const state = this.laneStates.get(laneId);
-    if (!state) return;
-
-    state.fileLimit += LOAD_MORE_FILES;
-    this.triggerUpdate();
+    this.updateState(laneId, (state) => {
+      state.fileLimit += LOAD_MORE_FILES;
+    });
   }
 
   // Toggle expanded state for a file (show all matches vs preview)
@@ -418,13 +432,7 @@ class SearchStateManager {
 
     const fileResults = state.results.get(filePath);
     if (fileResults) {
-      // Create a new object to ensure reactivity
-      const newFileResults: FileSearchResults = {
-        ...fileResults,
-        isExpanded: !fileResults.isExpanded
-      };
-      state.results.set(filePath, newFileResults);
-      this.triggerUpdate();
+      this.updateFileResults(laneId, filePath, { isExpanded: !fileResults.isExpanded });
     }
   }
 
@@ -533,20 +541,13 @@ class SearchStateManager {
 
     const fileResults = state.results.get(filePath);
     if (fileResults) {
-      // Create a new object to ensure reactivity
-      const newFileResults: FileSearchResults = {
-        ...fileResults,
-        isCollapsed: !fileResults.isCollapsed
-      };
-      state.results.set(filePath, newFileResults);
-      this.triggerUpdate();
+      this.updateFileResults(laneId, filePath, { isCollapsed: !fileResults.isCollapsed });
     }
   }
 
   // Clear search results for a lane
   clearResults(laneId: string): void {
-    const state = this.laneStates.get(laneId);
-    if (state) {
+    this.updateState(laneId, (state) => {
       state.searchId = null;
       state.subSearchIds.clear();
       state.query = '';
@@ -557,36 +558,37 @@ class SearchStateManager {
       state.isSearching = false;
       state.fileLimit = INITIAL_FILE_LIMIT;
       state.truncated = false;
-      this.triggerUpdate();
-    }
+    });
   }
 
   // Update query without triggering search (for controlled input)
   updateQuery(laneId: string, query: string): void {
     const state = this.getOrCreateLaneState(laneId);
-    state.query = query;
-    this.triggerUpdate();
+    this.updateState(laneId, (state) => {
+      state.query = query;
+    });
   }
 
   // Update search options without triggering search
   updateOptions(laneId: string, options: { isRegex?: boolean; caseSensitive?: boolean; matchWord?: boolean; includePattern?: string; excludePattern?: string }): void {
     const state = this.getOrCreateLaneState(laneId);
-    if (options.isRegex !== undefined) {
-      state.isRegex = options.isRegex;
-    }
-    if (options.caseSensitive !== undefined) {
-      state.caseSensitive = options.caseSensitive;
-    }
-    if (options.matchWord !== undefined) {
-      state.matchWord = options.matchWord;
-    }
-    if (options.includePattern !== undefined) {
-      state.includePattern = options.includePattern;
-    }
-    if (options.excludePattern !== undefined) {
-      state.excludePattern = options.excludePattern;
-    }
-    this.triggerUpdate();
+    this.updateState(laneId, (state) => {
+      if (options.isRegex !== undefined) {
+        state.isRegex = options.isRegex;
+      }
+      if (options.caseSensitive !== undefined) {
+        state.caseSensitive = options.caseSensitive;
+      }
+      if (options.matchWord !== undefined) {
+        state.matchWord = options.matchWord;
+      }
+      if (options.includePattern !== undefined) {
+        state.includePattern = options.includePattern;
+      }
+      if (options.excludePattern !== undefined) {
+        state.excludePattern = options.excludePattern;
+      }
+    });
   }
 
   // Dispose lane state
@@ -596,8 +598,9 @@ class SearchStateManager {
       // Cancel any active search
       invoke('search_cancel', { searchId: state.searchId }).catch(() => {});
     }
-    this.laneStates.delete(laneId);
-    this.triggerUpdate();
+    if (this.laneStates.delete(laneId)) {
+      this.triggerUpdate();
+    }
   }
 
   // Cleanup all listeners
