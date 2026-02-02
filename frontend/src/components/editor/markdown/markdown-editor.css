@@ -148,19 +148,17 @@
 }
 
 /* Shiki dual theme support - use dark colors by default */
-.markdown-editor .shiki,
 .markdown-editor .shiki span,
 .markdown-editor pre[class*="shiki"] span {
   color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
+  background-color: transparent !important;
 }
 
 /* Use light colors when in light theme */
-.light .markdown-editor .shiki,
 .light .markdown-editor .shiki span,
 .light .markdown-editor pre[class*="shiki"] span {
   color: var(--shiki-light) !important;
-  background-color: var(--shiki-light-bg) !important;
+  background-color: transparent !important;
 }
 
 /* ============ BLOCKQUOTES ============ */
