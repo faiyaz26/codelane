@@ -3,9 +3,10 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import type { OpenFile } from './types';
-import { getLanguageDisplayName, getShikiLanguage } from './types';
+import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './types';
 import { themeManager, type ThemeId } from '../../services/ThemeManager';
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
+import { MarkdownEditor } from './markdown';
 
 // Singleton highlighter instance
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -419,6 +420,7 @@ function parseShikiHtml(html: string): string[] {
 
 interface FileViewerProps {
   file: OpenFile | null;
+  laneId?: string;
 }
 
 export function FileViewer(props: FileViewerProps) {
@@ -848,8 +850,13 @@ export function FileViewer(props: FileViewerProps) {
         </div>
       </Show>
 
-      {/* File content */}
-      <Show when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null}>
+      {/* Markdown file - use dedicated editor */}
+      <Show when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name)}>
+        <MarkdownEditor file={props.file!} laneId={props.laneId} />
+      </Show>
+
+      {/* Non-markdown file content */}
+      <Show when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && !isMarkdownFile(props.file.name)}>
         {/* File info bar */}
         <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-between text-xs bg-zed-bg-panel">
           <div class="flex items-center gap-2 text-zed-text-tertiary truncate">

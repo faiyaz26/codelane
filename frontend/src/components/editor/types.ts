@@ -11,6 +11,12 @@ export interface OpenFile {
   language: string;
 }
 
+// Check if a file is a markdown file
+export function isMarkdownFile(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  return ['md', 'mdx', 'markdown'].includes(ext);
+}
+
 export interface EditorTab {
   id: string;
   path: string;

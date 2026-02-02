@@ -1,0 +1,505 @@
+/* Markdown Editor Styles - Notion-style WYSIWYG editing */
+
+/* ============ EDITOR CONTAINER ============ */
+
+.markdown-editor {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgb(var(--zed-text-primary));
+  background-color: rgb(var(--zed-bg-surface));
+  padding: 24px 32px;
+  min-height: 100%;
+  outline: none;
+}
+
+.markdown-editor:focus {
+  outline: none;
+}
+
+/* ============ HEADINGS ============ */
+
+.markdown-editor h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 0.67em 0 0.5em 0;
+  line-height: 1.3;
+  color: rgb(var(--zed-text-primary));
+  border-bottom: 1px solid rgb(var(--zed-border-default));
+  padding-bottom: 0.3em;
+}
+
+.markdown-editor h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 1em 0 0.5em 0;
+  line-height: 1.35;
+  color: rgb(var(--zed-text-primary));
+  border-bottom: 1px solid rgb(var(--zed-border-subtle));
+  padding-bottom: 0.2em;
+}
+
+.markdown-editor h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 1em 0 0.5em 0;
+  line-height: 1.4;
+  color: rgb(var(--zed-text-primary));
+}
+
+.markdown-editor h4 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 1em 0 0.5em 0;
+  color: rgb(var(--zed-text-primary));
+}
+
+.markdown-editor h5,
+.markdown-editor h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1em 0 0.5em 0;
+  color: rgb(var(--zed-text-secondary));
+}
+
+/* ============ PARAGRAPHS ============ */
+
+.markdown-editor p {
+  margin: 0 0 1em 0;
+}
+
+.markdown-editor p:last-child {
+  margin-bottom: 0;
+}
+
+/* ============ LINKS ============ */
+
+.markdown-editor a {
+  color: rgb(var(--zed-accent-blue));
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.markdown-editor a:hover {
+  text-decoration: underline;
+}
+
+/* ============ TEXT FORMATTING ============ */
+
+.markdown-editor strong {
+  font-weight: 600;
+}
+
+.markdown-editor em {
+  font-style: italic;
+}
+
+.markdown-editor s,
+.markdown-editor del {
+  text-decoration: line-through;
+  color: rgb(var(--zed-text-tertiary));
+}
+
+/* ============ INLINE CODE ============ */
+
+.markdown-editor code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9em;
+  background-color: rgb(var(--zed-bg-active));
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  color: rgb(var(--zed-accent-purple));
+}
+
+/* ============ CODE BLOCKS ============ */
+
+.markdown-editor pre {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  background-color: rgb(var(--zed-bg-panel));
+  border: 1px solid rgb(var(--zed-border-default));
+  border-radius: 6px;
+  padding: 16px;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+.markdown-editor pre code {
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+/* Shiki code block overrides */
+.markdown-editor .shiki {
+  margin: 1em 0;
+  border-radius: 6px;
+  padding: 16px !important;
+}
+
+/* ============ BLOCKQUOTES ============ */
+
+.markdown-editor blockquote {
+  border-left: 4px solid rgb(var(--zed-accent-blue));
+  margin: 1em 0;
+  padding: 0.5em 0 0.5em 1em;
+  color: rgb(var(--zed-text-secondary));
+  background-color: rgb(var(--zed-bg-hover) / 0.5);
+  border-radius: 0 4px 4px 0;
+}
+
+.markdown-editor blockquote p {
+  margin: 0;
+}
+
+/* ============ LISTS ============ */
+
+.markdown-editor ul,
+.markdown-editor ol {
+  margin: 0.5em 0 1em 0;
+  padding-left: 2em;
+}
+
+.markdown-editor li {
+  margin: 0.25em 0;
+}
+
+.markdown-editor li > p {
+  margin: 0;
+}
+
+.markdown-editor ul {
+  list-style-type: disc;
+}
+
+.markdown-editor ul ul {
+  list-style-type: circle;
+}
+
+.markdown-editor ul ul ul {
+  list-style-type: square;
+}
+
+.markdown-editor ol {
+  list-style-type: decimal;
+}
+
+/* Task lists */
+.markdown-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-editor ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.markdown-editor ul[data-type="taskList"] li input[type="checkbox"] {
+  margin-top: 0.3em;
+  cursor: pointer;
+  accent-color: rgb(var(--zed-accent-blue));
+}
+
+/* ============ HORIZONTAL RULE ============ */
+
+.markdown-editor hr {
+  border: none;
+  border-top: 1px solid rgb(var(--zed-border-default));
+  margin: 2em 0;
+}
+
+/* ============ TABLES ============ */
+
+.markdown-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.markdown-editor th,
+.markdown-editor td {
+  border: 1px solid rgb(var(--zed-border-default));
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-editor th {
+  background-color: rgb(var(--zed-bg-hover));
+  font-weight: 600;
+}
+
+.markdown-editor tr:nth-child(even) {
+  background-color: rgb(var(--zed-bg-hover) / 0.3);
+}
+
+/* ============ IMAGES ============ */
+
+.markdown-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 1em 0;
+}
+
+/* ============ HIGHLIGHT/MARK ============ */
+
+.markdown-editor mark {
+  background-color: rgb(var(--zed-accent-yellow) / 0.3);
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+/* ============ SELECTION ============ */
+
+.markdown-editor ::selection {
+  background-color: rgb(var(--zed-accent-blue) / 0.3);
+}
+
+/* ============ PLACEHOLDER TEXT ============ */
+
+.markdown-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgb(var(--zed-text-disabled));
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.markdown-editor .is-empty::before {
+  content: attr(data-placeholder);
+  color: rgb(var(--zed-text-disabled));
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ============ FLOATING TOOLBAR ============ */
+
+.floating-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background-color: rgb(var(--zed-bg-panel));
+  border: 1px solid rgb(var(--zed-border-default));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+
+.floating-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: rgb(var(--zed-text-secondary));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.floating-toolbar-btn:hover {
+  background-color: rgb(var(--zed-bg-hover));
+  color: rgb(var(--zed-text-primary));
+}
+
+.floating-toolbar-btn.is-active {
+  background-color: rgb(var(--zed-accent-blue) / 0.2);
+  color: rgb(var(--zed-accent-blue));
+}
+
+.floating-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background-color: rgb(var(--zed-border-default));
+  margin: 0 4px;
+}
+
+/* ============ LINK INPUT POPUP ============ */
+
+.link-input-popup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background-color: rgb(var(--zed-bg-panel));
+  border: 1px solid rgb(var(--zed-border-default));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+
+.link-input-popup input {
+  width: 200px;
+  padding: 6px 10px;
+  border: 1px solid rgb(var(--zed-border-default));
+  border-radius: 4px;
+  background-color: rgb(var(--zed-bg-surface));
+  color: rgb(var(--zed-text-primary));
+  font-size: 13px;
+}
+
+.link-input-popup input:focus {
+  outline: none;
+  border-color: rgb(var(--zed-accent-blue));
+}
+
+.link-input-popup button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.link-input-popup .btn-confirm {
+  background-color: rgb(var(--zed-accent-blue));
+  color: white;
+}
+
+.link-input-popup .btn-confirm:hover {
+  background-color: rgb(var(--zed-accent-blue-hover));
+}
+
+.link-input-popup .btn-cancel {
+  background-color: rgb(var(--zed-bg-surface));
+  color: rgb(var(--zed-text-secondary));
+  border: 1px solid rgb(var(--zed-border-default));
+}
+
+.link-input-popup .btn-cancel:hover {
+  background-color: rgb(var(--zed-bg-hover));
+}
+
+/* ============ MODE TOGGLE ============ */
+
+.markdown-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background-color: rgb(var(--zed-bg-surface));
+  border: 1px solid rgb(var(--zed-border-default));
+  border-radius: 4px;
+}
+
+.markdown-mode-toggle button {
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  color: rgb(var(--zed-text-secondary));
+  font-size: 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.markdown-mode-toggle button:hover {
+  color: rgb(var(--zed-text-primary));
+}
+
+.markdown-mode-toggle button.active {
+  background-color: rgb(var(--zed-accent-blue));
+  color: white;
+}
+
+/* ============ SOURCE MODE (Syntax Highlighted) ============ */
+
+.source-editor-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(var(--zed-bg-surface));
+}
+
+/* Shared font styles for both layers - MUST be identical */
+.source-highlight-layer,
+.source-highlight-layer pre,
+.source-highlight-layer code,
+.source-highlight-layer .shiki,
+.source-input-layer {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+/* Highlighted code layer (background) */
+.source-highlight-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  pointer-events: none;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.source-highlight-layer pre,
+.source-highlight-layer .shiki {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.source-highlight-layer code {
+  background: transparent !important;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+/* Input layer (foreground - transparent text) */
+.source-input-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 16px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: rgb(var(--zed-text-primary));
+  white-space: pre;
+  word-wrap: normal;
+  overflow: auto;
+}
+
+.source-input-layer:focus {
+  outline: none;
+}
+
+/* Selection in the input layer should be visible */
+.source-input-layer::selection {
+  background-color: rgb(var(--zed-accent-blue) / 0.3);
+  color: transparent;
+}
+
+/* ============ UNSAVED INDICATOR ============ */
+
+.unsaved-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgb(var(--zed-accent-yellow));
+  margin-left: 6px;
+}

@@ -1,9 +1,10 @@
 // Editor panel - orchestrates file tabs and viewer with lazy loading
 // State is managed per-lane via EditorStateManager
 
-import { createMemo, createEffect, on, For, Show } from 'solid-js';
+import { createMemo, createEffect, createSignal, on, For, Show } from 'solid-js';
 import { EditorTabs } from './EditorTabs';
 import { FileViewer } from './FileViewer';
+import { UnsavedChangesModal, type UnsavedChangesResult } from './UnsavedChangesModal';
 import type { EditorTab } from './types';
 import { editorStateManager } from '../../services/EditorStateManager';
 
@@ -19,6 +20,11 @@ interface EditorPanelProps {
 export function EditorPanel(props: EditorPanelProps) {
   // Subscribe to state updates
   const _ = editorStateManager.getUpdateSignal();
+
+  // Modal state for unsaved changes confirmation
+  const [pendingCloseFile, setPendingCloseFile] = createSignal<{ id: string; name: string } | null>(
+    null
+  );
 
   // Derive tabs from open files
   const tabs = createMemo((): EditorTab[] => {
@@ -60,12 +66,52 @@ export function EditorPanel(props: EditorPanelProps) {
     )
   );
 
-  // Close a file
+  // Close a file (with unsaved changes confirmation)
   const closeFile = (fileId: string) => {
+    // Check if file has unsaved changes
+    const files = editorStateManager.getOpenFiles(props.laneId);
+    const file = files.get(fileId);
+
+    if (file?.isModified) {
+      // Show confirmation modal
+      setPendingCloseFile({ id: fileId, name: file.name });
+      return;
+    }
+
+    // No unsaved changes, close directly
+    doCloseFile(fileId);
+  };
+
+  // Actually close the file
+  const doCloseFile = (fileId: string) => {
     const noFilesRemaining = editorStateManager.closeFile(props.laneId, fileId);
     if (noFilesRemaining) {
       props.onAllFilesClosed?.();
     }
+  };
+
+  // Handle unsaved changes modal result
+  const handleUnsavedChangesResult = async (result: UnsavedChangesResult) => {
+    const pending = pendingCloseFile();
+    if (!pending) return;
+
+    setPendingCloseFile(null);
+
+    if (result === 'cancel') {
+      return;
+    }
+
+    if (result === 'save') {
+      // Save the file first, then close
+      const saved = await editorStateManager.saveFile(props.laneId, pending.id);
+      if (!saved) {
+        // Save failed, don't close
+        return;
+      }
+    }
+
+    // Close the file (for both 'save' and 'discard')
+    doCloseFile(pending.id);
   };
 
   // Select a tab
@@ -75,6 +121,13 @@ export function EditorPanel(props: EditorPanelProps) {
 
   return (
     <div class="h-full flex flex-col bg-zed-bg-surface">
+      {/* Unsaved changes confirmation modal */}
+      <UnsavedChangesModal
+        isOpen={pendingCloseFile() !== null}
+        fileName={pendingCloseFile()?.name || ''}
+        onResult={handleUnsavedChangesResult}
+      />
+
       {/* File tabs */}
       <EditorTabs
         tabs={tabs()}
@@ -117,7 +170,7 @@ export function EditorPanel(props: EditorPanelProps) {
                 class="absolute inset-0"
                 style={{ display: file.id === activeFileId() ? 'block' : 'none' }}
               >
-                <FileViewer file={file} />
+                <FileViewer file={file} laneId={props.laneId} />
               </div>
             )}
           </For>

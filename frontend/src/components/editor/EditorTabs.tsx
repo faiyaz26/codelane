@@ -70,17 +70,18 @@ export function EditorTabs(props: EditorTabsProps) {
                 }`}
                 onClick={() => props.onTabSelect(tab.id)}
               >
-                {/* File icon */}
-                <FileIcon filename={tab.name} class="w-4 h-4 flex-shrink-0" />
+                {/* File icon or modified indicator */}
+                <Show
+                  when={tab.isModified}
+                  fallback={<FileIcon filename={tab.name} class="w-4 h-4 flex-shrink-0" />}
+                >
+                  <span class="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                    <span class="w-2 h-2 rounded-full bg-zed-accent-yellow" title="Unsaved changes" />
+                  </span>
+                </Show>
 
                 {/* File name */}
-                <span class="text-sm truncate">
-                  {tab.name}
-                  {/* Modified indicator */}
-                  <Show when={tab.isModified}>
-                    <span class="text-zed-accent-blue ml-1">●</span>
-                  </Show>
-                </span>
+                <span class="text-sm truncate">{tab.name}</span>
 
                 {/* Close button */}
                 <button

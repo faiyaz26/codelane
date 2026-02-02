@@ -9,6 +9,7 @@ interface LaneEditorState {
   openFiles: Map<string, OpenFile>;
   activeFileId: string | null;
   renderedFiles: Set<string>;
+  saveCallbacks: Map<string, () => Promise<void>>;
 }
 
 class EditorStateManager {
@@ -27,6 +28,7 @@ class EditorStateManager {
         openFiles: new Map(),
         activeFileId: null,
         renderedFiles: new Set(),
+        saveCallbacks: new Map(),
       };
       this.laneStates.set(laneId, state);
     }
@@ -200,6 +202,62 @@ class EditorStateManager {
     this.updateTrigger[0]();
     const state = this.laneStates.get(laneId);
     return state ? state.openFiles.size > 0 : false;
+  }
+
+  // Set file modified state
+  setFileModified(laneId: string, fileId: string, isModified: boolean): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    const file = state.openFiles.get(fileId);
+    if (file && file.isModified !== isModified) {
+      state.openFiles.set(fileId, { ...file, isModified });
+      this.triggerUpdate();
+    }
+  }
+
+  // Update file content (after save)
+  updateFileContent(laneId: string, fileId: string, content: string): void {
+    const state = this.laneStates.get(laneId);
+    if (!state) return;
+
+    const file = state.openFiles.get(fileId);
+    if (file) {
+      state.openFiles.set(fileId, { ...file, content, isModified: false });
+      this.triggerUpdate();
+    }
+  }
+
+  // Register a save callback for a file
+  registerSaveCallback(laneId: string, fileId: string, callback: () => Promise<void>): void {
+    const state = this.getOrCreateLaneState(laneId);
+    state.saveCallbacks.set(fileId, callback);
+  }
+
+  // Unregister a save callback for a file
+  unregisterSaveCallback(laneId: string, fileId: string): void {
+    const state = this.laneStates.get(laneId);
+    if (state) {
+      state.saveCallbacks.delete(fileId);
+    }
+  }
+
+  // Save a file by calling its registered callback
+  async saveFile(laneId: string, fileId: string): Promise<boolean> {
+    const state = this.laneStates.get(laneId);
+    if (!state) return false;
+
+    const saveCallback = state.saveCallbacks.get(fileId);
+    if (saveCallback) {
+      try {
+        await saveCallback();
+        return true;
+      } catch (err) {
+        console.error('Failed to save file:', err);
+        return false;
+      }
+    }
+    return false;
   }
 
   // Dispose lane state
