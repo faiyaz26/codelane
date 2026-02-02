@@ -48,14 +48,21 @@ export function EditorPanel(props: EditorPanelProps) {
     return editorStateManager.getActiveFileId(props.laneId);
   });
 
-  // Get files to render (only files that have been activated)
-  const filesToRender = createMemo(() => {
+  // Get file IDs to render (only files that have been activated)
+  // Using IDs instead of objects for stable identity tracking in For loop
+  const fileIdsToRender = createMemo(() => {
     editorStateManager.getUpdateSignal()();
 
     const files = editorStateManager.getOpenFiles(props.laneId);
     const rendered = editorStateManager.getRenderedFiles(props.laneId);
-    return Array.from(files.values()).filter((f) => rendered.has(f.id));
+    return Array.from(files.keys()).filter((id) => rendered.has(id));
   });
+
+  // Get file by ID (reactive lookup)
+  const getFile = (fileId: string) => {
+    editorStateManager.getUpdateSignal()();
+    return editorStateManager.getOpenFiles(props.laneId).get(fileId);
+  };
 
   // Open file when selectedFilePath changes
   createEffect(
@@ -142,7 +149,7 @@ export function EditorPanel(props: EditorPanelProps) {
       {/* File viewers - render all activated files, show/hide with CSS */}
       <div class="flex-1 overflow-hidden relative">
         <Show
-          when={filesToRender().length > 0}
+          when={fileIdsToRender().length > 0}
           fallback={
             <div class="h-full flex items-center justify-center">
               <div class="text-center">
@@ -167,15 +174,24 @@ export function EditorPanel(props: EditorPanelProps) {
             </div>
           }
         >
-          <For each={filesToRender()}>
-            {(file) => (
-              <div
-                class="absolute inset-0"
-                style={{ display: file.id === activeFileId() ? 'block' : 'none' }}
-              >
-                <FileViewer file={file} laneId={props.laneId} />
-              </div>
-            )}
+          <For each={fileIdsToRender()} fallback={null}>
+            {(fileId) => {
+              // Look up file reactively - getFile returns undefined if file was closed
+              const file = () => getFile(fileId);
+              return (
+                <Show when={file()}>
+                  {(f) => (
+                    <div
+                      class="absolute inset-0"
+                      style={{ display: fileId === activeFileId() ? 'block' : 'none' }}
+                      data-file-id={fileId}
+                    >
+                      <FileViewer file={f()} laneId={props.laneId} />
+                    </div>
+                  )}
+                </Show>
+              );
+            }}
           </For>
         </Show>
       </div>
