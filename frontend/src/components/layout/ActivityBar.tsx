@@ -1,6 +1,11 @@
 import { For } from 'solid-js';
 
-export type ActivityView = 'explorer' | 'search' | 'git' | 'extensions';
+export enum ActivityView {
+  Explorer = 'explorer',
+  Search = 'search',
+  Git = 'git',
+  Extensions = 'extensions',
+}
 
 interface ActivityBarProps {
   activeView: ActivityView;
@@ -18,22 +23,22 @@ interface ActivityItem {
 
 const ACTIVITY_ITEMS: ActivityItem[] = [
   {
-    id: 'explorer',
+    id: ActivityView.Explorer,
     icon: 'files',
     label: 'Explorer',
   },
   {
-    id: 'search',
+    id: ActivityView.Search,
     icon: 'search',
     label: 'Search',
   },
   {
-    id: 'git',
+    id: ActivityView.Git,
     icon: 'git',
     label: 'Source Control',
   },
   {
-    id: 'extensions',
+    id: ActivityView.Extensions,
     icon: 'extensions',
     label: 'Extensions',
   },

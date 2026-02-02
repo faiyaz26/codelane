@@ -1,6 +1,6 @@
 import { createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { TopBar } from './TopBar';
-import { ActivityBar, type ActivityView } from './ActivityBar';
+import { ActivityBar, ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
 import { EditorPanel } from '../editor';
 import { FileExplorer } from '../explorer/FileExplorer';
@@ -40,11 +40,11 @@ export function MainLayout(props: MainLayoutProps) {
     return props.lanes.find((l) => l.id === props.activeLaneId);
   });
 
-  // Get active view for current lane (defaults to 'explorer')
+  // Get active view for current lane (defaults to Explorer)
   const activeView = createMemo(() => {
     const laneId = props.activeLaneId;
-    if (!laneId) return 'explorer';
-    return laneActiveViews().get(laneId) || 'explorer';
+    if (!laneId) return ActivityView.Explorer;
+    return laneActiveViews().get(laneId) || ActivityView.Explorer;
   });
 
   // Set active view for current lane
@@ -65,7 +65,7 @@ export function MainLayout(props: MainLayoutProps) {
 
     // Clear highlights when switching to explorer, git, or extensions
     // (Keep highlights only in search view)
-    if (lane && view !== 'search') {
+    if (lane && view !== ActivityView.Search) {
       editorStateManager.clearHighlight(lane.id);
     }
   });
@@ -248,7 +248,7 @@ export function MainLayout(props: MainLayoutProps) {
               class="flex-shrink-0 bg-zed-bg-panel border-r border-zed-border-subtle overflow-hidden"
               style={{ width: `${sidebarWidth()}px` }}
             >
-              <Show when={activeView() === 'explorer' && activeLane()}>
+              <Show when={activeView() === ActivityView.Explorer && activeLane()}>
                 <FileExplorer
                   workingDir={activeLane()!.workingDir}
                   onFileSelect={setSelectedFile}
@@ -256,7 +256,7 @@ export function MainLayout(props: MainLayoutProps) {
                   onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
                 />
               </Show>
-              <Show when={activeView() === 'search' && activeLane()}>
+              <Show when={activeView() === ActivityView.Search && activeLane()}>
                 <SearchPanel
                   workingDir={activeLane()!.workingDir}
                   laneId={activeLane()!.id}
@@ -265,7 +265,7 @@ export function MainLayout(props: MainLayoutProps) {
                   }}
                 />
               </Show>
-              <Show when={activeView() === 'git'}>
+              <Show when={activeView() === ActivityView.Git}>
                 <div class="p-4 text-center text-zed-text-tertiary text-sm">
                   <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
@@ -273,7 +273,7 @@ export function MainLayout(props: MainLayoutProps) {
                   Source Control coming soon
                 </div>
               </Show>
-              <Show when={activeView() === 'extensions'}>
+              <Show when={activeView() === ActivityView.Extensions}>
                 <div class="p-4 text-center text-zed-text-tertiary text-sm">
                   <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
