@@ -4,7 +4,7 @@ import { createStore, produce } from 'solid-js/store';
 import { batch } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
 import type { OpenFile } from '../components/editor/types';
-import { detectLanguage } from '../components/editor/types';
+import { detectLanguage, isMarkdownFile } from '../components/editor/types';
 
 // Store structure
 interface EditorStore {
@@ -159,11 +159,13 @@ class EditorStateManager {
     // Check path index for O(1) lookup
     const existing = this.store.pathIndex[path];
     if (existing && existing.laneId === laneId) {
-      // File already open, update scroll target and highlight
+      // File already open, update scroll target, highlight, and force source mode for markdown
+      const fileName = path.split('/').pop() || '';
       this.batchUpdate(() => {
         this.setStore('lanes', laneId, 'openFiles', existing.fileId, {
           scrollToLine: line,
           highlightMatch: match ? { line, column: match.column, text: match.text } : undefined,
+          forceSourceMode: isMarkdownFile(fileName) ? Date.now() : undefined,
         });
         this.setStore('lanes', laneId, 'activeFileId', existing.fileId);
         if (!this.store.lanes[laneId].renderedFiles.has(existing.fileId)) {
@@ -193,6 +195,7 @@ class EditorStateManager {
       language,
       scrollToLine: line,
       highlightMatch: match ? { line, column: match.column, text: match.text } : undefined,
+      forceSourceMode: isMarkdownFile(name) ? Date.now() : undefined,
     };
 
     // Batch all updates

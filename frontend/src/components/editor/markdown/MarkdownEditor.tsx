@@ -1,7 +1,7 @@
 // Markdown Editor - TipTap-based WYSIWYG editor with live preview
 // Refactored for clean architecture with modular hooks
 
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, onMount, onCleanup, Show, createEffect } from 'solid-js';
 import type { Editor } from '@tiptap/core';
 import type { OpenFile } from '../types';
 import { FloatingToolbar } from './FloatingToolbar';
@@ -19,9 +19,29 @@ interface MarkdownEditorProps {
 
 export function MarkdownEditor(props: MarkdownEditorProps) {
   // Mode toggle: preview (WYSIWYG) or source (raw markdown)
+  // If forceSourceMode is set (e.g., opened from search), start in source mode
   const [mode, setMode] = createSignal<'preview' | 'source'>(
-    editorSettingsManager.getMarkdownDefaultMode()
+    props.file.forceSourceMode ? 'source' : editorSettingsManager.getMarkdownDefaultMode()
   );
+
+  // Track the last forced timestamp to avoid re-applying the same force
+  const [lastForcedTimestamp, setLastForcedTimestamp] = createSignal<number | undefined>(
+    props.file.forceSourceMode
+  );
+
+  // React to forceSourceMode changes (e.g., clicking search result when file already open)
+  // forceSourceMode is a timestamp that changes each time we want to force source mode
+  createEffect(() => {
+    const forceTimestamp = props.file.forceSourceMode;
+    // Only switch to source mode if this is a NEW timestamp we haven't acted on yet
+    if (forceTimestamp && forceTimestamp !== lastForcedTimestamp()) {
+      // Get current content from TipTap if in preview mode
+      const currentContent = tipTapEditor?.getMarkdown() || props.file.content || '';
+      setSourceContent(currentContent);
+      setMode('source');
+      setLastForcedTimestamp(forceTimestamp);
+    }
+  });
 
   // Source mode state
   const [sourceContent, setSourceContent] = createSignal(props.file.content || '');

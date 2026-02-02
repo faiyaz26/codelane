@@ -15,6 +15,7 @@ export interface OpenFile {
     column: number;
     text: string;
   };
+  forceSourceMode?: number; // For markdown files: timestamp to force source view (e.g., when opened from search)
 }
 
 // Check if a file is a markdown file

@@ -104,7 +104,7 @@ export function SearchPanel(props: SearchPanelProps) {
 
   // Clear search
   const handleClear = () => {
-    setQuery('');
+    searchStateManager.updateQuery(props.laneId, '');
     searchStateManager.clearResults(props.laneId);
   };
 
