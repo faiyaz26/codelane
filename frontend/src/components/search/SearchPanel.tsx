@@ -431,17 +431,19 @@ function FileResultGroup(props: FileResultGroupProps) {
     return all.length - MATCHES_PER_FILE_PREVIEW;
   };
 
-  // Search only this file by setting include pattern
+  // Search only this file using filePaths parameter (more efficient than glob)
   const handleShowAllMatches = (e: MouseEvent) => {
     e.stopPropagation();
-    // Set include pattern to this file and trigger new search
+    // Show relative path in include pattern for user feedback
+    const relPath = relativePath();
     searchStateManager.updateOptions(props.laneId, {
-      includePattern: props.fileResult.filePath
+      includePattern: relPath
     });
+    // Use filePaths for efficient single-file search
     searchStateManager.startSearch(props.laneId, props.workingDir, props.query, {
       isRegex: props.isRegex,
       caseSensitive: props.caseSensitive,
-      includePattern: props.fileResult.filePath,
+      filePaths: [props.fileResult.filePath],
     });
   };
 
