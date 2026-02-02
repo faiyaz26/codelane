@@ -75,7 +75,7 @@
 - [x] Lazy language loading
 - [x] Multiple file support
 - [x] Code folding
-- [ ] Search within file
+- [x] Search within file
 - [ ] Go to line
 
 ### Settings

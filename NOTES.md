@@ -32,6 +32,10 @@ This file contains temporary implementation notes, testing checklists, and work-
 
 <!-- Add temporary notes here, clean up when done -->
 
+### Markdown Editor Known Issues (Low Priority)
+
+- **False positive change detection**: Sometimes just clicking on a markdown file triggers the "modified" indicator even when no actual content change was made. This may be due to TipTap's internal markdown normalization differing from the original file content. Current mitigation uses normalized string comparison (trim whitespace, normalize line endings), but edge cases may still exist.
+
 ---
 
 ## Archived
