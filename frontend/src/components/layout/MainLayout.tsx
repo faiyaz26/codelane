@@ -249,21 +249,35 @@ export function MainLayout(props: MainLayoutProps) {
               style={{ width: `${sidebarWidth()}px` }}
             >
               <Show when={activeView() === ActivityView.Explorer && activeLane()}>
-                <FileExplorer
-                  workingDir={activeLane()!.workingDir}
-                  onFileSelect={setSelectedFile}
-                  collapsed={sidebarCollapsed()}
-                  onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                />
+                {(lane) => {
+                  const laneData = lane();
+                  if (!laneData) return null;
+
+                  return (
+                    <FileExplorer
+                      workingDir={laneData.workingDir}
+                      onFileSelect={setSelectedFile}
+                      collapsed={sidebarCollapsed()}
+                      onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                    />
+                  );
+                }}
               </Show>
               <Show when={activeView() === ActivityView.Search && activeLane()}>
-                <SearchPanel
-                  workingDir={activeLane()!.workingDir}
-                  laneId={activeLane()!.id}
-                  onFileOpen={(path, line, match) => {
-                    editorStateManager.openFileAtLine(activeLane()!.id, path, line, match);
-                  }}
-                />
+                {(lane) => {
+                  const laneData = lane();
+                  if (!laneData) return null;
+
+                  return (
+                    <SearchPanel
+                      workingDir={laneData.workingDir}
+                      laneId={laneData.id}
+                      onFileOpen={(path, line, match) => {
+                        editorStateManager.openFileAtLine(laneData.id, path, line, match);
+                      }}
+                    />
+                  );
+                }}
               </Show>
               <Show when={activeView() === ActivityView.Git}>
                 <div class="p-4 text-center text-zed-text-tertiary text-sm">
@@ -343,19 +357,24 @@ export function MainLayout(props: MainLayoutProps) {
             {/* Agent Terminal Content */}
             <div class="flex-1 overflow-hidden bg-zed-bg-surface">
               <Show when={activeLane()}>
-                {(lane) => (
-                  <TerminalView
-                    laneId={lane().id}
-                    cwd={lane().workingDir}
-                    onTerminalReady={(terminalId) => {
-                      props.onTerminalReady?.(lane().id, terminalId);
-                    }}
-                    onTerminalExit={() => {
-                      props.onTerminalExit?.(lane().id);
-                    }}
-                    onAgentFailed={props.onAgentFailed}
-                  />
-                )}
+                {(lane) => {
+                  const laneData = lane();
+                  if (!laneData) return null;
+
+                  return (
+                    <TerminalView
+                      laneId={laneData.id}
+                      cwd={laneData.workingDir}
+                      onTerminalReady={(terminalId) => {
+                        props.onTerminalReady?.(laneData.id, terminalId);
+                      }}
+                      onTerminalExit={() => {
+                        props.onTerminalExit?.(laneData.id);
+                      }}
+                      onAgentFailed={props.onAgentFailed}
+                    />
+                  );
+                }}
               </Show>
             </div>
           </div>
