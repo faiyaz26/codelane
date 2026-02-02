@@ -6,18 +6,18 @@ import { invoke } from '@tauri-apps/api/core';
 import type { OpenFile } from '../components/editor/types';
 import { detectLanguage, isMarkdownFile } from '../components/editor/types';
 
+// Lane state structure
+interface LaneState {
+  openFiles: Record<string, OpenFile>;
+  activeFileId: string | null;
+  renderedFiles: Set<string>;
+  saveCallbacks: Record<string, () => Promise<void>>;
+}
+
 // Store structure
 interface EditorStore {
   // Per-lane state
-  lanes: Record<
-    string,
-    {
-      openFiles: Record<string, OpenFile>;
-      activeFileId: string | null;
-      renderedFiles: Set<string>;
-      saveCallbacks: Record<string, () => Promise<void>>;
-    }
-  >;
+  lanes: Record<string, LaneState>;
   // O(1) lookup: path -> { laneId, fileId }
   pathIndex: Record<string, { laneId: string; fileId: string }>;
 }
@@ -57,15 +57,54 @@ class EditorStateManager {
     }
   }
 
+  // Helper: Update lane state with produce
+  private updateLane(laneId: string, updater: (lane: LaneState) => void) {
+    this.setStore(
+      produce((store) => {
+        if (store.lanes[laneId]) {
+          updater(store.lanes[laneId]);
+        }
+      })
+    );
+  }
+
+  // Helper: Update file in lane with produce
+  private updateFile(laneId: string, fileId: string, updates: Partial<OpenFile>) {
+    this.setStore(
+      produce((store) => {
+        if (store.lanes[laneId]?.openFiles[fileId]) {
+          Object.assign(store.lanes[laneId].openFiles[fileId], updates);
+        }
+      })
+    );
+  }
+
+  // Helper: Update path index
+  private updatePathIndex(path: string, value: { laneId: string; fileId: string } | undefined) {
+    this.setStore(
+      produce((store) => {
+        if (value === undefined) {
+          delete store.pathIndex[path];
+        } else {
+          store.pathIndex[path] = value;
+        }
+      })
+    );
+  }
+
   // Initialize lane if it doesn't exist
   private ensureLane(laneId: string) {
     if (!this.store.lanes[laneId]) {
-      this.setStore('lanes', laneId, {
-        openFiles: {},
-        activeFileId: null,
-        renderedFiles: new Set(),
-        saveCallbacks: {},
-      });
+      this.setStore(
+        produce((store) => {
+          store.lanes[laneId] = {
+            openFiles: {},
+            activeFileId: null,
+            renderedFiles: new Set(),
+            saveCallbacks: {},
+          };
+        })
+      );
     }
   }
 
@@ -99,14 +138,10 @@ class EditorStateManager {
     if (existing && existing.laneId === laneId) {
       // File already open in this lane, just activate it
       this.batchUpdate(() => {
-        this.setStore('lanes', laneId, 'activeFileId', existing.fileId);
-        if (!this.store.lanes[laneId].renderedFiles.has(existing.fileId)) {
-          this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-            const newSet = new Set(files);
-            newSet.add(existing.fileId);
-            return newSet;
-          });
-        }
+        this.updateLane(laneId, (lane) => {
+          lane.activeFileId = existing.fileId;
+          lane.renderedFiles.add(existing.fileId);
+        });
       });
       return;
     }
@@ -129,18 +164,18 @@ class EditorStateManager {
 
     // Batch all updates together
     this.batchUpdate(() => {
-      // Add file to lane
-      this.setStore('lanes', laneId, 'openFiles', id, newFile);
-      // Update path index
-      this.setStore('pathIndex', path, { laneId, fileId: id });
-      // Set as active
-      this.setStore('lanes', laneId, 'activeFileId', id);
-      // Mark as rendered
-      this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-        const newSet = new Set(files);
-        newSet.add(id);
-        return newSet;
-      });
+      this.setStore(
+        produce((store) => {
+          // Add file to lane
+          store.lanes[laneId].openFiles[id] = newFile;
+          // Update path index
+          store.pathIndex[path] = { laneId, fileId: id };
+          // Set as active
+          store.lanes[laneId].activeFileId = id;
+          // Mark as rendered
+          store.lanes[laneId].renderedFiles.add(id);
+        })
+      );
     });
 
     // Load content asynchronously
@@ -162,19 +197,16 @@ class EditorStateManager {
       // File already open, update scroll target, highlight, and force source mode for markdown
       const fileName = path.split('/').pop() || '';
       this.batchUpdate(() => {
-        this.setStore('lanes', laneId, 'openFiles', existing.fileId, {
-          scrollToLine: line,
-          highlightMatch: match ? { line, column: match.column, text: match.text } : undefined,
-          forceSourceMode: isMarkdownFile(fileName) ? Date.now() : undefined,
+        this.updateLane(laneId, (lane) => {
+          const file = lane.openFiles[existing.fileId];
+          if (file) {
+            file.scrollToLine = line;
+            file.highlightMatch = match ? { line, column: match.column, text: match.text } : undefined;
+            file.forceSourceMode = isMarkdownFile(fileName) ? Date.now() : undefined;
+          }
+          lane.activeFileId = existing.fileId;
+          lane.renderedFiles.add(existing.fileId);
         });
-        this.setStore('lanes', laneId, 'activeFileId', existing.fileId);
-        if (!this.store.lanes[laneId].renderedFiles.has(existing.fileId)) {
-          this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-            const newSet = new Set(files);
-            newSet.add(existing.fileId);
-            return newSet;
-          });
-        }
       });
       return;
     }
@@ -200,14 +232,14 @@ class EditorStateManager {
 
     // Batch all updates
     this.batchUpdate(() => {
-      this.setStore('lanes', laneId, 'openFiles', id, newFile);
-      this.setStore('pathIndex', path, { laneId, fileId: id });
-      this.setStore('lanes', laneId, 'activeFileId', id);
-      this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-        const newSet = new Set(files);
-        newSet.add(id);
-        return newSet;
-      });
+      this.setStore(
+        produce((store) => {
+          store.lanes[laneId].openFiles[id] = newFile;
+          store.pathIndex[path] = { laneId, fileId: id };
+          store.lanes[laneId].activeFileId = id;
+          store.lanes[laneId].renderedFiles.add(id);
+        })
+      );
     });
 
     // Load content
@@ -220,7 +252,7 @@ class EditorStateManager {
     if (!lane || !lane.openFiles[fileId]) return;
 
     if (lane.openFiles[fileId].scrollToLine !== undefined) {
-      this.setStore('lanes', laneId, 'openFiles', fileId, 'scrollToLine', undefined);
+      this.updateFile(laneId, fileId, { scrollToLine: undefined });
     }
   }
 
@@ -230,19 +262,22 @@ class EditorStateManager {
     if (!lane) return;
 
     this.batchUpdate(() => {
-      if (fileId) {
-        // Clear highlight for specific file
-        if (lane.openFiles[fileId]?.highlightMatch !== undefined) {
-          this.setStore('lanes', laneId, 'openFiles', fileId, 'highlightMatch', undefined);
-        }
-      } else {
-        // Clear highlights for all files in the lane
-        for (const id in lane.openFiles) {
-          if (lane.openFiles[id].highlightMatch !== undefined) {
-            this.setStore('lanes', laneId, 'openFiles', id, 'highlightMatch', undefined);
+      this.updateLane(laneId, (lane) => {
+        if (fileId) {
+          // Clear highlight for specific file
+          const file = lane.openFiles[fileId];
+          if (file?.highlightMatch !== undefined) {
+            file.highlightMatch = undefined;
+          }
+        } else {
+          // Clear highlights for all files in the lane
+          for (const id in lane.openFiles) {
+            if (lane.openFiles[id].highlightMatch !== undefined) {
+              lane.openFiles[id].highlightMatch = undefined;
+            }
           }
         }
-      }
+      });
     });
   }
 
@@ -252,7 +287,7 @@ class EditorStateManager {
     if (!lane || !lane.openFiles[fileId]) return;
 
     // Set loading state
-    this.setStore('lanes', laneId, 'openFiles', fileId, 'isLoading', true);
+    this.updateFile(laneId, fileId, { isLoading: true });
 
     try {
       const content = await invoke<string>('read_file', { path });
@@ -260,10 +295,7 @@ class EditorStateManager {
       // Check if file still exists (might have been closed while loading)
       if (this.store.lanes[laneId]?.openFiles[fileId]) {
         this.batchUpdate(() => {
-          this.setStore('lanes', laneId, 'openFiles', fileId, {
-            content,
-            isLoading: false,
-          });
+          this.updateFile(laneId, fileId, { content, isLoading: false });
         });
       }
     } catch (err) {
@@ -272,7 +304,7 @@ class EditorStateManager {
       // Check if file still exists
       if (this.store.lanes[laneId]?.openFiles[fileId]) {
         this.batchUpdate(() => {
-          this.setStore('lanes', laneId, 'openFiles', fileId, {
+          this.updateFile(laneId, fileId, {
             isLoading: false,
             error: err instanceof Error ? err.message : 'Failed to read file',
           });
@@ -287,21 +319,15 @@ class EditorStateManager {
     const lane = this.store.lanes[laneId];
 
     this.batchUpdate(() => {
-      this.setStore('lanes', laneId, 'activeFileId', fileId);
+      this.updateLane(laneId, (lane) => {
+        lane.activeFileId = fileId;
+        lane.renderedFiles.add(fileId);
+      });
 
-      // Mark as rendered if not already
-      if (!lane.renderedFiles.has(fileId)) {
-        this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-          const newSet = new Set(files);
-          newSet.add(fileId);
-          return newSet;
-        });
-
-        // Load content if not loaded
-        const file = lane.openFiles[fileId];
-        if (file && file.content === null && !file.isLoading && !file.error) {
-          this.loadFileContent(laneId, fileId, file.path);
-        }
+      // Load content if not loaded
+      const file = lane.openFiles[fileId];
+      if (file && file.content === null && !file.isLoading && !file.error) {
+        this.loadFileContent(laneId, fileId, file.path);
       }
     });
   }
@@ -315,27 +341,25 @@ class EditorStateManager {
     if (!file) return false;
 
     this.batchUpdate(() => {
-      // Remove from path index
-      this.setStore('pathIndex', file.path, undefined!);
+      this.setStore(
+        produce((store) => {
+          const lane = store.lanes[laneId];
 
-      // Remove from lane
-      this.setStore('lanes', laneId, 'openFiles', fileId, undefined!);
-      this.setStore('lanes', laneId, 'saveCallbacks', fileId, undefined!);
-      this.setStore('lanes', laneId, 'renderedFiles', (files) => {
-        const newSet = new Set(files);
-        newSet.delete(fileId);
-        return newSet;
-      });
+          // Remove from path index
+          delete store.pathIndex[file.path];
 
-      // If closing active file, switch to another
-      if (lane.activeFileId === fileId) {
-        const remaining = Object.keys(lane.openFiles).filter((id) => id !== fileId);
-        if (remaining.length > 0) {
-          this.setStore('lanes', laneId, 'activeFileId', remaining[remaining.length - 1]);
-        } else {
-          this.setStore('lanes', laneId, 'activeFileId', null);
-        }
-      }
+          // Remove from lane
+          delete lane.openFiles[fileId];
+          delete lane.saveCallbacks[fileId];
+          lane.renderedFiles.delete(fileId);
+
+          // If closing active file, switch to another
+          if (lane.activeFileId === fileId) {
+            const remaining = Object.keys(lane.openFiles);
+            lane.activeFileId = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+          }
+        })
+      );
     });
 
     // Return true if no files remain
@@ -348,7 +372,7 @@ class EditorStateManager {
     if (!lane?.openFiles[fileId]) return;
 
     if (lane.openFiles[fileId].isModified !== isModified) {
-      this.setStore('lanes', laneId, 'openFiles', fileId, 'isModified', isModified);
+      this.updateFile(laneId, fileId, { isModified });
     }
   }
 
@@ -358,24 +382,25 @@ class EditorStateManager {
     if (!lane?.openFiles[fileId]) return;
 
     this.batchUpdate(() => {
-      this.setStore('lanes', laneId, 'openFiles', fileId, {
-        content,
-        isModified: false,
-      });
+      this.updateFile(laneId, fileId, { content, isModified: false });
     });
   }
 
   // Register a save callback for a file
   registerSaveCallback(laneId: string, fileId: string, callback: () => Promise<void>): void {
     this.ensureLane(laneId);
-    this.setStore('lanes', laneId, 'saveCallbacks', fileId, callback);
+    this.updateLane(laneId, (lane) => {
+      lane.saveCallbacks[fileId] = callback;
+    });
   }
 
   // Unregister a save callback for a file
   unregisterSaveCallback(laneId: string, fileId: string): void {
     const lane = this.store.lanes[laneId];
     if (lane) {
-      this.setStore('lanes', laneId, 'saveCallbacks', fileId, undefined!);
+      this.updateLane(laneId, (lane) => {
+        delete lane.saveCallbacks[fileId];
+      });
     }
   }
 
@@ -403,14 +428,20 @@ class EditorStateManager {
     if (!lane) return;
 
     this.batchUpdate(() => {
-      // Remove all path index entries for this lane
-      for (const fileId in lane.openFiles) {
-        const file = lane.openFiles[fileId];
-        this.setStore('pathIndex', file.path, undefined!);
-      }
+      this.setStore(
+        produce((store) => {
+          const lane = store.lanes[laneId];
 
-      // Remove lane
-      this.setStore('lanes', laneId, undefined!);
+          // Remove all path index entries for this lane
+          for (const fileId in lane.openFiles) {
+            const file = lane.openFiles[fileId];
+            delete store.pathIndex[file.path];
+          }
+
+          // Remove lane
+          delete store.lanes[laneId];
+        })
+      );
     });
   }
 }
