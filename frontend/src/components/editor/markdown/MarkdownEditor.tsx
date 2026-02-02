@@ -10,6 +10,7 @@ import { Markdown } from 'tiptap-markdown';
 import type { OpenFile } from '../types';
 import { FloatingToolbar } from './FloatingToolbar';
 import { editorStateManager } from '../../../services/EditorStateManager';
+import { editorSettingsManager } from '../../../services/EditorSettingsManager';
 import { themeManager, type ThemeId } from '../../../services/ThemeManager';
 import './markdown-editor.css';
 
@@ -54,7 +55,10 @@ function normalizeForComparison(content: string): string {
 }
 
 export function MarkdownEditor(props: MarkdownEditorProps) {
-  const [mode, setMode] = createSignal<'preview' | 'source'>('preview');
+  // Use default mode from settings
+  const [mode, setMode] = createSignal<'preview' | 'source'>(
+    editorSettingsManager.getMarkdownDefaultMode()
+  );
   const [sourceContent, setSourceContent] = createSignal(props.file.content || '');
   const [isModified, setIsModified] = createSignal(false);
   const [isSaving, setIsSaving] = createSignal(false);
@@ -331,19 +335,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   return (
     <div class="h-full flex flex-col bg-zed-bg-surface relative">
       {/* Header bar */}
-      <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-between text-xs bg-zed-bg-panel">
-        <div class="flex items-center gap-2 text-zed-text-tertiary truncate">
-          <span class="truncate">{props.file.path}</span>
-        </div>
+      <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-end text-xs bg-zed-bg-panel">
         <div class="flex items-center gap-4 text-zed-text-disabled flex-shrink-0">
           {/* Mode toggle */}
           <div class="markdown-mode-toggle">
             <button
               classList={{ active: mode() === 'preview' }}
               onClick={() => mode() !== 'preview' && toggleMode()}
-              title="Preview mode"
+              title="Live preview with inline editing"
             >
-              Preview
+              Live Preview
             </button>
             <button
               classList={{ active: mode() === 'source' }}
@@ -361,8 +362,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           <Show when={saveError()}>
             <span class="text-zed-accent-red" title={saveError()!}>Save failed</span>
           </Show>
-
-          <span>Markdown</span>
         </div>
       </div>
 

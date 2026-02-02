@@ -8,6 +8,7 @@ import { TerminalView } from '../TerminalView';
 import { TabPanel } from '../tabs/TabPanel';
 import { ProcessMonitor } from '../ProcessMonitor';
 import { editorStateManager } from '../../services/EditorStateManager';
+import { getLanguageDisplayName } from '../editor/types';
 import type { Lane } from '../../types/lane';
 
 interface MainLayoutProps {
@@ -35,6 +36,27 @@ export function MainLayout(props: MainLayoutProps) {
 
   const activeLane = createMemo(() => {
     return props.lanes.find((l) => l.id === props.activeLaneId);
+  });
+
+  // Get file info for status bar - only the data it needs
+  const fileInfo = createMemo(() => {
+    const laneId = props.activeLaneId;
+    if (!laneId) return null;
+
+    // Subscribe to updates
+    editorStateManager.getUpdateSignal()();
+
+    const activeFileId = editorStateManager.getActiveFileId(laneId);
+    if (!activeFileId) return null;
+
+    const files = editorStateManager.getOpenFiles(laneId);
+    const file = files.get(activeFileId);
+    if (!file) return null;
+
+    // Transform to only what StatusBar needs
+    return {
+      language: getLanguageDisplayName(file.language),
+    };
   });
 
   // Get selected file for current lane
@@ -254,6 +276,7 @@ export function MainLayout(props: MainLayoutProps) {
                 >
                   <EditorPanel
                     laneId={props.activeLaneId!}
+                    basePath={activeLane()?.workingDir}
                     selectedFilePath={selectedFile()}
                     onAllFilesClosed={() => setSelectedFile(undefined)}
                   />
@@ -327,7 +350,7 @@ export function MainLayout(props: MainLayoutProps) {
       </div>
 
       {/* Status Bar */}
-      <StatusBar activeLane={activeLane()} totalLanes={props.lanes.length} />
+      <StatusBar activeLane={activeLane()} totalLanes={props.lanes.length} fileInfo={fileInfo()} />
     </div>
   );
 }

@@ -858,13 +858,9 @@ export function FileViewer(props: FileViewerProps) {
       {/* Non-markdown file content */}
       <Show when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && !isMarkdownFile(props.file.name)}>
         {/* File info bar */}
-        <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-between text-xs bg-zed-bg-panel">
-          <div class="flex items-center gap-2 text-zed-text-tertiary truncate">
-            <span class="truncate">{props.file!.path}</span>
-          </div>
+        <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-end text-xs bg-zed-bg-panel">
           <div class="flex items-center gap-4 text-zed-text-disabled flex-shrink-0">
             <span>{props.file!.content?.split('\n').length || 0} lines</span>
-            <span>{getLanguageDisplayName(props.file!.language)}</span>
             <button
               class="hover:text-zed-text-primary transition-colors"
               onClick={openSearch}

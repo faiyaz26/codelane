@@ -1,6 +1,14 @@
 // General Settings Tab
 
+import { editorSettingsManager, type MarkdownDefaultMode } from '../../services/EditorSettingsManager';
+
 export function GeneralSettings() {
+  const settings = editorSettingsManager.getSettings();
+
+  const handleMarkdownModeChange = (mode: MarkdownDefaultMode) => {
+    editorSettingsManager.setMarkdownDefaultMode(mode);
+  };
+
   return (
     <div>
       <h2 class="text-xl font-semibold text-zed-text-primary mb-2">General Settings</h2>
@@ -9,11 +17,43 @@ export function GeneralSettings() {
       </p>
 
       <div class="space-y-6">
-        <div class="p-6 rounded-lg bg-zed-bg-surface border border-zed-border-default text-center">
-          <svg class="w-12 h-12 mx-auto mb-3 text-zed-text-disabled" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-          <p class="text-sm text-zed-text-tertiary">General settings coming soon</p>
+        {/* Editor Settings */}
+        <div>
+          <h3 class="text-sm font-medium text-zed-text-primary mb-4">Editor</h3>
+
+          {/* Markdown Default Mode */}
+          <div class="p-4 rounded-lg bg-zed-bg-surface border border-zed-border-default">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-zed-text-primary">Markdown Default Mode</p>
+                <p class="text-xs text-zed-text-tertiary mt-1">
+                  Choose how markdown files open by default
+                </p>
+              </div>
+              <div class="flex items-center gap-1 p-1 bg-zed-bg-panel rounded-md border border-zed-border-default">
+                <button
+                  class={`px-3 py-1.5 text-sm rounded transition-colors ${
+                    settings().markdownDefaultMode === 'preview'
+                      ? 'bg-zed-accent-blue text-white'
+                      : 'text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover'
+                  }`}
+                  onClick={() => handleMarkdownModeChange('preview')}
+                >
+                  Live Preview
+                </button>
+                <button
+                  class={`px-3 py-1.5 text-sm rounded transition-colors ${
+                    settings().markdownDefaultMode === 'source'
+                      ? 'bg-zed-accent-blue text-white'
+                      : 'text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover'
+                  }`}
+                  onClick={() => handleMarkdownModeChange('source')}
+                >
+                  Source
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

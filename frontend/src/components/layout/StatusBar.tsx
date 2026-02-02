@@ -1,9 +1,15 @@
 import { Show } from 'solid-js';
 import type { Lane } from '../../types/lane';
 
+// Only the data StatusBar needs - keeps component decoupled from editor internals
+interface FileInfo {
+  language: string; // Already formatted display name
+}
+
 interface StatusBarProps {
-  activeLane: Lane | undefined;
+  activeLane?: Lane;
   totalLanes: number;
+  fileInfo?: FileInfo | null;
 }
 
 export function StatusBar(props: StatusBarProps) {
@@ -69,10 +75,12 @@ export function StatusBar(props: StatusBarProps) {
 
       {/* Right Section */}
       <div class="flex items-center gap-3 flex-1 justify-end">
-        {/* Language (placeholder) */}
-        <span class="text-zed-text-tertiary hover:text-zed-text-primary cursor-pointer transition-colors">
-          TypeScript
-        </span>
+        {/* Language */}
+        <Show when={props.fileInfo?.language}>
+          <span class="text-zed-text-tertiary hover:text-zed-text-primary cursor-pointer transition-colors">
+            {props.fileInfo!.language}
+          </span>
+        </Show>
 
         {/* Encoding */}
         <span class="text-zed-text-tertiary hover:text-zed-text-primary cursor-pointer transition-colors">
@@ -80,9 +88,11 @@ export function StatusBar(props: StatusBarProps) {
         </span>
 
         {/* Line/Column (placeholder) */}
-        <span class="text-zed-text-tertiary">
-          Ln 1, Col 1
-        </span>
+        <Show when={props.fileInfo}>
+          <span class="text-zed-text-tertiary">
+            Ln 1, Col 1
+          </span>
+        </Show>
 
         {/* Lanes Count */}
         <span class="text-zed-text-tertiary">

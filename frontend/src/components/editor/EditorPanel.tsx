@@ -11,6 +11,8 @@ import { editorStateManager } from '../../services/EditorStateManager';
 interface EditorPanelProps {
   // Lane ID for scoping editor state
   laneId: string;
+  // Lane's working directory for relative path calculation
+  basePath?: string;
   // Path of file to open (from file explorer)
   selectedFilePath?: string;
   // Callback when all files are closed
@@ -134,6 +136,7 @@ export function EditorPanel(props: EditorPanelProps) {
         activeTabId={activeFileId()}
         onTabSelect={selectTab}
         onTabClose={closeFile}
+        basePath={props.basePath}
       />
 
       {/* File viewers - render all activated files, show/hide with CSS */}
