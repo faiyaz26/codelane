@@ -24,13 +24,20 @@ interface EditorStore {
 
 class EditorStateManager {
   // SolidJS store for reactive state
-  private [store, setStore] = createStore<EditorStore>({
-    lanes: {},
-    pathIndex: {},
-  });
+  private store;
+  private setStore;
 
   // Pending updates for batching
   private pendingBatch = false;
+
+  constructor() {
+    const storeResult = createStore<EditorStore>({
+      lanes: {},
+      pathIndex: {},
+    });
+    this.store = storeResult[0];
+    this.setStore = storeResult[1];
+  }
 
   // Public store access
   getStore() {
@@ -53,7 +60,7 @@ class EditorStateManager {
   // Initialize lane if it doesn't exist
   private ensureLane(laneId: string) {
     if (!this.store.lanes[laneId]) {
-      setStore('lanes', laneId, {
+      this.setStore('lanes', laneId, {
         openFiles: {},
         activeFileId: null,
         renderedFiles: new Set(),
