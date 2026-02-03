@@ -2,7 +2,7 @@ import { createSignal, onMount, Show, createMemo } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MainLayout } from './components/layout';
-import { CreateLaneDialog } from './components/CreateLaneDialog';
+import { CreateLaneDialog } from './components/lanes';
 import { SettingsDialog } from './components/SettingsDialog';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
@@ -106,43 +106,28 @@ function App() {
     setInitializedLanes((prev) => new Set(prev).add(laneId));
   };
 
-  const handleLaneClose = async (laneId: string) => {
-    const lane = lanes().find(l => l.id === laneId);
-    const laneName = lane?.name || 'this lane';
+  const handleLaneDeleted = async (laneId: string) => {
+    // Update local state (deletion already happened in ProjectPanel)
+    setLanes((prev) => prev.filter((l) => l.id !== laneId));
 
-    const confirmed = await ask(`Are you sure you want to close "${laneName}"?`, {
-      title: 'Close Lane',
-      kind: 'warning',
-    });
+    // Dispose TabManager for this lane
+    tabManager.disposeLane(laneId);
 
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteLane(laneId);
-      setLanes((prev) => prev.filter((l) => l.id !== laneId));
-
-      // Dispose TabManager for this lane
-      tabManager.disposeLane(laneId);
-
-      // If the deleted lane was active, clear active lane
-      if (activeLaneId() === laneId) {
-        const remaining = lanes().filter((l) => l.id !== laneId);
-        if (remaining.length > 0) {
-          await handleLaneSelect(remaining[0].id);
-        } else {
-          setActiveLaneIdSignal(null);
-          setActiveLaneId(null);
-        }
+    // If the deleted lane was active, switch to another lane
+    if (activeLaneId() === laneId) {
+      const remaining = lanes().filter((l) => l.id !== laneId);
+      if (remaining.length > 0) {
+        await handleLaneSelect(remaining[0].id);
+      } else {
+        setActiveLaneIdSignal(null);
+        setActiveLaneId(null);
       }
-    } catch (err) {
-      await ask(err instanceof Error ? err.message : 'Failed to delete lane', {
-        title: 'Error',
-        kind: 'error',
-      });
-      console.error('Failed to delete lane:', err);
     }
+  };
+
+  const handleLaneRenamed = (updatedLane: Lane) => {
+    // Update the lane in local state
+    setLanes((prev) => prev.map((l) => l.id === updatedLane.id ? updatedLane : l));
   };
 
   const handleSettingsSaved = (settings: AgentSettings) => {
@@ -204,7 +189,8 @@ function App() {
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
           onLaneSelect={handleLaneSelect}
-          onLaneClose={handleLaneClose}
+          onLaneDeleted={handleLaneDeleted}
+          onLaneRenamed={handleLaneRenamed}
           onNewLane={() => setDialogOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onTerminalReady={handleTerminalReady}
@@ -218,7 +204,6 @@ function App() {
         open={dialogOpen()}
         onOpenChange={setDialogOpen}
         onLaneCreated={handleLaneCreated}
-        existingLanes={lanes()}
       />
 
       {/* Settings Dialog */}

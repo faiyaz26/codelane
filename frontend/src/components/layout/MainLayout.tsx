@@ -7,6 +7,7 @@ import { AgentTerminalPanel } from './AgentTerminalPanel';
 import { Sidebar } from './Sidebar';
 import { BottomPanel } from './BottomPanel';
 import { ResizeHandle } from './ResizeHandle';
+import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
 import { editorStateManager } from '../../services/EditorStateManager';
 import { getLanguageDisplayName } from '../editor/types';
@@ -17,7 +18,8 @@ interface MainLayoutProps {
   activeLaneId: string | null;
   initializedLanes: Set<string>;
   onLaneSelect: (laneId: string) => void;
-  onLaneClose: (laneId: string) => void;
+  onLaneDeleted: (laneId: string) => void;
+  onLaneRenamed: (lane: Lane) => void;
   onNewLane: () => void;
   onSettingsOpen: () => void;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
@@ -26,6 +28,9 @@ interface MainLayoutProps {
 }
 
 // Constants for panel sizing
+const PROJECT_PANEL_MIN_WIDTH = 160;
+const PROJECT_PANEL_MAX_WIDTH = 350;
+const PROJECT_PANEL_DEFAULT_WIDTH = 200;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 500;
 const SIDEBAR_DEFAULT_WIDTH = 260;
@@ -34,6 +39,7 @@ const AGENT_PANEL_MAX_WIDTH = 800;
 
 export function MainLayout(props: MainLayoutProps) {
   // Panel state
+  const [projectPanelWidth, setProjectPanelWidth] = createSignal(PROJECT_PANEL_DEFAULT_WIDTH);
   const [sidebarWidth, setSidebarWidth] = createSignal(SIDEBAR_DEFAULT_WIDTH);
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
   const [agentPanelWidth, setAgentPanelWidth] = createSignal<number | null>(null);
@@ -105,6 +111,11 @@ export function MainLayout(props: MainLayoutProps) {
     });
   };
 
+  // Get effective working directory (worktree path if available, otherwise workingDir)
+  const getEffectiveWorkingDir = (lane: Lane): string => {
+    return lane.worktreePath || lane.workingDir;
+  };
+
   // Clear highlights when switching away from search view
   createEffect(() => {
     const view = activeView();
@@ -115,6 +126,11 @@ export function MainLayout(props: MainLayoutProps) {
   });
 
   // Resize handlers
+  const handleProjectPanelResize = (delta: number) => {
+    const newWidth = Math.max(PROJECT_PANEL_MIN_WIDTH, Math.min(PROJECT_PANEL_MAX_WIDTH, projectPanelWidth() + delta));
+    setProjectPanelWidth(newWidth);
+  };
+
   const handleSidebarResize = (delta: number) => {
     const newWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, sidebarWidth() + delta));
     setSidebarWidth(newWidth);
@@ -128,15 +144,19 @@ export function MainLayout(props: MainLayoutProps) {
 
   return (
     <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
-      <TopBar
-        lanes={props.lanes}
-        activeLaneId={props.activeLaneId}
-        onLaneSelect={props.onLaneSelect}
-        onLaneClose={props.onLaneClose}
-        onNewLane={props.onNewLane}
-      />
+      <TopBar activeLaneName={activeLane()?.name} />
 
       <div class="flex-1 flex overflow-hidden">
+        <ProjectPanel
+          lanes={props.lanes}
+          activeLaneId={props.activeLaneId}
+          width={projectPanelWidth()}
+          onLaneSelect={props.onLaneSelect}
+          onLaneDeleted={props.onLaneDeleted}
+          onLaneRenamed={props.onLaneRenamed}
+          onNewLane={props.onNewLane}
+        />
+        <ResizeHandle direction="left" onResize={handleProjectPanelResize} />
         <Show when={activeLane()} fallback={<WelcomeScreen onNewLane={props.onNewLane} />}>
           {(lane) => (
             <div class="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -160,7 +180,7 @@ export function MainLayout(props: MainLayoutProps) {
                   <div class="flex flex-col overflow-hidden min-w-0 flex-1">
                     <EditorPanel
                       laneId={props.activeLaneId!}
-                      basePath={lane().workingDir}
+                      basePath={getEffectiveWorkingDir(lane())}
                       selectedFilePath={selectedFile()}
                       onAllFilesClosed={() => setSelectedFile(undefined)}
                     />
@@ -175,6 +195,7 @@ export function MainLayout(props: MainLayoutProps) {
                 {/* Sidebar */}
                 <Sidebar
                   lane={lane()}
+                  effectiveWorkingDir={getEffectiveWorkingDir(lane())}
                   activeView={activeView()}
                   width={sidebarWidth()}
                   collapsed={sidebarCollapsed()}

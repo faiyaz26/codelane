@@ -64,3 +64,42 @@ export async function createCommit(path: string, message: string): Promise<strin
 export async function discardChanges(path: string, files: string[]): Promise<void> {
   return invoke<void>('git_discard', { path, files });
 }
+
+/**
+ * Check if a directory is a git repository
+ */
+export async function isGitRepo(path: string): Promise<boolean> {
+  return invoke<boolean>('git_is_repo', { path });
+}
+
+/**
+ * Check if a branch exists
+ */
+export async function branchExists(path: string, branch: string): Promise<boolean> {
+  return invoke<boolean>('git_branch_exists', { path, branch });
+}
+
+/**
+ * Create a new branch
+ */
+export async function createBranch(path: string, branch: string): Promise<void> {
+  return invoke<void>('git_create_branch', { path, branch });
+}
+
+/**
+ * Create a git worktree
+ */
+export async function createWorktree(
+  path: string,
+  worktreePath: string,
+  branch: string
+): Promise<void> {
+  return invoke<void>('git_worktree_add', { path, worktreePath, branch });
+}
+
+/**
+ * Remove a git worktree
+ */
+export async function removeWorktree(path: string, worktreePath: string): Promise<void> {
+  return invoke<void>('git_worktree_remove', { path, worktreePath });
+}

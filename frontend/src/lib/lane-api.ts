@@ -5,6 +5,7 @@
 import { getDatabase } from './db';
 import type { Lane, CreateLaneParams, UpdateLaneParams } from '../types/lane';
 import { v4 as uuidv4 } from 'uuid';
+import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree } from './git-api';
 
 /**
  * Creates a new lane
@@ -19,6 +20,34 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     throw new Error('Working directory is required');
   }
 
+  let worktreePath: string | undefined;
+  let branch: string | undefined;
+
+  // Handle branch/worktree creation if branch is specified
+  if (params.branch && params.branch.trim()) {
+    branch = params.branch.trim();
+
+    // Check if directory is a git repo
+    const isRepo = await isGitRepo(params.workingDir);
+    if (isRepo) {
+      // Sanitize branch name for filesystem (replace / with -)
+      const safeBranchName = branch.replace(/\//g, '-');
+      worktreePath = `${params.workingDir}/.codelane-worktrees/${safeBranchName}`;
+
+      // Check if branch exists, create if not
+      const exists = await branchExists(params.workingDir, branch);
+      if (!exists) {
+        await createBranch(params.workingDir, branch);
+      }
+
+      // Create worktree
+      await createWorktree(params.workingDir, worktreePath, branch);
+    } else {
+      // Not a git repo, ignore branch
+      branch = undefined;
+    }
+  }
+
   // Default config as JSON
   const defaultConfig = JSON.stringify({
     env: [],
@@ -27,9 +56,9 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
 
   // Insert lane with config
   await db.execute(
-    `INSERT INTO lanes (id, name, working_dir, config, created_at, updated_at, last_accessed)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, params.name, params.workingDir, defaultConfig, now, now, now]
+    `INSERT INTO lanes (id, name, working_dir, worktree_path, branch, config, created_at, updated_at, last_accessed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, params.name, params.workingDir, worktreePath || null, branch || null, defaultConfig, now, now, now]
   );
 
   // Return the created lane
@@ -37,6 +66,8 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     id,
     name: params.name,
     workingDir: params.workingDir,
+    worktreePath,
+    branch,
     createdAt: now,
     updatedAt: now,
     config: {
@@ -56,11 +87,13 @@ export async function listLanes(): Promise<Lane[]> {
     id: string;
     name: string;
     working_dir: string;
+    worktree_path: string | null;
+    branch: string | null;
     config: string;
     created_at: number;
     updated_at: number;
   }>>(
-    `SELECT id, name, working_dir, config, created_at, updated_at
+    `SELECT id, name, working_dir, worktree_path, branch, config, created_at, updated_at
      FROM lanes
      ORDER BY COALESCE(sort_order, 999999), updated_at DESC`
   );
@@ -71,6 +104,8 @@ export async function listLanes(): Promise<Lane[]> {
       id: row.id,
       name: row.name,
       workingDir: row.working_dir,
+      worktreePath: row.worktree_path || undefined,
+      branch: row.branch || undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       config: {
@@ -92,11 +127,13 @@ export async function getLane(laneId: string): Promise<Lane> {
     id: string;
     name: string;
     working_dir: string;
+    worktree_path: string | null;
+    branch: string | null;
     config: string;
     created_at: number;
     updated_at: number;
   }>>(
-    `SELECT id, name, working_dir, config, created_at, updated_at
+    `SELECT id, name, working_dir, worktree_path, branch, config, created_at, updated_at
      FROM lanes
      WHERE id = ?`,
     [laneId]
@@ -112,6 +149,8 @@ export async function getLane(laneId: string): Promise<Lane> {
     id: row.id,
     name: row.name,
     workingDir: row.working_dir,
+    worktreePath: row.worktree_path || undefined,
+    branch: row.branch || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     config: {
@@ -164,6 +203,28 @@ export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
  */
 export async function deleteLane(laneId: string): Promise<void> {
   const db = await getDatabase();
+
+  // Get lane info first to check for worktree
+  const lanes = await db.select<Array<{
+    working_dir: string;
+    worktree_path: string | null;
+    branch: string | null;
+  }>>(
+    'SELECT working_dir, worktree_path, branch FROM lanes WHERE id = ?',
+    [laneId]
+  );
+
+  if (lanes.length > 0) {
+    const lane = lanes[0];
+    // If lane has worktree, try to remove it
+    if (lane.worktree_path && lane.branch) {
+      try {
+        await removeWorktree(lane.working_dir, lane.worktree_path);
+      } catch (e) {
+        console.warn('Failed to remove worktree:', e);
+      }
+    }
+  }
 
   await db.execute('DELETE FROM lanes WHERE id = ?', [laneId]);
 }

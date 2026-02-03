@@ -103,7 +103,7 @@ export function EditorTabs(props: EditorTabsProps) {
   });
 
   return (
-    <div class="h-9 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center relative">
+    <div class="panel-header bg-zed-bg-panel relative px-0">
       {/* Left scroll button */}
       <Show when={showLeftScroll()}>
         <button

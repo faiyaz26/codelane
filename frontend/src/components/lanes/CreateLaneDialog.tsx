@@ -1,14 +1,28 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, createEffect, onCleanup } from 'solid-js';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Dialog, Button, TextField } from './ui';
-import { createLane } from '../lib/lane-api';
-import type { Lane } from '../types/lane';
+import { Dialog, Button, TextField } from '../ui';
+import { createLane } from '../../lib/lane-api';
+import { isGitRepo } from '../../lib/git-api';
+import type { Lane } from '../../types/lane';
+
+// Rotating placeholder examples
+const PLACEHOLDER_EXAMPLES = [
+  'Add user authentication',
+  'Fix checkout bug',
+  'Refactor API layer',
+  'Update dependencies',
+  'Add dark mode support',
+  'Improve search performance',
+  'Write unit tests',
+  'Setup CI/CD pipeline',
+  'Migrate to TypeScript',
+  'Add payment integration',
+];
 
 interface CreateLaneDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLaneCreated: (lane: Lane) => void;
-  existingLanes: Lane[];
 }
 
 export function CreateLaneDialog(props: CreateLaneDialogProps) {
@@ -16,28 +30,47 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   const [workingDir, setWorkingDir] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [isCreating, setIsCreating] = createSignal(false);
+  const [branch, setBranch] = createSignal('');
+  const [isGitRepoDir, setIsGitRepoDir] = createSignal(false);
+  const [checkingGitRepo, setCheckingGitRepo] = createSignal(false);
+  const [placeholderIndex, setPlaceholderIndex] = createSignal(
+    Math.floor(Math.random() * PLACEHOLDER_EXAMPLES.length)
+  );
 
-  // Generate a unique lane name from folder path
-  const generateUniqueName = (folderPath: string): string => {
-    // Extract folder name from path
-    const parts = folderPath.split(/[/\\]/);
-    const baseName = parts[parts.length - 1] || 'New Lane';
-
-    // Check if name exists
-    const existingNames = new Set(props.existingLanes.map(l => l.name.toLowerCase()));
-
-    if (!existingNames.has(baseName.toLowerCase())) {
-      return baseName;
+  // Rotate placeholder when dialog is open
+  createEffect(() => {
+    if (props.open) {
+      const interval = setInterval(() => {
+        setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_EXAMPLES.length);
+      }, 2500);
+      onCleanup(() => clearInterval(interval));
     }
+  });
 
-    // Find a unique name with number suffix
-    let counter = 2;
-    while (existingNames.has(`${baseName} ${counter}`.toLowerCase())) {
-      counter++;
+  const currentPlaceholder = () => PLACEHOLDER_EXAMPLES[placeholderIndex()];
+
+  // Check if working directory is a git repo when it changes
+  createEffect(async () => {
+    const dir = workingDir();
+    if (dir && dir.trim()) {
+      setCheckingGitRepo(true);
+      try {
+        const result = await isGitRepo(dir);
+        setIsGitRepoDir(result);
+        if (!result) {
+          setBranch(''); // Clear branch if not a git repo
+        }
+      } catch (e) {
+        setIsGitRepoDir(false);
+        setBranch('');
+      } finally {
+        setCheckingGitRepo(false);
+      }
+    } else {
+      setIsGitRepoDir(false);
+      setBranch('');
     }
-
-    return `${baseName} ${counter}`;
-  };
+  });
 
   const handleCreate = async () => {
     const laneName = name().trim();
@@ -61,11 +94,13 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       const lane = await createLane({
         name: laneName,
         workingDir: laneWorkingDir,
+        branch: branch().trim() || undefined,
       });
 
       // Reset form
       setName('');
       setWorkingDir('');
+      setBranch('');
       setError(null);
 
       // Close dialog and notify parent
@@ -81,6 +116,7 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   const handleCancel = () => {
     setName('');
     setWorkingDir('');
+    setBranch('');
     setError(null);
     props.onOpenChange(false);
   };
@@ -95,11 +131,6 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
 
       if (selected && typeof selected === 'string') {
         setWorkingDir(selected);
-
-        // Auto-populate lane name from folder name
-        const uniqueName = generateUniqueName(selected);
-        setName(uniqueName);
-
         setError(null);
       }
     } catch (err) {
@@ -112,15 +143,15 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       open={props.open}
       onOpenChange={props.onOpenChange}
       title="Create New Lane"
-      description="Set up a new project workspace with its own terminal and AI agents."
+      description="Start a new task with a dedicated AI agent and terminal session."
     >
       <div class="space-y-4">
         <TextField
           label="Lane Name"
-          placeholder="My Project"
+          placeholder={currentPlaceholder()}
           value={name()}
           onChange={setName}
-          description="A descriptive name for this project workspace"
+          description="What are you working on? e.g., feature name, bug fix, or task"
         />
 
         <div>
@@ -147,6 +178,28 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
             Absolute path to your project directory
           </p>
         </div>
+
+        <Show when={isGitRepoDir()}>
+          <div class="p-3 rounded-lg bg-zed-accent-green/5 border border-zed-accent-green/20">
+            <div class="flex items-center gap-2 mb-3">
+              <svg class="w-4 h-4 text-zed-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="text-sm font-medium text-zed-accent-green">Git repository detected</span>
+            </div>
+            <TextField
+              label="Feature Branch (Optional)"
+              placeholder="feature/add-auth"
+              value={branch()}
+              onChange={setBranch}
+              description=""
+            />
+            <p class="text-xs text-zed-text-tertiary mt-2 leading-relaxed">
+              Run multiple AI agents in parallel on different branches. Each lane gets its own isolated worktree —
+              no conflicts, no stashing. Leave empty to work on the current branch.
+            </p>
+          </div>
+        </Show>
 
         <Show when={error()}>
           <div class="p-3 rounded-md bg-zed-accent-red/10 border border-zed-accent-red/30 text-sm text-zed-accent-red">

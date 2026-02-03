@@ -29,8 +29,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       }}
     >
       {/* Header */}
-      <div class="h-10 border-b border-zed-border-subtle bg-zed-bg-panel px-4 flex items-center justify-between flex-shrink-0">
-        <h3 class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
+      <div class="panel-header justify-between bg-zed-bg-panel">
+        <h3 class="panel-header-title">Agent Terminal</h3>
         <div class="flex items-center gap-2">
           <ProcessMonitor laneId={props.activeLaneId} />
         </div>
@@ -48,7 +48,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                 {(laneData) => {
                   // Capture values at render time to avoid stale accessors
                   const id = laneData().id;
-                  const workingDir = laneData().workingDir;
+                  // Use worktree path if available, otherwise use workingDir
+                  const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
 
                   return (
                     <div
@@ -61,7 +62,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                     >
                       <TerminalView
                         laneId={id}
-                        cwd={workingDir}
+                        cwd={effectiveWorkingDir}
                         onTerminalReady={(terminalId) => {
                           props.onTerminalReady?.(id, terminalId);
                         }}

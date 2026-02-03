@@ -115,6 +115,30 @@ export async function initDatabase(): Promise<Database> {
       console.log('Database already up to date');
     }
 
+    // Check if migration 002 has been applied
+    const result002 = await db.select<Array<{version: number}>>(
+      'SELECT version FROM schema_migrations WHERE version = 2'
+    );
+
+    if (result002.length === 0) {
+      console.log('Running migration 002: worktree support');
+
+      // Migration 002: Add worktree support columns
+      await db.execute(`
+        ALTER TABLE lanes ADD COLUMN worktree_path TEXT;
+        ALTER TABLE lanes ADD COLUMN branch TEXT;
+        CREATE INDEX IF NOT EXISTS idx_lanes_working_dir ON lanes(working_dir);
+      `);
+
+      // Record migration
+      await db.execute(
+        'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)',
+        [2, 'worktree_support', Math.floor(Date.now() / 1000)]
+      );
+
+      console.log('Migration 002 applied successfully');
+    }
+
     console.log('Database initialized successfully');
     dbInstance = db;
     return db;

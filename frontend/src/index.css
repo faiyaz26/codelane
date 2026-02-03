@@ -202,6 +202,15 @@
     @apply bg-zed-bg-surface border border-zed-border-default rounded-md;
   }
 
+  /* Common panel header style */
+  .panel-header {
+    @apply h-9 px-3 flex items-center border-b border-zed-border-subtle flex-shrink-0;
+  }
+
+  .panel-header-title {
+    @apply text-xs font-semibold text-zed-text-secondary uppercase tracking-wide;
+  }
+
   .btn-primary {
     @apply px-4 py-2 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white rounded-md font-medium transition-colors;
   }

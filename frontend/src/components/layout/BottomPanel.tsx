@@ -22,9 +22,10 @@ export function BottomPanel(props: BottomPanelProps) {
             {(laneData) => {
               // Capture values at render time to avoid stale accessors
               const id = laneData().id;
-              const workingDir = laneData().workingDir;
+              // Use worktree path if available, otherwise use workingDir
+              const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
 
-              return <TabPanel laneId={id} workingDir={workingDir} />;
+              return <TabPanel laneId={id} workingDir={effectiveWorkingDir} />;
             }}
           </Show>
         );

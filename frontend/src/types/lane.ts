@@ -34,6 +34,8 @@ export interface Lane {
   id: string;
   name: string;
   workingDir: string;
+  worktreePath?: string;  // Worktree path (if branch specified)
+  branch?: string;        // Branch name (if using worktree)
   createdAt: number;
   updatedAt: number;
   config?: LaneConfig;
@@ -45,6 +47,7 @@ export interface Lane {
 export interface CreateLaneParams {
   name: string;
   workingDir: string;
+  branch?: string;  // Optional branch for worktree
 }
 
 /**

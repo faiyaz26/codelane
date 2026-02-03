@@ -71,6 +71,12 @@ pub fn run() {
             git::git_unstage,
             git::git_commit,
             git::git_discard,
+            // Git worktree commands
+            git::git_is_repo,
+            git::git_branch_exists,
+            git::git_create_branch,
+            git::git_worktree_add,
+            git::git_worktree_remove,
             // Filesystem commands
             fs::read_file,
             fs::write_file,

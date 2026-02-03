@@ -347,6 +347,94 @@ pub async fn git_discard(path: String, files: Vec<String>) -> Result<(), String>
 }
 
 // ============================================================================
+// Worktree Commands
+// ============================================================================
+
+/// Check if a directory is a git repository
+#[tauri::command]
+pub async fn git_is_repo(path: String) -> Result<bool, String> {
+    let work_dir = Path::new(&path);
+
+    if !work_dir.exists() {
+        return Ok(false);
+    }
+
+    let output = Command::new("git")
+        .current_dir(work_dir)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    Ok(output.status.success())
+}
+
+/// Check if a branch exists in the repository
+#[tauri::command]
+pub async fn git_branch_exists(path: String, branch: String) -> Result<bool, String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    let output = Command::new("git")
+        .current_dir(work_dir)
+        .args(["rev-parse", "--verify", &format!("refs/heads/{}", branch)])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    Ok(output.status.success())
+}
+
+/// Create a new branch from the current HEAD
+#[tauri::command]
+pub async fn git_create_branch(path: String, branch: String) -> Result<(), String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    run_git(work_dir, &["branch", &branch])?;
+    Ok(())
+}
+
+/// Create a git worktree
+#[tauri::command]
+pub async fn git_worktree_add(path: String, worktree_path: String, branch: String) -> Result<(), String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    // Create parent directory if it doesn't exist
+    let worktree_dir = Path::new(&worktree_path);
+    if let Some(parent) = worktree_dir.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create worktree directory: {}", e))?;
+    }
+
+    run_git(work_dir, &["worktree", "add", &worktree_path, &branch])?;
+    Ok(())
+}
+
+/// Remove a git worktree
+#[tauri::command]
+pub async fn git_worktree_remove(path: String, worktree_path: String) -> Result<(), String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    // First try to remove with --force to handle any edge cases
+    let result = run_git(work_dir, &["worktree", "remove", "--force", &worktree_path]);
+
+    if result.is_err() {
+        // If that fails, try without --force
+        run_git(work_dir, &["worktree", "remove", &worktree_path])?;
+    }
+
+    // Clean up the parent directory if empty
+    let worktree_dir = Path::new(&worktree_path);
+    if let Some(parent) = worktree_dir.parent() {
+        // Try to remove the parent dir (will only succeed if empty)
+        let _ = std::fs::remove_dir(parent);
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // Module Initialization
 // ============================================================================
 

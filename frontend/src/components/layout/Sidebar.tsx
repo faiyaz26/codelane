@@ -7,6 +7,7 @@ import type { Lane } from '../../types/lane';
 
 interface SidebarProps {
   lane: Lane;
+  effectiveWorkingDir: string;
   activeView: ActivityView;
   width: number;
   collapsed: boolean;
@@ -48,13 +49,13 @@ export function Sidebar(props: SidebarProps) {
           <Switch>
             <Match when={props.activeView === ActivityView.Explorer}>
               <FileExplorer
-                workingDir={props.lane.workingDir}
+                workingDir={props.effectiveWorkingDir}
                 onFileSelect={props.onFileSelect}
               />
             </Match>
             <Match when={props.activeView === ActivityView.Search}>
               <SearchPanel
-                workingDir={props.lane.workingDir}
+                workingDir={props.effectiveWorkingDir}
                 laneId={props.lane.id}
                 onFileOpen={(path, line, match) => {
                   editorStateManager.openFileAtLine(props.lane.id, path, line, match);
@@ -87,8 +88,8 @@ export function Sidebar(props: SidebarProps) {
 // Common sidebar header with collapse button
 function SidebarHeader(props: { title: string; onToggleCollapse: () => void }) {
   return (
-    <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between flex-shrink-0">
-      <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">
+    <div class="panel-header justify-between">
+      <span class="panel-header-title">
         {props.title}
       </span>
       <button
