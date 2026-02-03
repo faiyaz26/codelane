@@ -15,10 +15,6 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
-  // Capture lane data to avoid stale accessor issues
-  const laneId = props.lane.id;
-  const workingDir = props.lane.workingDir;
-
   return (
     <Show
       when={!props.collapsed}
@@ -31,7 +27,7 @@ export function Sidebar(props: SidebarProps) {
         <Switch>
           <Match when={props.activeView === ActivityView.Explorer}>
             <FileExplorer
-              workingDir={workingDir}
+              workingDir={props.lane.workingDir}
               onFileSelect={props.onFileSelect}
               collapsed={props.collapsed}
               onToggleCollapse={props.onToggleCollapse}
@@ -39,10 +35,10 @@ export function Sidebar(props: SidebarProps) {
           </Match>
           <Match when={props.activeView === ActivityView.Search}>
             <SearchPanel
-              workingDir={workingDir}
-              laneId={laneId}
+              workingDir={props.lane.workingDir}
+              laneId={props.lane.id}
               onFileOpen={(path, line, match) => {
-                editorStateManager.openFileAtLine(laneId, path, line, match);
+                editorStateManager.openFileAtLine(props.lane.id, path, line, match);
               }}
             />
           </Match>
