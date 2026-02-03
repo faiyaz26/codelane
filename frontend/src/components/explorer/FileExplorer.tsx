@@ -143,7 +143,6 @@ export function FileExplorer(props: FileExplorerProps) {
     <div class="h-full flex flex-col bg-zed-bg-panel">
       {/* Header */}
       <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
-        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Explorer</span>
         <button
           class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors p-0.5 rounded hover:bg-zed-bg-hover"
           onClick={() => props.onToggleCollapse?.()}
@@ -155,9 +154,10 @@ export function FileExplorer(props: FileExplorerProps) {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
+        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Explorer</span>
       </div>
 
       {/* Tabs */}

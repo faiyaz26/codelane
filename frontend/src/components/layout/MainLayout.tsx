@@ -1,4 +1,4 @@
-import { createSignal, Show, For, createMemo, createEffect } from 'solid-js';
+import { createSignal, Show, For, createMemo, createEffect, Switch, Match, batch } from 'solid-js';
 import { TopBar } from './TopBar';
 import { ActivityBar, ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
@@ -51,10 +51,12 @@ export function MainLayout(props: MainLayoutProps) {
   const setActiveView = (view: ActivityView) => {
     const laneId = props.activeLaneId;
     if (!laneId) return;
-    setLaneActiveViews((prev) => {
-      const newMap = new Map(prev);
-      newMap.set(laneId, view);
-      return newMap;
+    batch(() => {
+      setLaneActiveViews((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(laneId, view);
+        return newMap;
+      });
     });
   };
 
@@ -119,7 +121,7 @@ export function MainLayout(props: MainLayoutProps) {
     return editorStateManager.hasOpenFiles(laneId) || selectedFile() !== undefined;
   });
 
-  // Sidebar resize handler
+  // Sidebar resize handler (sidebar is on the right, so we invert the delta)
   const handleSidebarResizeStart = (e: MouseEvent) => {
     e.preventDefault();
     setIsResizingSidebar(true);
@@ -128,7 +130,7 @@ export function MainLayout(props: MainLayoutProps) {
     const startWidth = sidebarWidth();
 
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startX;
+      const delta = startX - e.clientX; // Inverted for right-side sidebar
       const newWidth = Math.max(200, Math.min(500, startWidth + delta));
       setSidebarWidth(newWidth);
     };
@@ -143,18 +145,18 @@ export function MainLayout(props: MainLayoutProps) {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Agent panel resize handler
+  // Agent panel resize handler (agent is on the left now)
   const handleAgentResizeStart = (e: MouseEvent) => {
     e.preventDefault();
     setIsResizingAgent(true);
 
     const startX = e.clientX;
     // Get current width from element if using 50% default
-    const agentPanel = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+    const agentPanel = (e.target as HTMLElement).previousElementSibling as HTMLElement;
     const startWidth = agentPanelWidth() ?? agentPanel?.offsetWidth ?? 400;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = startX - e.clientX;
+      const delta = e.clientX - startX; // Normal direction for left-side panel
       const newWidth = Math.max(300, Math.min(800, startWidth + delta));
       setAgentPanelWidth(newWidth); // User has customized, now use fixed width
     };
@@ -219,100 +221,87 @@ export function MainLayout(props: MainLayoutProps) {
             </div>
           }
         >
-          {/* Collapsed Sidebar Handle */}
-          <Show when={sidebarCollapsed()}>
-            <div class="w-6 flex flex-col bg-zed-bg-panel border-r border-zed-border-subtle">
-              {/* Expand button aligned with Agent Terminal header */}
-              <div class="h-10 flex items-center justify-center">
-                <button
-                  class="p-1 text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
-                  onClick={() => setSidebarCollapsed(false)}
-                  title="Expand explorer"
-                >
-                  <svg
-                    class="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </Show>
-
-          {/* Sidebar (File Explorer) */}
-          <Show when={!sidebarCollapsed()}>
-            <div
-              class="flex-shrink-0 bg-zed-bg-panel border-r border-zed-border-subtle overflow-hidden"
-              style={{ width: `${sidebarWidth()}px` }}
-            >
-              <Show when={activeView() === ActivityView.Explorer && activeLane()}>
-                {(lane) => (
-                  <Show when={lane()}>
-                    {(laneData) => (
-                      <FileExplorer
-                        workingDir={laneData().workingDir}
-                        onFileSelect={setSelectedFile}
-                        collapsed={sidebarCollapsed()}
-                        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                      />
-                    )}
-                  </Show>
-                )}
-              </Show>
-              <Show when={activeView() === ActivityView.Search && activeLane()}>
-                {(lane) => (
-                  <Show when={lane()}>
-                    {(laneData) => (
-                      <SearchPanel
-                        workingDir={laneData().workingDir}
-                        laneId={laneData().id}
-                        onFileOpen={(path, line, match) => {
-                          editorStateManager.openFileAtLine(laneData().id, path, line, match);
-                        }}
-                      />
-                    )}
-                  </Show>
-                )}
-              </Show>
-              <Show when={activeView() === ActivityView.Git}>
-                <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                  </svg>
-                  Source Control coming soon
-                </div>
-              </Show>
-              <Show when={activeView() === ActivityView.Extensions}>
-                <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                  <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-                  </svg>
-                  Extensions coming soon
-                </div>
-              </Show>
-            </div>
-
-            {/* Sidebar Resize Handle */}
-            <div
-              class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
-                isResizingSidebar() ? 'bg-zed-accent-blue' : ''
-              }`}
-              onMouseDown={handleSidebarResizeStart}
-            />
-          </Show>
-
-          {/* Main Content Area (Editor + Agent on top, Bottom Panel below) */}
+          {/* Main Content Area (Agent on left, Editor in center, File Explorer on right) */}
           <div class="flex-1 flex flex-col overflow-hidden min-w-0">
-            {/* Top Row: Editor and Agent side by side */}
+            {/* Top Row: Agent, Editor, and File Explorer side by side */}
             <div class="flex-1 flex overflow-hidden">
+              {/* Agent Terminal Panel - On the left, full width when no file */}
+              <div
+                class={`flex flex-col overflow-hidden ${
+                  showEditor()
+                    ? agentPanelWidth() === null
+                      ? 'flex-1'  // 50% split
+                      : 'flex-shrink-0'  // custom width
+                    : 'flex-1'  // no file - full width
+                }`}
+                style={{
+                  width: showEditor() && agentPanelWidth() !== null ? `${agentPanelWidth()}px` : 'auto'
+                }}
+              >
+                {/* Agent Terminal Header */}
+                <div class="h-10 border-b border-zed-border-subtle bg-zed-bg-panel px-4 flex items-center justify-between flex-shrink-0">
+                  <h3 class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
+                  <div class="flex items-center gap-2">
+                    <ProcessMonitor laneId={props.activeLaneId} />
+                  </div>
+                </div>
+
+                {/* Agent Terminal Content */}
+                <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
+                  <For each={Array.from(props.initializedLanes)}>
+                    {(laneId) => {
+                      const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+                      const isActive = createMemo(() => props.activeLaneId === laneId);
+
+                      return (
+                        <Show when={lane()}>
+                          {(laneData) => {
+                            // Capture values at render time to avoid stale accessors
+                            const id = laneData().id;
+                            const workingDir = laneData().workingDir;
+
+                            return (
+                              <div
+                                class="absolute inset-0 transition-opacity duration-150"
+                                style={{
+                                  opacity: isActive() ? '1' : '0',
+                                  'pointer-events': isActive() ? 'auto' : 'none',
+                                  'z-index': isActive() ? '1' : '0',
+                                }}
+                              >
+                                <TerminalView
+                                  laneId={id}
+                                  cwd={workingDir}
+                                  onTerminalReady={(terminalId) => {
+                                    props.onTerminalReady?.(id, terminalId);
+                                  }}
+                                  onTerminalExit={() => {
+                                    props.onTerminalExit?.(id);
+                                  }}
+                                  onAgentFailed={props.onAgentFailed}
+                                />
+                              </div>
+                            );
+                          }}
+                        </Show>
+                      );
+                    }}
+                  </For>
+                </div>
+              </div>
+
               {/* Editor Area - Only show when lane has open files */}
               <Show when={showEditor() && props.activeLaneId}>
+                {/* Agent Panel Resize Handle - Between Agent and Editor */}
                 <div
-                  class="flex flex-col overflow-hidden min-w-0"
-                  style={{ flex: agentPanelWidth() === null ? '1' : '1' }}
+                  class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
+                    isResizingAgent() ? 'bg-zed-accent-blue' : ''
+                  }`}
+                  onMouseDown={handleAgentResizeStart}
+                />
+
+                <div
+                  class="flex flex-col overflow-hidden min-w-0 flex-1"
                 >
                   <EditorPanel
                     laneId={props.activeLaneId!}
@@ -321,88 +310,113 @@ export function MainLayout(props: MainLayoutProps) {
                     onAllFilesClosed={() => setSelectedFile(undefined)}
                   />
                 </div>
+              </Show>
 
-                {/* Agent Panel Resize Handle - Only show when editor is visible */}
+              {/* Sidebar Resize Handle - Between Editor and File Explorer */}
+              <Show when={!sidebarCollapsed()}>
                 <div
                   class={`w-1 cursor-col-resize hover:bg-zed-accent-blue/50 transition-colors ${
-                    isResizingAgent() ? 'bg-zed-accent-blue' : ''
+                    isResizingSidebar() ? 'bg-zed-accent-blue' : ''
                   }`}
-                  onMouseDown={handleAgentResizeStart}
+                  onMouseDown={handleSidebarResizeStart}
                 />
               </Show>
 
-              {/* Agent Terminal Panel - Full width when no file, 50% or custom width when file selected */}
-              <div
-                class={`flex flex-col overflow-hidden ${
-                  showEditor()
-                    ? agentPanelWidth() === null
-                      ? 'flex-1 border-l border-zed-border-subtle'  // 50% split
-                      : 'flex-shrink-0 border-l border-zed-border-subtle'  // custom width
-                    : 'flex-1'  // no file - full width
-                }`}
-                style={{
-                  width: showEditor() && agentPanelWidth() !== null ? `${agentPanelWidth()}px` : 'auto'
-                }}
-              >
-            {/* Agent Terminal Header */}
-            <div class="h-10 border-b border-zed-border-subtle bg-zed-bg-panel px-4 flex items-center justify-between flex-shrink-0">
-              <h3 class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Agent Terminal</h3>
-              <div class="flex items-center gap-2">
-                <ProcessMonitor laneId={props.activeLaneId} />
-              </div>
-            </div>
+              {/* Sidebar (File Explorer) - On the right */}
+              <Show when={!sidebarCollapsed()}>
+                <div
+                  class="flex-shrink-0 bg-zed-bg-panel border-l border-zed-border-subtle overflow-hidden"
+                  style={{ width: `${sidebarWidth()}px` }}
+                >
+                  <Show when={activeLane()}>
+                    {(lane) => {
+                      // Capture lane data to avoid stale accessor issues
+                      const laneId = lane().id;
+                      const workingDir = lane().workingDir;
 
-            {/* Agent Terminal Content */}
-            <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
-              <For each={Array.from(props.initializedLanes)}>
-                {(laneId) => {
-                  const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
-                  const isActive = createMemo(() => props.activeLaneId === laneId);
+                      return (
+                        <Switch>
+                          <Match when={activeView() === ActivityView.Explorer}>
+                            <FileExplorer
+                              workingDir={workingDir}
+                              onFileSelect={setSelectedFile}
+                              collapsed={sidebarCollapsed()}
+                              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                            />
+                          </Match>
+                          <Match when={activeView() === ActivityView.Search}>
+                            <SearchPanel
+                              workingDir={workingDir}
+                              laneId={laneId}
+                              onFileOpen={(path, line, match) => {
+                                editorStateManager.openFileAtLine(laneId, path, line, match);
+                              }}
+                            />
+                          </Match>
+                          <Match when={activeView() === ActivityView.Git}>
+                            <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                              <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                              </svg>
+                              Source Control coming soon
+                            </div>
+                          </Match>
+                          <Match when={activeView() === ActivityView.Extensions}>
+                            <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                              <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                              </svg>
+                              Extensions coming soon
+                            </div>
+                          </Match>
+                        </Switch>
+                      );
+                    }}
+                  </Show>
+                </div>
+              </Show>
 
-                  return (
-                    <Show when={lane()}>
-                      {(laneData) => (
-                        <div
-                          class="absolute inset-0 transition-opacity duration-150"
-                          style={{
-                            opacity: isActive() ? '1' : '0',
-                            'pointer-events': isActive() ? 'auto' : 'none',
-                            'z-index': isActive() ? '1' : '0',
-                          }}
-                        >
-                          <TerminalView
-                            laneId={laneData().id}
-                            cwd={laneData().workingDir}
-                            onTerminalReady={(terminalId) => {
-                              props.onTerminalReady?.(laneData().id, terminalId);
-                            }}
-                            onTerminalExit={() => {
-                              props.onTerminalExit?.(laneData().id);
-                            }}
-                            onAgentFailed={props.onAgentFailed}
-                          />
-                        </div>
-                      )}
-                    </Show>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
+              {/* Collapsed Sidebar Handle - On the right */}
+              <Show when={sidebarCollapsed()}>
+                <div class="w-6 flex flex-col bg-zed-bg-panel border-l border-zed-border-subtle">
+                  {/* Expand button aligned with header */}
+                  <div class="h-10 flex items-center justify-center">
+                    <button
+                      class="p-1 text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
+                      onClick={() => setSidebarCollapsed(false)}
+                      title="Expand explorer"
+                    >
+                      <svg
+                        class="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </Show>
             </div>
 
             {/* Bottom Panel (Terminal Tabs) - Spans full width below Editor + Agent */}
             <For each={Array.from(props.initializedLanes)}>
               {(laneId) => {
-                const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+                const lane = createMemo(() => {
+                  if (laneId !== props.activeLaneId) return undefined;
+                  return props.lanes.find((l) => l.id === laneId);
+                });
 
                 return (
                   <Show when={lane()}>
-                    {(laneData) => (
-                      <Show when={laneData().id === props.activeLaneId}>
-                        <TabPanel laneId={laneData().id} workingDir={laneData().workingDir} />
-                      </Show>
-                    )}
+                    {(laneData) => {
+                      // Capture values at render time to avoid stale accessors
+                      const id = laneData().id;
+                      const workingDir = laneData().workingDir;
+
+                      return <TabPanel laneId={id} workingDir={workingDir} />;
+                    }}
                   </Show>
                 );
               }}
