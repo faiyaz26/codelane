@@ -5,6 +5,12 @@ import { batch } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
 import type { OpenFile } from '../components/editor/types';
 import { detectLanguage, isMarkdownFile } from '../components/editor/types';
+import { fileWatchService, type FileWatchEvent } from './FileWatchService';
+
+interface FileStats {
+  modified: number | null;
+  size: number;
+}
 
 // Lane state structure
 interface LaneState {
@@ -12,6 +18,8 @@ interface LaneState {
   activeFileId: string | null;
   renderedFiles: Set<string>;
   saveCallbacks: Record<string, () => Promise<void>>;
+  // File watch unsubscribe functions by file path
+  fileWatchers: Record<string, () => void>;
 }
 
 // Store structure
@@ -89,6 +97,7 @@ class EditorStateManager {
             activeFileId: null,
             renderedFiles: new Set(),
             saveCallbacks: {},
+            fileWatchers: {},
           };
         })
       );
@@ -277,13 +286,25 @@ class EditorStateManager {
     this.updateFile(laneId, fileId, { isLoading: true });
 
     try {
-      const content = await invoke<string>('read_file', { path });
+      // Load content and get file stats in parallel
+      const [content, stats] = await Promise.all([
+        invoke<string>('read_file', { path }),
+        invoke<FileStats>('get_file_stats', { path }).catch(() => null),
+      ]);
 
       // Check if file still exists (might have been closed while loading)
       if (this.store.lanes[laneId]?.openFiles[fileId]) {
         this.batchUpdate(() => {
-          this.updateFile(laneId, fileId, { content, isLoading: false });
+          this.updateFile(laneId, fileId, {
+            content,
+            isLoading: false,
+            lastKnownModifiedTime: stats?.modified ?? undefined,
+            hasExternalChanges: false,
+          });
         });
+
+        // Set up file watching for this file
+        this.watchFile(laneId, fileId, path);
       }
     } catch (err) {
       console.error('Failed to read file:', err);
@@ -297,6 +318,145 @@ class EditorStateManager {
           });
         });
       }
+    }
+  }
+
+  // Set up file watching for an open file
+  private async watchFile(laneId: string, fileId: string, path: string): Promise<void> {
+    const lane = this.store.lanes[laneId];
+    if (!lane) return;
+
+    // Don't watch if already watching this path
+    if (lane.fileWatchers[path]) return;
+
+    // Get parent directory to watch (watching individual files doesn't work well on all platforms)
+    const parentDir = path.substring(0, path.lastIndexOf('/'));
+    if (!parentDir) return;
+
+    try {
+      const unsubscribe = await fileWatchService.watchDirectory(
+        parentDir,
+        (event: FileWatchEvent) => {
+          // Only care about modifications to this specific file
+          if (event.path === path && event.kind === 'modify') {
+            this.handleExternalFileChange(laneId, path);
+          }
+        },
+        false // non-recursive
+      );
+
+      // Store unsubscribe function - use the original path as key
+      this.setStore(
+        produce((store) => {
+          if (store.lanes[laneId]) {
+            store.lanes[laneId].fileWatchers[path] = unsubscribe;
+          }
+        })
+      );
+    } catch (err) {
+      console.error('Failed to watch file:', path, err);
+    }
+  }
+
+  // Debounce map for external change handling
+  private externalChangeDebounce = new Map<string, ReturnType<typeof setTimeout>>();
+
+  // Handle external file change notification
+  private async handleExternalFileChange(laneId: string, path: string): Promise<void> {
+    // Debounce: ignore rapid successive changes
+    const debounceKey = `${laneId}:${path}`;
+    const existing = this.externalChangeDebounce.get(debounceKey);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    // Debounce for 200ms
+    const timeout = setTimeout(async () => {
+      this.externalChangeDebounce.delete(debounceKey);
+      await this.processExternalFileChange(laneId, path);
+    }, 200);
+
+    this.externalChangeDebounce.set(debounceKey, timeout);
+  }
+
+  // Actually process the external file change
+  private async processExternalFileChange(laneId: string, path: string): Promise<void> {
+    const fileEntry = this.store.pathIndex[path];
+    if (!fileEntry || fileEntry.laneId !== laneId) return;
+
+    const file = this.store.lanes[laneId]?.openFiles[fileEntry.fileId];
+    if (!file) return;
+
+    try {
+      const stats = await invoke<FileStats>('get_file_stats', { path });
+
+      // Check if modification time has changed
+      if (stats.modified && file.lastKnownModifiedTime !== undefined) {
+        if (stats.modified > file.lastKnownModifiedTime) {
+          if (file.isModified) {
+            // User has unsaved changes - show conflict modal when they view the file
+            this.updateFile(laneId, fileEntry.fileId, { hasExternalChanges: true });
+          } else {
+            // No local changes - auto-reload the file
+            await this.reloadFile(laneId, fileEntry.fileId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check file stats:', err);
+    }
+  }
+
+  // Unwatch a file when it's closed
+  private unwatchFile(laneId: string, path: string): void {
+    const lane = this.store.lanes[laneId];
+    if (!lane) return;
+
+    const unsubscribe = lane.fileWatchers[path];
+    if (unsubscribe) {
+      unsubscribe();
+      this.setStore(
+        produce((store) => {
+          if (store.lanes[laneId]) {
+            delete store.lanes[laneId].fileWatchers[path];
+          }
+        })
+      );
+    }
+  }
+
+  // Clear external change flag (user chose to keep local changes)
+  clearExternalChangeFlag(laneId: string, fileId: string): void {
+    const lane = this.store.lanes[laneId];
+    if (!lane?.openFiles[fileId]) return;
+
+    this.updateFile(laneId, fileId, { hasExternalChanges: false });
+  }
+
+  // Reload file from disk (user chose to reload)
+  async reloadFile(laneId: string, fileId: string): Promise<void> {
+    const lane = this.store.lanes[laneId];
+    if (!lane) return;
+
+    const file = lane.openFiles[fileId];
+    if (!file) return;
+
+    try {
+      const [content, stats] = await Promise.all([
+        invoke<string>('read_file', { path: file.path }),
+        invoke<FileStats>('get_file_stats', { path: file.path }).catch(() => null),
+      ]);
+
+      this.batchUpdate(() => {
+        this.updateFile(laneId, fileId, {
+          content,
+          isModified: false,
+          hasExternalChanges: false,
+          lastKnownModifiedTime: stats?.modified ?? undefined,
+        });
+      });
+    } catch (err) {
+      console.error('Failed to reload file:', err);
     }
   }
 
@@ -326,6 +486,9 @@ class EditorStateManager {
 
     const file = lane.openFiles[fileId];
     if (!file) return false;
+
+    // Stop watching this file
+    this.unwatchFile(laneId, file.path);
 
     this.batchUpdate(() => {
       this.setStore(
@@ -364,12 +527,29 @@ class EditorStateManager {
   }
 
   // Update file content (after save)
-  updateFileContent(laneId: string, fileId: string, content: string): void {
+  async updateFileContent(laneId: string, fileId: string, content: string): Promise<void> {
     const lane = this.store.lanes[laneId];
     if (!lane?.openFiles[fileId]) return;
 
+    const file = lane.openFiles[fileId];
+
+    // Get updated modification time after save
+    let lastKnownModifiedTime: number | undefined;
+    try {
+      const stats = await invoke<FileStats>('get_file_stats', { path: file.path });
+      lastKnownModifiedTime = stats?.modified ?? undefined;
+    } catch {
+      // Ignore error, keep old time
+      lastKnownModifiedTime = file.lastKnownModifiedTime;
+    }
+
     this.batchUpdate(() => {
-      this.updateFile(laneId, fileId, { content, isModified: false });
+      this.updateFile(laneId, fileId, {
+        content,
+        isModified: false,
+        hasExternalChanges: false,
+        lastKnownModifiedTime,
+      });
     });
   }
 
@@ -413,6 +593,14 @@ class EditorStateManager {
   disposeLane(laneId: string): void {
     const lane = this.store.lanes[laneId];
     if (!lane) return;
+
+    // Clean up all file watchers
+    for (const path in lane.fileWatchers) {
+      const unsubscribe = lane.fileWatchers[path];
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    }
 
     this.batchUpdate(() => {
       this.setStore(

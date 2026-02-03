@@ -4,7 +4,13 @@
 //! While Tauri provides built-in FS plugins, these commands offer
 //! additional functionality specific to Codelane's needs.
 
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::mpsc;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter};
 
 /// File entry information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,12 +27,33 @@ pub struct FileEntry {
 /// File watch event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileWatchEvent {
+    pub watch_id: String,
     pub path: String,
     pub kind: String, // "create", "modify", "delete", "rename"
 }
 
+/// File stats for external change detection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileStats {
+    pub modified: Option<u64>,
+    pub size: u64,
+}
+
 /// Watch handle identifier
 pub type WatchId = String;
+
+/// Managed state for file watchers
+pub struct FileWatchState {
+    watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+}
+
+impl FileWatchState {
+    pub fn new() -> Self {
+        Self {
+            watchers: Mutex::new(HashMap::new()),
+        }
+    }
+}
 
 /// Read a file's contents
 #[tauri::command]
@@ -121,17 +148,94 @@ pub async fn list_directory(
     Ok(entries)
 }
 
+/// Get file stats (modification time and size)
+#[tauri::command]
+pub async fn get_file_stats(path: String) -> Result<FileStats, String> {
+    let metadata = tokio::fs::metadata(&path)
+        .await
+        .map_err(|e| format!("Failed to get file stats: {}", e))?;
+
+    Ok(FileStats {
+        modified: metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs()),
+        size: metadata.len(),
+    })
+}
+
 /// Start watching a path for changes
 #[tauri::command]
 pub async fn watch_path(
+    app: AppHandle,
+    state: tauri::State<'_, FileWatchState>,
     path: String,
-    _recursive: Option<bool>,
+    recursive: Option<bool>,
 ) -> Result<WatchId, String> {
     tracing::info!("Starting file watch on: {}", path);
 
-    // TODO: Implement file watching with notify crate
-    // Events should be emitted to the frontend via Tauri events
+    // Verify path exists
+    if !Path::new(&path).exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
     let watch_id = uuid::Uuid::new_v4().to_string();
+    let watch_id_for_thread = watch_id.clone();
+    let watch_id_for_storage = watch_id.clone();
+
+    let (tx, rx) = mpsc::channel();
+
+    let mut watcher = RecommendedWatcher::new(tx, Config::default())
+        .map_err(|e| format!("Failed to create watcher: {}", e))?;
+
+    let mode = if recursive.unwrap_or(true) {
+        RecursiveMode::Recursive
+    } else {
+        RecursiveMode::NonRecursive
+    };
+
+    watcher
+        .watch(Path::new(&path), mode)
+        .map_err(|e| format!("Failed to start watching: {}", e))?;
+
+    // Store watcher
+    {
+        let mut watchers = state.watchers.lock().map_err(|e| e.to_string())?;
+        watchers.insert(watch_id_for_storage, watcher);
+    }
+
+    // Spawn thread to handle events
+    std::thread::spawn(move || {
+        while let Ok(result) = rx.recv() {
+            match result {
+                Ok(event) => {
+                    let kind = match &event.kind {
+                        notify::EventKind::Create(_) => "create",
+                        notify::EventKind::Modify(m) => {
+                            match m {
+                                notify::event::ModifyKind::Name(_) => "rename",
+                                _ => "modify",
+                            }
+                        }
+                        notify::EventKind::Remove(_) => "delete",
+                        _ => continue,
+                    };
+
+                    for path in event.paths {
+                        let watch_event = FileWatchEvent {
+                            watch_id: watch_id_for_thread.clone(),
+                            path: path.to_string_lossy().to_string(),
+                            kind: kind.to_string(),
+                        };
+
+                        let _ = app.emit("file-watch-event", &watch_event);
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    });
 
     Ok(watch_id)
 }
@@ -139,10 +243,13 @@ pub async fn watch_path(
 /// Stop watching a path
 #[tauri::command]
 pub async fn unwatch_path(
+    state: tauri::State<'_, FileWatchState>,
     watch_id: WatchId,
 ) -> Result<(), String> {
     tracing::info!("Stopping file watch: {}", watch_id);
 
-    // TODO: Implement watch cleanup
+    let mut watchers = state.watchers.lock().map_err(|e| e.to_string())?;
+    watchers.remove(&watch_id);
+
     Ok(())
 }

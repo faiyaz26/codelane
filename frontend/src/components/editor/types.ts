@@ -16,6 +16,9 @@ export interface OpenFile {
     text: string;
   };
   forceSourceMode?: number; // For markdown files: timestamp to force source view (e.g., when opened from search)
+  // External change tracking
+  lastKnownModifiedTime?: number; // Unix timestamp when file was last loaded/saved
+  hasExternalChanges?: boolean; // Flag set when external modification detected
 }
 
 // Check if a file is a markdown file

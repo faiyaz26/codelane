@@ -5,6 +5,7 @@ import { createMemo, createEffect, createSignal, on, For, Show } from 'solid-js'
 import { EditorTabs } from './EditorTabs';
 import { FileViewer } from './FileViewer';
 import { UnsavedChangesModal, type UnsavedChangesResult } from './UnsavedChangesModal';
+import { ExternalChangeModal, type ExternalChangeResult } from './ExternalChangeModal';
 import type { EditorTab } from './types';
 import { editorStateManager } from '../../services/EditorStateManager';
 
@@ -24,6 +25,13 @@ export function EditorPanel(props: EditorPanelProps) {
   const [pendingCloseFile, setPendingCloseFile] = createSignal<{ id: string; name: string } | null>(
     null
   );
+
+  // Modal state for external change notification
+  const [externalChangeFile, setExternalChangeFile] = createSignal<{
+    id: string;
+    name: string;
+    hasLocalChanges: boolean;
+  } | null>(null);
 
   // Derive tabs from open files
   const tabs = createMemo((): EditorTab[] => {
@@ -118,6 +126,49 @@ export function EditorPanel(props: EditorPanelProps) {
     editorStateManager.setActiveFile(props.laneId, tabId);
   };
 
+  // Check for external changes when active file changes
+  createEffect(
+    on(activeFileId, (fileId) => {
+      if (!fileId) return;
+
+      const files = editorStateManager.getOpenFiles(props.laneId);
+      const file = files[fileId];
+
+      if (file?.hasExternalChanges) {
+        // Show external change modal
+        setExternalChangeFile({
+          id: fileId,
+          name: file.name,
+          hasLocalChanges: file.isModified,
+        });
+      }
+    })
+  );
+
+  // Handle external change modal result
+  const handleExternalChangeResult = async (result: ExternalChangeResult) => {
+    const pending = externalChangeFile();
+    if (!pending) return;
+
+    setExternalChangeFile(null);
+
+    if (result === 'cancel') {
+      return;
+    }
+
+    if (result === 'reload') {
+      // Reload file from disk
+      await editorStateManager.reloadFile(props.laneId, pending.id);
+    } else if (result === 'keep') {
+      // Keep local changes, clear the external change flag (don't save yet)
+      editorStateManager.clearExternalChangeFlag(props.laneId, pending.id);
+    } else if (result === 'overwrite') {
+      // Save local changes to disk, overwriting external changes
+      await editorStateManager.saveFile(props.laneId, pending.id);
+      editorStateManager.clearExternalChangeFlag(props.laneId, pending.id);
+    }
+  };
+
   return (
     <div class="h-full flex flex-col bg-zed-bg-surface">
       {/* Unsaved changes confirmation modal */}
@@ -125,6 +176,14 @@ export function EditorPanel(props: EditorPanelProps) {
         isOpen={pendingCloseFile() !== null}
         fileName={pendingCloseFile()?.name || ''}
         onResult={handleUnsavedChangesResult}
+      />
+
+      {/* External change notification modal */}
+      <ExternalChangeModal
+        isOpen={externalChangeFile() !== null}
+        fileName={externalChangeFile()?.name || ''}
+        hasLocalChanges={externalChangeFile()?.hasLocalChanges || false}
+        onResult={handleExternalChangeResult}
       />
 
       {/* File tabs */}
@@ -169,16 +228,15 @@ export function EditorPanel(props: EditorPanelProps) {
               // Look up file reactively - getFile returns undefined if file was closed
               const file = () => getFile(fileId);
               return (
-                <Show when={file()} keyed>
-                  {(f) => (
-                    <div
-                      class="absolute inset-0"
-                      style={{ display: fileId === activeFileId() ? 'block' : 'none' }}
-                      data-file-id={fileId}
-                    >
-                      <FileViewer file={f} laneId={props.laneId} />
-                    </div>
-                  )}
+                <Show when={file()}>
+                  <div
+                    class="absolute inset-0"
+                    style={{ display: fileId === activeFileId() ? 'block' : 'none' }}
+                    data-file-id={fileId}
+                  >
+                    {/* Access file() reactively so content updates are reflected */}
+                    <FileViewer file={file()!} laneId={props.laneId} />
+                  </div>
                 </Show>
               );
             }}

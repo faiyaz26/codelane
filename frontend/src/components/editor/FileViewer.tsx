@@ -1064,12 +1064,10 @@ export function FileViewer(props: FileViewerProps) {
       </Show>
 
       {/* Markdown file - use dedicated editor */}
-      {/* keyed=true ensures component is recreated if file identity changes */}
       <Show
-        when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name) ? props.file : undefined}
-        keyed
+        when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name)}
       >
-        {(file) => <MarkdownEditor file={file} laneId={props.laneId} />}
+        <MarkdownEditor file={props.file!} laneId={props.laneId} />
       </Show>
 
       {/* Non-markdown file content */}

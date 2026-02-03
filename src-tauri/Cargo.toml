@@ -47,6 +47,9 @@ sysinfo = "0.32"
 ignore = "0.4"
 regex = "1"
 
+# File watching
+notify = "6.1"
+
 # Internal crates (for Tauri commands)
 codelane-terminal = { path = "../crates/codelane-terminal" }
 codelane-git = { path = "../crates/codelane-git" }

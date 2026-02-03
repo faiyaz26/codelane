@@ -1,5 +1,6 @@
-import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
+import { createSignal, createEffect, For, Show, onCleanup, onMount } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
+import { fileWatchService, type FileWatchEvent } from '../../services/FileWatchService';
 
 interface FileEntry {
   name: string;
@@ -32,10 +33,132 @@ export function FileExplorer(props: FileExplorerProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null);
 
+  // Track expanded directories for targeted refresh
+  const [expandedDirs, setExpandedDirs] = createSignal<Set<string>>(new Set());
+
+  // Debounce timer for file watch events
+  let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+  const pendingRefreshDirs = new Set<string>();
+
   // Load root directory
   createEffect(() => {
     loadDirectory(props.workingDir);
   });
+
+  // Subscribe to file watch events
+  onMount(async () => {
+    const unsubscribe = await fileWatchService.watchDirectory(
+      props.workingDir,
+      (event: FileWatchEvent) => {
+        // Get parent directory of the changed file
+        const parentDir = getParentPath(event.path);
+
+        // Only refresh if the parent is expanded or is the root
+        if (parentDir === props.workingDir || expandedDirs().has(parentDir)) {
+          pendingRefreshDirs.add(parentDir);
+
+          // Debounce: wait 100ms before refreshing to batch rapid changes
+          if (refreshTimeout) {
+            clearTimeout(refreshTimeout);
+          }
+          refreshTimeout = setTimeout(() => {
+            const dirsToRefresh = [...pendingRefreshDirs];
+            pendingRefreshDirs.clear();
+
+            for (const dir of dirsToRefresh) {
+              refreshDirectory(dir);
+            }
+          }, 100);
+        }
+      }
+    );
+
+    onCleanup(() => {
+      unsubscribe();
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+    });
+  });
+
+  // Get parent path from a file path
+  const getParentPath = (filePath: string): string => {
+    const parts = filePath.split('/');
+    parts.pop();
+    return parts.join('/') || '/';
+  };
+
+  // Refresh a specific directory (or root if it's the working dir)
+  const refreshDirectory = async (dirPath: string) => {
+    try {
+      const entries = await invoke<FileEntry[]>('list_directory', { path: dirPath });
+
+      const sorted = entries.sort((a, b) => {
+        if (a.is_dir && !b.is_dir) return -1;
+        if (!a.is_dir && b.is_dir) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      const filtered = sorted.filter((e) => !e.name.startsWith('.'));
+
+      const newNodes = filtered.map((entry) => ({
+        entry,
+        children: [],
+        isExpanded: false,
+        isLoading: false,
+      }));
+
+      if (dirPath === props.workingDir) {
+        // Refresh root - preserve expanded state where possible
+        setRootNodes((oldNodes) => {
+          // Preserve expanded state for directories that still exist
+          const expandedPaths = new Set(
+            oldNodes.filter(n => n.isExpanded).map(n => n.entry.path)
+          );
+
+          return newNodes.map(node => ({
+            ...node,
+            isExpanded: expandedPaths.has(node.entry.path),
+            // Preserve children if expanded (will be refreshed separately if needed)
+            children: expandedPaths.has(node.entry.path)
+              ? (oldNodes.find(n => n.entry.path === node.entry.path)?.children || [])
+              : [],
+          }));
+        });
+      } else {
+        // Refresh subdirectory
+        updateNodeByPath(dirPath, { children: newNodes });
+      }
+    } catch (err) {
+      console.error('Failed to refresh directory:', dirPath, err);
+    }
+  };
+
+  // Update a node by its file path
+  const updateNodeByPath = (targetPath: string, updates: Partial<TreeNode>) => {
+    setRootNodes((nodes) => {
+      return updateNodeRecursive(nodes, targetPath, updates);
+    });
+  };
+
+  const updateNodeRecursive = (
+    nodes: TreeNode[],
+    targetPath: string,
+    updates: Partial<TreeNode>
+  ): TreeNode[] => {
+    return nodes.map((node) => {
+      if (node.entry.path === targetPath) {
+        return { ...node, ...updates };
+      }
+      if (node.children.length > 0 && targetPath.startsWith(node.entry.path + '/')) {
+        return {
+          ...node,
+          children: updateNodeRecursive(node.children, targetPath, updates),
+        };
+      }
+      return node;
+    });
+  };
 
   const loadDirectory = async (path: string) => {
     setIsLoading(true);
@@ -80,9 +203,20 @@ export function FileExplorer(props: FileExplorerProps) {
 
     // Toggle directory
     if (node.isExpanded) {
-      // Collapse
+      // Collapse - remove from expanded set
+      setExpandedDirs((prev) => {
+        const next = new Set(prev);
+        next.delete(node.entry.path);
+        return next;
+      });
       updateNode(path, { isExpanded: false });
     } else {
+      // Expand - add to expanded set
+      setExpandedDirs((prev) => {
+        const next = new Set(prev);
+        next.add(node.entry.path);
+        return next;
+      });
       // Expand and load children
       updateNode(path, { isLoading: true, isExpanded: true });
 
@@ -143,6 +277,7 @@ export function FileExplorer(props: FileExplorerProps) {
     <div class="h-full flex flex-col bg-zed-bg-panel">
       {/* Header */}
       <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
+        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Explorer</span>
         <button
           class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors p-0.5 rounded hover:bg-zed-bg-hover"
           onClick={() => props.onToggleCollapse?.()}
@@ -157,7 +292,6 @@ export function FileExplorer(props: FileExplorerProps) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
-        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">Explorer</span>
       </div>
 
       {/* Tabs */}

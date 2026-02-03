@@ -46,6 +46,24 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   // Source mode state
   const [sourceContent, setSourceContent] = createSignal(props.file.content || '');
 
+  // Track last known content to detect external changes
+  let lastKnownContent = props.file.content;
+
+  // Sync content when file is reloaded externally (not modified by user)
+  createEffect(() => {
+    const newContent = props.file.content;
+    // Only update if content changed externally (file reload)
+    // and the file is not marked as modified by user
+    if (newContent !== lastKnownContent && !props.file.isModified) {
+      lastKnownContent = newContent;
+      setSourceContent(newContent || '');
+      // Also update TipTap editor if in preview mode
+      if (tipTapEditor && mode() === 'preview') {
+        tipTapEditor.setContent(newContent || '');
+      }
+    }
+  });
+
   // Floating toolbar state
   const [showToolbar, setShowToolbar] = createSignal(false);
   const [toolbarPosition, setToolbarPosition] = createSignal({ x: 0, y: 0 });

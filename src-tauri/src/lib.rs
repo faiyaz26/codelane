@@ -40,6 +40,8 @@ pub fn run() {
         .manage(terminal::TerminalState::new())
         // Manage search state
         .manage(search::SearchState::new())
+        // Manage file watch state
+        .manage(fs::FileWatchState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Database commands
@@ -74,6 +76,7 @@ pub fn run() {
             fs::list_directory,
             fs::watch_path,
             fs::unwatch_path,
+            fs::get_file_stats,
             // Terminal commands (using portable-pty)
             terminal::create_terminal,
             terminal::write_terminal,
