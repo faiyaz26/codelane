@@ -205,7 +205,6 @@ export function MainLayout(props: MainLayoutProps) {
 
       <StatusBar
         activeLane={activeLane()}
-        totalLanes={props.lanes.length}
         fileInfo={fileInfo()}
       />
     </div>

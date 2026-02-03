@@ -1,4 +1,5 @@
-import { Show } from 'solid-js';
+import { Show, createSignal, onMount, onCleanup } from 'solid-js';
+import { invoke } from '@tauri-apps/api/core';
 import type { Lane } from '../../types/lane';
 
 // Only the data StatusBar needs - keeps component decoupled from editor internals
@@ -6,13 +7,39 @@ interface FileInfo {
   language: string; // Already formatted display name
 }
 
+interface AppResourceUsage {
+  cpuPercent: number;
+  memoryMb: number;
+  memoryPercent: number;
+}
+
 interface StatusBarProps {
   activeLane?: Lane;
-  totalLanes: number;
   fileInfo?: FileInfo | null;
 }
 
 export function StatusBar(props: StatusBarProps) {
+  const [resourceUsage, setResourceUsage] = createSignal<AppResourceUsage | null>(null);
+
+  // Poll for resource usage every 2 seconds
+  onMount(() => {
+    const fetchUsage = async () => {
+      try {
+        const usage = await invoke<AppResourceUsage>('get_app_resource_usage');
+        setResourceUsage(usage);
+      } catch (err) {
+        console.error('Failed to get app resource usage:', err);
+      }
+    };
+
+    // Initial fetch
+    fetchUsage();
+
+    // Set up interval
+    const interval = setInterval(fetchUsage, 2000);
+
+    onCleanup(() => clearInterval(interval));
+  });
   return (
     <div class="h-6 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs select-none">
       {/* Left Section */}
@@ -94,10 +121,25 @@ export function StatusBar(props: StatusBarProps) {
           </span>
         </Show>
 
-        {/* Lanes Count */}
-        <span class="text-zed-text-tertiary">
-          {props.totalLanes} {props.totalLanes === 1 ? 'lane' : 'lanes'}
-        </span>
+        {/* Resource Usage */}
+        <Show when={resourceUsage()}>
+          <div class="flex items-center gap-2 text-zed-text-tertiary">
+            {/* CPU */}
+            <span class="flex items-center gap-1" title="CPU Usage">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+              <span>{resourceUsage()!.cpuPercent.toFixed(1)}%</span>
+            </span>
+            {/* Memory */}
+            <span class="flex items-center gap-1" title="Memory Usage">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <span>{resourceUsage()!.memoryMb.toFixed(0)} MB</span>
+            </span>
+          </div>
+        </Show>
       </div>
     </div>
   );

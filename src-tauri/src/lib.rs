@@ -61,6 +61,7 @@ pub fn run() {
             // Process monitoring
             process::get_process_stats,
             process::find_process_by_lane,
+            process::get_app_resource_usage,
             // Git commands
             git::git_status,
             git::git_diff,
