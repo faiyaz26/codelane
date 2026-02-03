@@ -7,8 +7,6 @@ import { FileTree } from './FileTree';
 interface FileExplorerProps {
   workingDir: string;
   onFileSelect?: (path: string) => void;
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
 }
 
 export function FileExplorer(props: FileExplorerProps) {
@@ -40,9 +38,6 @@ export function FileExplorer(props: FileExplorerProps) {
 
   return (
     <div class="h-full flex flex-col bg-zed-bg-panel">
-      {/* Header */}
-      <Header onToggleCollapse={props.onToggleCollapse} />
-
       {/* Tabs */}
       <Tabs activeTab={activeTab()} onTabChange={setActiveTab} />
 
@@ -79,25 +74,6 @@ export function FileExplorer(props: FileExplorerProps) {
 }
 
 // Sub-components
-
-function Header(props: { onToggleCollapse?: () => void }) {
-  return (
-    <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
-      <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">
-        Explorer
-      </span>
-      <button
-        class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors p-0.5 rounded hover:bg-zed-bg-hover"
-        onClick={() => props.onToggleCollapse?.()}
-        title="Collapse explorer"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-    </div>
-  );
-}
 
 function Tabs(props: { activeTab: string; onTabChange: (tab: 'files' | 'changes') => void }) {
   const tabClass = (tab: string) =>

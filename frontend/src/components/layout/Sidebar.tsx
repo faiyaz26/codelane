@@ -15,33 +15,52 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  // Get the title for the current view
+  const getViewTitle = () => {
+    switch (props.activeView) {
+      case ActivityView.Explorer:
+        return 'Explorer';
+      case ActivityView.Search:
+        return 'Search';
+      case ActivityView.Git:
+        return 'Source Control';
+      case ActivityView.Extensions:
+        return 'Extensions';
+      default:
+        return 'Explorer';
+    }
+  };
+
   return (
     <Show
       when={!props.collapsed}
       fallback={<CollapsedSidebar onExpand={props.onToggleCollapse} />}
     >
       <div
-        class="flex-shrink-0 bg-zed-bg-panel border-l border-zed-border-subtle overflow-hidden"
+        class="flex-shrink-0 bg-zed-bg-panel border-l border-zed-border-subtle overflow-hidden flex flex-col"
         style={{ width: `${props.width}px` }}
       >
-        <Switch>
-          <Match when={props.activeView === ActivityView.Explorer}>
-            <FileExplorer
-              workingDir={props.lane.workingDir}
-              onFileSelect={props.onFileSelect}
-              collapsed={props.collapsed}
-              onToggleCollapse={props.onToggleCollapse}
-            />
-          </Match>
-          <Match when={props.activeView === ActivityView.Search}>
-            <SearchPanel
-              workingDir={props.lane.workingDir}
-              laneId={props.lane.id}
-              onFileOpen={(path, line, match) => {
-                editorStateManager.openFileAtLine(props.lane.id, path, line, match);
-              }}
-            />
-          </Match>
+        {/* Common Sidebar Header */}
+        <SidebarHeader title={getViewTitle()} onToggleCollapse={props.onToggleCollapse} />
+
+        {/* Content */}
+        <div class="flex-1 overflow-hidden">
+          <Switch>
+            <Match when={props.activeView === ActivityView.Explorer}>
+              <FileExplorer
+                workingDir={props.lane.workingDir}
+                onFileSelect={props.onFileSelect}
+              />
+            </Match>
+            <Match when={props.activeView === ActivityView.Search}>
+              <SearchPanel
+                workingDir={props.lane.workingDir}
+                laneId={props.lane.id}
+                onFileOpen={(path, line, match) => {
+                  editorStateManager.openFileAtLine(props.lane.id, path, line, match);
+                }}
+              />
+            </Match>
           <Match when={props.activeView === ActivityView.Git}>
             <PlaceholderView
               icon={
@@ -59,8 +78,29 @@ export function Sidebar(props: SidebarProps) {
             />
           </Match>
         </Switch>
+        </div>
       </div>
     </Show>
+  );
+}
+
+// Common sidebar header with collapse button
+function SidebarHeader(props: { title: string; onToggleCollapse: () => void }) {
+  return (
+    <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between flex-shrink-0">
+      <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">
+        {props.title}
+      </span>
+      <button
+        class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors p-0.5 rounded hover:bg-zed-bg-hover"
+        onClick={props.onToggleCollapse}
+        title="Collapse sidebar"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
   );
 }
 

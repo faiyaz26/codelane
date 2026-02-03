@@ -187,13 +187,6 @@ export function SearchPanel(props: SearchPanelProps) {
 
   return (
     <div class="h-full flex flex-col bg-zed-bg-panel">
-      {/* Header */}
-      <div class="px-4 py-3 border-b border-zed-border-subtle flex items-center justify-between">
-        <span class="text-xs font-semibold text-zed-text-secondary uppercase tracking-wide">
-          Search
-        </span>
-      </div>
-
       {/* Search Input */}
       <div class="p-3 border-b border-zed-border-subtle">
         <div class="relative">

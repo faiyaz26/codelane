@@ -97,7 +97,7 @@ function ActivityIcon(props: { icon: string; class?: string }) {
 
 export function ActivityBar(props: ActivityBarProps) {
   return (
-    <div class="w-14 bg-zed-bg-panel border-r border-zed-border-subtle flex flex-col">
+    <div class="w-14 bg-zed-bg-panel border-l border-zed-border-subtle flex flex-col">
       {/* Top Activity Icons */}
       <div class="flex-1 flex flex-col items-center pt-2 gap-1">
         <For each={ACTIVITY_ITEMS}>
@@ -124,7 +124,7 @@ export function ActivityBar(props: ActivityBarProps) {
             >
               {/* Active indicator */}
               {props.activeView === item.id && (
-                <div class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-zed-accent-blue rounded-r" />
+                <div class="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-zed-accent-blue rounded-l" />
               )}
               <ActivityIcon icon={item.icon} class="w-6 h-6" />
             </button>

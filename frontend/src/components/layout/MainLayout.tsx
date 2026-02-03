@@ -137,14 +137,6 @@ export function MainLayout(props: MainLayoutProps) {
       />
 
       <div class="flex-1 flex overflow-hidden">
-        <ActivityBar
-          activeView={activeView()}
-          onViewChange={setActiveView}
-          onSettingsOpen={props.onSettingsOpen}
-          sidebarCollapsed={sidebarCollapsed()}
-          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
-        />
-
         <Show when={activeLane()} fallback={<WelcomeScreen onNewLane={props.onNewLane} />}>
           {(lane) => (
             <div class="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -180,7 +172,7 @@ export function MainLayout(props: MainLayoutProps) {
                   <ResizeHandle direction="right" onResize={handleSidebarResize} />
                 </Show>
 
-                {/* Sidebar - Right */}
+                {/* Sidebar */}
                 <Sidebar
                   lane={lane()}
                   activeView={activeView()}
@@ -200,6 +192,15 @@ export function MainLayout(props: MainLayoutProps) {
             </div>
           )}
         </Show>
+
+        {/* Activity Bar - Rightmost */}
+        <ActivityBar
+          activeView={activeView()}
+          onViewChange={setActiveView}
+          onSettingsOpen={props.onSettingsOpen}
+          sidebarCollapsed={sidebarCollapsed()}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
+        />
       </div>
 
       <StatusBar
