@@ -163,6 +163,26 @@ function App() {
     });
   };
 
+  const handleReloadTerminal = (laneId: string) => {
+    console.log(`Reloading terminal for lane ${laneId}`);
+    // Remove lane from initialized set to unmount the terminal
+    setInitializedLanes((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(laneId);
+      return newSet;
+    });
+    // Clear terminal ID
+    setTerminalIds((prev) => {
+      const newMap = new Map(prev);
+      newMap.delete(laneId);
+      return newMap;
+    });
+    // Re-add after a short delay to allow unmount
+    setTimeout(() => {
+      setInitializedLanes((prev) => new Set(prev).add(laneId));
+    }, 100);
+  };
+
   return (
     <ThemeProvider>
       <Show
@@ -196,6 +216,7 @@ function App() {
           onTerminalReady={handleTerminalReady}
           onTerminalExit={handleTerminalExit}
           onAgentFailed={handleAgentFailed}
+          onReloadTerminal={handleReloadTerminal}
         />
       </Show>
 

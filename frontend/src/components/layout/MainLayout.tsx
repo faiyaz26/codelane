@@ -25,6 +25,7 @@ interface MainLayoutProps {
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
+  onReloadTerminal?: (laneId: string) => void;
 }
 
 // Constants for panel sizing
@@ -172,6 +173,7 @@ export function MainLayout(props: MainLayoutProps) {
                   onTerminalReady={props.onTerminalReady}
                   onTerminalExit={props.onTerminalExit}
                   onAgentFailed={props.onAgentFailed}
+                  onReloadTerminal={props.onReloadTerminal}
                 />
 
                 {/* Editor - Center */}
