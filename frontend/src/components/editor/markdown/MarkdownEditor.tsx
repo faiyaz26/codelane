@@ -8,6 +8,7 @@ import { FloatingToolbar } from './FloatingToolbar';
 import { editorStateManager } from '../../../services/EditorStateManager';
 import { editorSettingsManager } from '../../../services/EditorSettingsManager';
 import { useShikiHighlighter, createTipTapEditor, useMarkdownSave, type TipTapEditorInstance } from './hooks';
+import { useExternalContentSync } from '../hooks';
 import './markdown-editor.css';
 
 interface MarkdownEditorProps {
@@ -43,26 +44,37 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
   });
 
-  // Source mode state
-  const [sourceContent, setSourceContent] = createSignal(props.file.content || '');
+  // TipTap editor instance (created after mount when ref is available)
+  // Declared early so it can be used in useExternalContentSync callback
+  let tipTapEditor: TipTapEditorInstance | null = null;
 
-  // Track last known content to detect external changes
-  let lastKnownContent = props.file.content;
+  // Flag to skip modified state update during external reload
+  let isExternalReload = false;
 
-  // Sync content when file is reloaded externally (not modified by user)
-  createEffect(() => {
-    const newContent = props.file.content;
-    // Only update if content changed externally (file reload)
-    // and the file is not marked as modified by user
-    if (newContent !== lastKnownContent && !props.file.isModified) {
-      lastKnownContent = newContent;
-      setSourceContent(newContent || '');
-      // Also update TipTap editor if in preview mode
-      if (tipTapEditor && mode() === 'preview') {
-        tipTapEditor.setContent(newContent || '');
+  // External content sync - handles file reloads from external changes
+  const contentSync = useExternalContentSync({
+    file: props.file,
+    onExternalChange: (newContent) => {
+      // Set flag to prevent marking as modified
+      isExternalReload = true;
+
+      // Update TipTap editor if it exists
+      if (tipTapEditor) {
+        tipTapEditor.setContent(newContent);
       }
-    }
+
+      // Reset flag after a tick (after TipTap's change event fires)
+      setTimeout(() => {
+        isExternalReload = false;
+        // Also update the save manager's original content so it doesn't think we have changes
+        saveManager?.setOriginalContent(newContent);
+      }, 0);
+    },
   });
+
+  // Use synced content for source mode
+  const sourceContent = contentSync.content;
+  const setSourceContent = contentSync.setContent;
 
   // Floating toolbar state
   const [showToolbar, setShowToolbar] = createSignal(false);
@@ -72,9 +84,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   let editorRef: HTMLDivElement | undefined;
   let sourceTextareaRef: HTMLTextAreaElement | undefined;
   let highlightContainerRef: HTMLPreElement | undefined;
-
-  // TipTap editor instance (created after mount when ref is available)
-  let tipTapEditor: TipTapEditorInstance | null = null;
 
   // Shiki syntax highlighting for source mode
   const highlightedSource = useShikiHighlighter({
@@ -201,6 +210,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   // Handle content changes from TipTap
   const handleTipTapContentChange = (markdown: string) => {
     if (mode() !== 'preview') return;
+    // Skip modified state update during external reload to prevent false positives
+    if (isExternalReload) return;
     saveManager.updateModifiedState(markdown);
   };
 

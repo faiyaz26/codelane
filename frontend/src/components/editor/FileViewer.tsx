@@ -1065,9 +1065,10 @@ export function FileViewer(props: FileViewerProps) {
 
       {/* Markdown file - use dedicated editor */}
       <Show
-        when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name)}
+        when={props.file && !props.file.isLoading && !props.file.error && props.file.content !== null && isMarkdownFile(props.file.name) ? props.file : undefined}
+        keyed
       >
-        <MarkdownEditor file={props.file!} laneId={props.laneId} />
+        {(file) => <MarkdownEditor file={file} laneId={props.laneId} />}
       </Show>
 
       {/* Non-markdown file content */}
