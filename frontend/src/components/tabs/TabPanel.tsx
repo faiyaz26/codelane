@@ -17,8 +17,6 @@ interface TabPanelProps {
 }
 
 export function TabPanel(props: TabPanelProps) {
-  console.log('[TabPanel] Created for lane:', props.laneId);
-
   const tabManager = useTabManager();
 
   // Panel UI state
@@ -50,7 +48,6 @@ export function TabPanel(props: TabPanelProps) {
     if (prev === true && isCollapsed === false) {
       // If there are no tabs, create one
       if (tabs().length === 0) {
-        console.log('[TabPanel] Creating tab on expand');
         tabManager.createTab(props.laneId).catch((err) => {
           console.error('[TabPanel] Failed to create tab on expand:', err);
         });
@@ -66,7 +63,6 @@ export function TabPanel(props: TabPanelProps) {
 
     // Only auto-collapse if we had tabs before and now we don't
     if (tabCount === 0 && !currentCollapsed && prev && prev.tabCount > 0) {
-      console.log('[TabPanel] Auto-collapsing due to no tabs');
       setCollapsed(true);
     }
 
@@ -93,7 +89,6 @@ export function TabPanel(props: TabPanelProps) {
   };
 
   const handleToggleCollapse = () => {
-    console.log('[TabPanel] Toggle collapse');
     setCollapsed((prev) => !prev);
   };
 
@@ -131,13 +126,11 @@ export function TabPanel(props: TabPanelProps) {
   };
 
   onMount(() => {
-    console.log('[TabPanel] Mounted for lane:', props.laneId);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   });
 
   onCleanup(() => {
-    console.log('[TabPanel] Cleanup for lane:', props.laneId);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   });

@@ -24,7 +24,6 @@ export function TabContent(props: TabContentProps) {
   createEffect(() => {
     const active = props.activeTabId;
     if (active && !mountedTabs().has(active)) {
-      console.log('[TabContent] Mounting tab:', active);
       setMountedTabs((prev) => new Set(prev).add(active));
     }
   });

@@ -145,7 +145,10 @@ export function MainLayout(props: MainLayoutProps) {
 
   return (
     <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
-      <TopBar activeLaneName={activeLane()?.name} />
+      <TopBar
+        activeLaneName={activeLane()?.name}
+        effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
+      />
 
       <div class="flex-1 flex overflow-hidden">
         <ProjectPanel

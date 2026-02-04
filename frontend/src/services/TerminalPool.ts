@@ -35,12 +35,9 @@ class TerminalPool {
    * Acquire a terminal handle (create if needed)
    */
   async acquire(config: TerminalConfig): Promise<TerminalHandle> {
-    console.log('[TerminalPool] Acquiring terminal:', config.id);
-
     // Check if already exists
     const existing = this.handles.get(config.id);
     if (existing) {
-      console.log('[TerminalPool] Returning existing terminal:', config.id);
       return existing;
     }
 
@@ -55,8 +52,6 @@ class TerminalPool {
     const handle = await this.createTerminalHandle(config);
     this.handles.set(config.id, handle);
 
-    console.log('[TerminalPool] Created terminal:', config.id);
-
     return handle;
   }
 
@@ -64,18 +59,14 @@ class TerminalPool {
    * Release a terminal handle (cleanup PTY)
    */
   async release(terminalId: string): Promise<void> {
-    console.log('[TerminalPool] Releasing terminal:', terminalId);
-
     const handle = this.handles.get(terminalId);
     if (!handle) {
-      console.warn('[TerminalPool] Terminal not found:', terminalId);
       return;
     }
 
     // Kill PTY
     try {
       await handle.pty.kill();
-      console.log('[TerminalPool] PTY killed:', terminalId);
     } catch (error) {
       console.error('[TerminalPool] Failed to kill PTY:', error);
     }
@@ -115,8 +106,6 @@ class TerminalPool {
    * Cleanup all terminals
    */
   async cleanup(): Promise<void> {
-    console.log('[TerminalPool] Cleaning up all terminals');
-
     const releasePromises = Array.from(this.handles.keys()).map((id) =>
       this.release(id)
     );
@@ -172,7 +161,6 @@ class TerminalPool {
               env: { ...baseEnv, ...agentConfig.env },
             });
             spawnSuccess = true;
-            console.log('[TerminalPool] Agent spawned:', commandPath);
           } catch (error) {
             console.error('[TerminalPool] Failed to spawn agent:', error);
           }
@@ -190,7 +178,6 @@ class TerminalPool {
           cwd: config.cwd,
           env: baseEnv,
         });
-        console.log('[TerminalPool] Shell spawned:', fallbackShell);
       } catch (error) {
         console.error('[TerminalPool] Failed to spawn shell:', error);
         throw error;
@@ -222,7 +209,6 @@ class TerminalPool {
 
     // Handle PTY exit
     await pty.onExit(() => {
-      console.log('[TerminalPool] PTY exited:', config.id);
       terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
       status = 'exited';
     });

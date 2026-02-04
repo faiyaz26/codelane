@@ -76,8 +76,6 @@ export async function spawn(
     env: options?.env,
   });
 
-  console.log('[PortablePty] Created terminal:', terminalId);
-
   // If initial size provided, resize immediately
   if (options?.cols && options?.rows) {
     await invoke('resize_terminal', {
@@ -110,7 +108,6 @@ export async function spawn(
     },
 
     async kill() {
-      console.log('[PortablePty] Killing terminal:', terminalId);
       writer.dispose();
 
       // Clean up listeners

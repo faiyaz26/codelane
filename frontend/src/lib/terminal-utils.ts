@@ -54,7 +54,6 @@ export function attachKeyHandlers(
     const now = Date.now();
     // Debounce - only send if more than 50ms since last send
     if (now - lastHandledTimestamp > 50) {
-      console.log(`[terminal-utils] Shift+Enter handled by ${source}`);
       lastHandledTimestamp = now;
       writeToPty('\x1b\r'); // ESC + carriage return
     }

@@ -62,7 +62,37 @@ pub struct GitBranchInfo {
 // Helper Functions
 // ============================================================================
 
+/// Validate that a path is inside a git repository or worktree
+/// Returns the path as-is if valid (for worktree support)
+fn validate_git_path(path: &str) -> Result<String, String> {
+    let work_dir = Path::new(path);
+
+    if !work_dir.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    // Check if we're inside a git work tree (works for both repos and worktrees)
+    let output = Command::new("git")
+        .current_dir(path)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Not a git repository: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    // Return the original path - this is important for worktree support
+    // We want to run git commands from the worktree directory, not the main repo
+    Ok(path.to_string())
+}
+
 /// Find the git repository root from the given path
+/// Note: For worktrees, this returns the MAIN repo root, not the worktree path
+/// Use validate_git_path() instead when you want to work within a worktree
 fn find_repo_root(path: &str) -> Result<String, String> {
     let output = Command::new("git")
         .current_dir(path)
@@ -99,11 +129,12 @@ fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
 // Tauri Commands
 // ============================================================================
 
-/// Get the git status for a repository
+/// Get the git status for a repository or worktree
 #[tauri::command]
 pub async fn git_status(path: String) -> Result<GitStatusResult, String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    // Use validate_git_path to support worktrees - run git from the passed path
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     // Get current branch
     let branch = run_git(work_dir, &["branch", "--show-current"])
@@ -173,11 +204,11 @@ pub async fn git_status(path: String) -> Result<GitStatusResult, String> {
     })
 }
 
-/// Get the diff for a repository or specific file
+/// Get the diff for a repository/worktree or specific file
 #[tauri::command]
 pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) -> Result<String, String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     let mut args = vec!["diff", "--color=never"];
 
@@ -193,11 +224,11 @@ pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) 
     run_git(work_dir, &args)
 }
 
-/// Get the commit log for a repository
+/// Get the commit log for a repository or worktree
 #[tauri::command]
 pub async fn git_log(path: String, count: Option<u32>) -> Result<Vec<GitCommit>, String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
     let count = count.unwrap_or(50);
 
     // Use a custom format for easy parsing
@@ -230,11 +261,11 @@ pub async fn git_log(path: String, count: Option<u32>) -> Result<Vec<GitCommit>,
     Ok(commits)
 }
 
-/// Get branch information for a repository
+/// Get branch information for a repository or worktree
 #[tauri::command]
 pub async fn git_branch(path: String) -> Result<GitBranchInfo, String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     // Get current branch
     let current = run_git(work_dir, &["branch", "--show-current"])
@@ -266,8 +297,8 @@ pub async fn git_branch(path: String) -> Result<GitBranchInfo, String> {
 /// Stage files for commit
 #[tauri::command]
 pub async fn git_stage(path: String, files: Vec<String>) -> Result<(), String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     if files.is_empty() {
         return Ok(());
@@ -285,8 +316,8 @@ pub async fn git_stage(path: String, files: Vec<String>) -> Result<(), String> {
 /// Unstage files (remove from staging area)
 #[tauri::command]
 pub async fn git_unstage(path: String, files: Vec<String>) -> Result<(), String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     if files.is_empty() {
         return Ok(());
@@ -304,8 +335,8 @@ pub async fn git_unstage(path: String, files: Vec<String>) -> Result<(), String>
 /// Create a commit with the staged changes
 #[tauri::command]
 pub async fn git_commit(path: String, message: String) -> Result<String, String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     if message.trim().is_empty() {
         return Err("Commit message cannot be empty".to_string());
@@ -321,8 +352,8 @@ pub async fn git_commit(path: String, message: String) -> Result<String, String>
 /// Discard changes in working directory
 #[tauri::command]
 pub async fn git_discard(path: String, files: Vec<String>) -> Result<(), String> {
-    let repo_root = find_repo_root(&path)?;
-    let work_dir = Path::new(&repo_root);
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
 
     if files.is_empty() {
         return Ok(());
@@ -349,6 +380,19 @@ pub async fn git_discard(path: String, files: Vec<String>) -> Result<(), String>
 // ============================================================================
 // Worktree Commands
 // ============================================================================
+
+/// Initialize a new git repository
+#[tauri::command]
+pub async fn git_init(path: String) -> Result<(), String> {
+    let work_dir = Path::new(&path);
+
+    if !work_dir.exists() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+
+    run_git(work_dir, &["init"])?;
+    Ok(())
+}
 
 /// Check if a directory is a git repository
 #[tauri::command]

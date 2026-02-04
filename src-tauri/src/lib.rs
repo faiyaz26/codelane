@@ -72,6 +72,7 @@ pub fn run() {
             git::git_commit,
             git::git_discard,
             // Git worktree commands
+            git::git_init,
             git::git_is_repo,
             git::git_branch_exists,
             git::git_create_branch,

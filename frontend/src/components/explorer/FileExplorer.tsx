@@ -3,6 +3,7 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import { useFileTree, useFileWatcher } from './hooks';
 import { FileTree } from './FileTree';
+import { ChangesView } from './ChangesView';
 
 interface FileExplorerProps {
   workingDir: string;
@@ -66,7 +67,10 @@ export function FileExplorer(props: FileExplorerProps) {
         </Show>
 
         <Show when={activeTab() === 'changes'}>
-          <EmptyChangesView />
+          <ChangesView
+            workingDir={props.workingDir}
+            onFileSelect={props.onFileSelect}
+          />
         </Show>
       </div>
     </div>
@@ -106,24 +110,3 @@ function ProjectHeader(props: { name: string }) {
   );
 }
 
-function EmptyChangesView() {
-  return (
-    <div class="px-4 py-8 text-center text-xs text-zed-text-tertiary">
-      <svg
-        class="w-8 h-8 mx-auto mb-2 opacity-50"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.5"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      <p>No changes to display</p>
-      <p class="text-zed-text-disabled mt-1">Changes will appear here when you modify files</p>
-    </div>
-  );
-}

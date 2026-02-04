@@ -73,6 +73,13 @@ export async function isGitRepo(path: string): Promise<boolean> {
 }
 
 /**
+ * Initialize a new git repository
+ */
+export async function initGitRepo(path: string): Promise<void> {
+  return invoke<void>('git_init', { path });
+}
+
+/**
  * Check if a branch exists
  */
 export async function branchExists(path: string, branch: string): Promise<boolean> {

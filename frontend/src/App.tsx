@@ -168,27 +168,22 @@ function App() {
   };
 
   const handleAgentFailed = (agentType: string, command: string) => {
-    console.log('handleAgentFailed called with:', agentType, command);
     const notif = {
       message: `Agent "${agentType}" (${command}) is not installed. Using shell instead. Click settings to configure.`,
       type: 'warning' as const,
     };
-    console.log('Setting notification:', notif);
     setNotification(notif);
     // Auto-dismiss after 8 seconds
     setTimeout(() => {
-      console.log('Auto-dismissing notification');
       setNotification(null);
     }, 8000);
   };
 
   const handleTerminalReady = (laneId: string, terminalId: string) => {
-    console.log(`Terminal ready for lane ${laneId}, ID:`, terminalId);
     setTerminalIds((prev) => new Map(prev).set(laneId, terminalId));
   };
 
   const handleTerminalExit = (laneId: string) => {
-    console.log(`Terminal exited for lane ${laneId}`);
     setTerminalIds((prev) => {
       const newMap = new Map(prev);
       newMap.delete(laneId);
@@ -197,7 +192,6 @@ function App() {
   };
 
   const handleReloadTerminal = (laneId: string) => {
-    console.log(`Reloading terminal for lane ${laneId}`);
     // Remove lane from initialized set to unmount the terminal
     setInitializedLanes((prev) => {
       const newSet = new Set(prev);

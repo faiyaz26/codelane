@@ -18,8 +18,6 @@ interface TerminalViewProps {
 }
 
 export function TerminalView(props: TerminalViewProps) {
-  console.log('[TerminalView] Created with laneId:', props.laneId);
-
   let containerRef: HTMLDivElement | undefined;
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
@@ -34,7 +32,6 @@ export function TerminalView(props: TerminalViewProps) {
   });
 
   onMount(async () => {
-    console.log('[TerminalView] Mounting laneId:', props.laneId);
     if (!containerRef) return;
 
     // Create xterm.js instance with shared configuration
@@ -66,8 +63,6 @@ export function TerminalView(props: TerminalViewProps) {
       if (useAgent) {
         const agentConfig = await getLaneAgentConfig(props.laneId);
 
-        console.log('Agent config:', JSON.stringify(agentConfig, null, 2));
-
         // Merge agent env with terminal env
         const env = {
           ...baseEnv,
@@ -76,15 +71,10 @@ export function TerminalView(props: TerminalViewProps) {
 
         // Try to spawn the configured agent
         if (agentConfig.agentType !== 'shell') {
-          console.log('Checking if agent exists:', agentConfig.command);
-
           // Check if command exists before trying to spawn
           const commandPath = await checkCommandExists(agentConfig.command);
 
           if (commandPath) {
-            console.log('Agent found at:', commandPath);
-            console.log('Spawning agent:', commandPath);
-
             try {
               pty = await spawn(commandPath, agentConfig.args, {
                 cols: terminal.cols,
@@ -94,7 +84,6 @@ export function TerminalView(props: TerminalViewProps) {
               });
 
               spawnSuccess = true;
-              console.log('Agent spawned successfully, terminal ID:', pty.id);
             } catch (spawnError) {
               console.error('Failed to spawn agent:', spawnError);
               spawnSuccess = false;
@@ -102,7 +91,6 @@ export function TerminalView(props: TerminalViewProps) {
               props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
             }
           } else {
-            console.log('Agent command not found in PATH:', agentConfig.command);
             spawnSuccess = false;
             // Notify parent that agent is not installed
             props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
@@ -114,7 +102,6 @@ export function TerminalView(props: TerminalViewProps) {
       if (!spawnSuccess) {
         // Use zsh as default shell (will use user's default shell via -l flag)
         const fallbackShell = 'zsh';
-        console.log('Using shell:', fallbackShell);
 
         pty = await spawn(fallbackShell, undefined, {
           cols: terminal.cols,
@@ -122,8 +109,6 @@ export function TerminalView(props: TerminalViewProps) {
           cwd: props.cwd,
           env: baseEnv,
         });
-
-        console.log('Shell spawned, terminal ID:', pty.id);
       }
 
       // Attach custom key handlers (Shift+Enter, etc.)
@@ -146,7 +131,6 @@ export function TerminalView(props: TerminalViewProps) {
 
       // Handle PTY exit
       await pty!.onExit(() => {
-        console.log('PTY exited');
         if (terminal) {
           terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
         }
@@ -208,11 +192,9 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Cleanup on unmount
   onCleanup(async () => {
-    console.log('[TerminalView] Cleanup for laneId:', props.laneId);
     if (pty) {
       try {
         await pty.kill();
-        console.log('PTY killed');
       } catch (error) {
         console.error('Failed to kill PTY:', error);
       }

@@ -23,11 +23,8 @@ class TabManager {
    */
   async initializeLane(laneId: string): Promise<void> {
     if (this.tabs.has(laneId)) {
-      console.log('[TabManager] Lane already initialized:', laneId);
       return;
     }
-
-    console.log('[TabManager] Initializing lane:', laneId);
 
     // Load from storage
     const state = await loadTabPanelState(laneId);
@@ -38,15 +35,12 @@ class TabManager {
 
     this.tabs.set(laneId, tabsSignal);
     this.activeTabs.set(laneId, activeTabSignal);
-
-    console.log('[TabManager] Initialized with tabs:', state.tabs.length, 'active:', state.activeTabId);
   }
 
   /**
    * Dispose lane (cleanup)
    */
   disposeLane(laneId: string): void {
-    console.log('[TabManager] Disposing lane:', laneId);
     this.tabs.delete(laneId);
     this.activeTabs.delete(laneId);
   }
@@ -96,8 +90,6 @@ class TabManager {
       createdAt: config?.createdAt || Date.now(),
     };
 
-    console.log('[TabManager] Creating tab:', newTab.id, newTab.title);
-
     // Update local state first (optimistic update)
     const updatedTabs = [...tabs(), newTab];
     setTabs(updatedTabs);
@@ -134,13 +126,10 @@ class TabManager {
     const [tabs, setTabs] = signal;
     const [activeTab, setActiveTab] = activeSignal;
 
-    console.log('[TabManager] Closing tab:', tabId);
-
     const currentTabs = tabs();
     const tabIndex = currentTabs.findIndex((t) => t.id === tabId);
 
     if (tabIndex === -1) {
-      console.warn('[TabManager] Tab not found:', tabId);
       return;
     }
 
@@ -197,11 +186,8 @@ class TabManager {
 
     // Verify tab exists
     if (!tabs().find((t) => t.id === tabId)) {
-      console.warn('[TabManager] Tab not found:', tabId);
       return;
     }
-
-    console.log('[TabManager] Setting active tab:', tabId);
 
     // Update local state
     const prevActiveTab = activeTab();
@@ -233,13 +219,10 @@ class TabManager {
 
     const [tabs, setTabs] = signal;
 
-    console.log('[TabManager] Renaming tab:', tabId, 'to:', title);
-
     const currentTabs = tabs();
     const tabIndex = currentTabs.findIndex((t) => t.id === tabId);
 
     if (tabIndex === -1) {
-      console.warn('[TabManager] Tab not found:', tabId);
       return;
     }
 
@@ -275,8 +258,6 @@ class TabManager {
     }
 
     const [tabs, setTabs] = signal;
-
-    console.log('[TabManager] Reordering tabs:', tabIds);
 
     const currentTabs = tabs();
 

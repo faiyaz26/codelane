@@ -15,8 +15,6 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel(props: BottomPanelProps) {
-  console.log('[BottomPanel] Created for lane:', props.laneId);
-
   // Load initial state from localStorage
   const initialState = getPanelState(props.laneId);
   const [collapsed, setCollapsed] = createSignal(initialState.collapsed);
@@ -35,16 +33,6 @@ export function BottomPanel(props: BottomPanelProps) {
     });
   });
 
-  // Log collapsed state changes
-  createEffect(() => {
-    console.log('[BottomPanel] Collapsed state changed to:', collapsed());
-  });
-
-  // Log tabs prop changes
-  createEffect(() => {
-    console.log('[BottomPanel] Tabs prop changed:', props.tabs.length, props.tabs);
-  });
-
   // Create tab if none exist when expanding
   createEffect((prev) => {
     const isCollapsed = collapsed();
@@ -52,7 +40,6 @@ export function BottomPanel(props: BottomPanelProps) {
     if (prev === true && isCollapsed === false) {
       // If there are no tabs, create one
       if (props.tabs.length === 0) {
-        console.log('[BottomPanel] Creating tab on expand');
         props.onTabCreate();
       }
       // ResizeObserver in TerminalView will handle resize automatically
@@ -69,7 +56,6 @@ export function BottomPanel(props: BottomPanelProps) {
     // Only auto-collapse if we had tabs before and now we don't
     // Don't auto-collapse if we're currently expanding from a collapsed state
     if (tabCount === 0 && !currentCollapsed && prev && prev.tabCount > 0) {
-      console.log('[BottomPanel] Auto-collapsing due to no tabs');
       setCollapsed(true);
     }
 
@@ -93,11 +79,7 @@ export function BottomPanel(props: BottomPanelProps) {
   };
 
   const handleToggleCollapse = () => {
-    console.log('[BottomPanel] handleToggleCollapse called, current collapsed:', collapsed());
-    setCollapsed((prev) => {
-      console.log('[BottomPanel] Setting collapsed from', prev, 'to', !prev);
-      return !prev;
-    });
+    setCollapsed((prev) => !prev);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -113,13 +95,11 @@ export function BottomPanel(props: BottomPanelProps) {
   };
 
   onMount(() => {
-    console.log('[BottomPanel] Mounted for lane:', props.laneId);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   });
 
   onCleanup(() => {
-    console.log('[BottomPanel] Cleanup for lane:', props.laneId);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   });

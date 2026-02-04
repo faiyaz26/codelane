@@ -51,7 +51,6 @@ export function TerminalContainer(props: TerminalContainerProps) {
   onCleanup(async () => {
     const h = handle();
     if (h) {
-      console.log('[TerminalContainer] Releasing terminal:', h.id);
       await terminalPool.release(h.id);
     }
   });

@@ -333,12 +333,18 @@ class EditorStateManager {
     const parentDir = path.substring(0, path.lastIndexOf('/'));
     if (!parentDir) return;
 
+    // Normalize the path for comparison (remove any trailing slashes, etc.)
+    const normalizedPath = path.replace(/\/+$/, '');
+
     try {
       const unsubscribe = await fileWatchService.watchDirectory(
         parentDir,
         (event: FileWatchEvent) => {
+          // Normalize event path for comparison
+          const eventPath = event.path.replace(/\/+$/, '');
+
           // Only care about modifications to this specific file
-          if (event.path === path && event.kind === 'modify') {
+          if (eventPath === normalizedPath && event.kind === 'modify') {
             this.handleExternalFileChange(laneId, path);
           }
         },
