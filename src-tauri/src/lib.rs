@@ -77,6 +77,7 @@ pub fn run() {
             git::git_branch_exists,
             git::git_create_branch,
             git::git_worktree_add,
+            git::git_worktree_list,
             git::git_worktree_remove,
             // Filesystem commands
             fs::read_file,

@@ -1,16 +1,10 @@
-import { Show, createSignal, onMount, onCleanup } from 'solid-js';
-import { invoke } from '@tauri-apps/api/core';
+import { Show } from 'solid-js';
+import { resourceManager } from '../../services/ResourceManager';
 import type { Lane } from '../../types/lane';
 
 // Only the data StatusBar needs - keeps component decoupled from editor internals
 interface FileInfo {
   language: string; // Already formatted display name
-}
-
-interface AppResourceUsage {
-  cpuPercent: number;
-  memoryMb: number;
-  memoryPercent: number;
 }
 
 interface StatusBarProps {
@@ -19,27 +13,8 @@ interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps) {
-  const [resourceUsage, setResourceUsage] = createSignal<AppResourceUsage | null>(null);
-
-  // Poll for resource usage every 2 seconds
-  onMount(() => {
-    const fetchUsage = async () => {
-      try {
-        const usage = await invoke<AppResourceUsage>('get_app_resource_usage');
-        setResourceUsage(usage);
-      } catch (err) {
-        console.error('Failed to get app resource usage:', err);
-      }
-    };
-
-    // Initial fetch
-    fetchUsage();
-
-    // Set up interval
-    const interval = setInterval(fetchUsage, 2000);
-
-    onCleanup(() => clearInterval(interval));
-  });
+  // Use centralized resource manager instead of own polling
+  const resourceUsage = resourceManager.getAppResources();
   return (
     <div class="h-6 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs select-none">
       {/* Left Section */}

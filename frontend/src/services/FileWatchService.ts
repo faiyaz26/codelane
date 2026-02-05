@@ -18,6 +18,8 @@ interface WatchEntry {
 
 class FileWatchService {
   private watches = new Map<string, WatchEntry>();
+  // O(1) lookup from watchId to path
+  private watchIdToPath = new Map<string, string>();
   private unlisten: (() => void) | null = null;
   private initialized = false;
 
@@ -31,19 +33,21 @@ class FileWatchService {
   }
 
   private handleEvent(event: FileWatchEvent): void {
-    // Find the watch entry that matches this watch_id and notify all callbacks
-    for (const [, entry] of this.watches) {
-      if (entry.watchId === event.watch_id) {
-        entry.callbacks.forEach((cb) => {
-          try {
-            cb(event);
-          } catch (err) {
-            console.error('Error in file watch callback:', err);
-          }
-        });
-        break;
+    // O(1) lookup using watchId -> path map
+    const path = this.watchIdToPath.get(event.watch_id);
+    if (!path) return;
+
+    const entry = this.watches.get(path);
+    if (!entry) return;
+
+    // Notify all callbacks
+    entry.callbacks.forEach((cb) => {
+      try {
+        cb(event);
+      } catch (err) {
+        console.error('Error in file watch callback:', err);
       }
-    }
+    });
   }
 
   /**
@@ -66,6 +70,7 @@ class FileWatchService {
       const watchId = await invoke<string>('watch_path', { path, recursive });
       entry = { watchId, callbacks: new Set() };
       this.watches.set(path, entry);
+      this.watchIdToPath.set(watchId, path);
     }
 
     entry.callbacks.add(callback);
@@ -76,6 +81,7 @@ class FileWatchService {
 
       // If no more callbacks, stop watching
       if (entry!.callbacks.size === 0) {
+        this.watchIdToPath.delete(entry!.watchId);
         invoke('unwatch_path', { watchId: entry!.watchId }).catch(() => {});
         this.watches.delete(path);
       }
@@ -98,12 +104,11 @@ class FileWatchService {
     this.unlisten = null;
 
     for (const [, entry] of this.watches) {
-      invoke('unwatch_path', { watchId: entry.watchId }).catch((err) => {
-        console.error('Failed to unwatch path:', err);
-      });
+      invoke('unwatch_path', { watchId: entry.watchId }).catch(() => {});
     }
 
     this.watches.clear();
+    this.watchIdToPath.clear();
     this.initialized = false;
   }
 }

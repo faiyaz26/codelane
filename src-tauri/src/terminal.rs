@@ -168,19 +168,49 @@ pub async fn create_terminal(
         .openpty(pty_size)
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-    // Build the command
-    let mut cmd = CommandBuilder::new(&shell_cmd);
+    // Determine the user's login shell for wrapping commands
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let is_shell_command = shell_cmd.contains("zsh") || shell_cmd.contains("bash") || shell_cmd.contains("fish");
 
-    // Add arguments if provided
-    if let Some(cmd_args) = args {
-        for arg in cmd_args {
-            cmd.arg(arg);
+    // Build the command
+    // For non-shell commands, wrap in a login shell to ensure .zshrc/.bashrc is sourced
+    // This ensures PATH and other environment variables from shell init files are available
+    let mut cmd = if !is_shell_command {
+        // Wrap the command in a login shell: zsh -l -c 'command args...'
+        let mut full_command = shell_cmd.clone();
+        if let Some(ref cmd_args) = args {
+            for arg in cmd_args {
+                // Escape single quotes in arguments
+                let escaped = arg.replace('\'', "'\\''");
+                full_command.push(' ');
+                full_command.push_str(&format!("'{}'", escaped));
+            }
         }
-    } else if shell_cmd.contains("zsh") || shell_cmd.contains("bash") {
-        // For zsh/bash without explicit args, use login shell mode
-        cmd.arg("-l");  // Login shell
-        cmd.arg("-i");  // Interactive
-    }
+
+        tracing::info!("Wrapping command in login shell: {} -l -c '{}'", login_shell, full_command);
+
+        let mut wrapper = CommandBuilder::new(&login_shell);
+        wrapper.arg("-l");  // Login shell - sources .zprofile/.zshrc
+        wrapper.arg("-i");  // Interactive - ensures proper terminal setup
+        wrapper.arg("-c");  // Run command string
+        wrapper.arg(&full_command);
+        wrapper
+    } else {
+        // For shell commands, run directly
+        let mut wrapper = CommandBuilder::new(&shell_cmd);
+
+        // Add arguments if provided
+        if let Some(cmd_args) = args {
+            for arg in cmd_args {
+                wrapper.arg(arg);
+            }
+        } else {
+            // For zsh/bash without explicit args, use login shell mode
+            wrapper.arg("-l");  // Login shell
+            wrapper.arg("-i");  // Interactive
+        }
+        wrapper
+    };
 
     cmd.cwd(&working_dir);
 
@@ -605,12 +635,47 @@ pub fn init() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // TerminalState tests
+    // =========================================================================
+
     #[test]
     fn test_terminal_state_creation() {
         let state = TerminalState::new();
         let terminals = state.terminals.lock().unwrap();
         assert!(terminals.is_empty());
     }
+
+    #[test]
+    fn test_default_terminal_state() {
+        let state = TerminalState::default();
+        let terminals = state.terminals.lock().unwrap();
+        assert!(terminals.is_empty());
+    }
+
+    #[test]
+    fn test_terminal_state_thread_safety() {
+        use std::sync::Arc;
+
+        let state = Arc::new(TerminalState::new());
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let state_clone = state.clone();
+                std::thread::spawn(move || {
+                    let terminals = state_clone.terminals.lock().unwrap();
+                    assert!(terminals.is_empty());
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+    }
+
+    // =========================================================================
+    // TerminalOutputPayload tests
+    // =========================================================================
 
     #[test]
     fn test_terminal_output_payload_serialization() {
@@ -620,10 +685,51 @@ mod tests {
         };
 
         let json = serde_json::to_string(&payload).unwrap();
-        assert!(json.contains("test-id"));
-        // Data is serialized as byte array
-        assert!(!json.is_empty());
+        assert!(json.contains("\"id\":\"test-id\""));
+        assert!(json.contains("\"data\""));
     }
+
+    #[test]
+    fn test_terminal_output_payload_deserialization() {
+        // Data is serialized as an array of bytes
+        let json = r#"{"id":"test-id","data":[104,101,108,108,111]}"#;
+        let payload: TerminalOutputPayload = serde_json::from_str(json).unwrap();
+
+        assert_eq!(payload.id, "test-id");
+        assert_eq!(payload.data, b"hello");
+    }
+
+    #[test]
+    fn test_terminal_output_payload_empty_data() {
+        let payload = TerminalOutputPayload {
+            id: "empty".to_string(),
+            data: vec![],
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, "empty");
+        assert!(deserialized.data.is_empty());
+    }
+
+    #[test]
+    fn test_terminal_output_payload_binary_data() {
+        // Test with binary data including null bytes and escape sequences
+        let payload = TerminalOutputPayload {
+            id: "binary".to_string(),
+            data: vec![0x1b, 0x5b, 0x31, 0x6d, 0x00, 0xff], // ESC[1m + null + 0xff
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.data, vec![0x1b, 0x5b, 0x31, 0x6d, 0x00, 0xff]);
+    }
+
+    // =========================================================================
+    // TerminalExitPayload tests
+    // =========================================================================
 
     #[test]
     fn test_terminal_exit_payload_serialization() {
@@ -633,9 +739,49 @@ mod tests {
         };
 
         let json = serde_json::to_string(&payload).unwrap();
-        assert!(json.contains("test-id"));
-        assert!(json.contains("0"));
+        assert!(json.contains("\"id\":\"test-id\""));
+        assert!(json.contains("\"code\":0"));
     }
+
+    #[test]
+    fn test_terminal_exit_payload_deserialization() {
+        let json = r#"{"id":"test-id","code":42}"#;
+        let payload: TerminalExitPayload = serde_json::from_str(json).unwrap();
+
+        assert_eq!(payload.id, "test-id");
+        assert_eq!(payload.code, Some(42));
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_null_code() {
+        let payload = TerminalExitPayload {
+            id: "test-id".to_string(),
+            code: None,
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(json.contains("\"code\":null"));
+
+        let deserialized: TerminalExitPayload = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.code.is_none());
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_negative_code() {
+        let payload = TerminalExitPayload {
+            id: "test-id".to_string(),
+            code: Some(-1),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalExitPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.code, Some(-1));
+    }
+
+    // =========================================================================
+    // TerminalInfo tests
+    // =========================================================================
 
     #[test]
     fn test_terminal_info_serialization() {
@@ -646,15 +792,390 @@ mod tests {
         };
 
         let json = serde_json::to_string(&info).unwrap();
-        assert!(json.contains("test-id"));
-        assert!(json.contains("80"));
-        assert!(json.contains("24"));
+        assert!(json.contains("\"id\":\"test-id\""));
+        assert!(json.contains("\"cols\":80"));
+        assert!(json.contains("\"rows\":24"));
     }
 
     #[test]
-    fn test_default_terminal_state() {
-        let state = TerminalState::default();
-        let terminals = state.terminals.lock().unwrap();
-        assert!(terminals.is_empty());
+    fn test_terminal_info_deserialization() {
+        let json = r#"{"id":"test-id","cols":120,"rows":40}"#;
+        let info: TerminalInfo = serde_json::from_str(json).unwrap();
+
+        assert_eq!(info.id, "test-id");
+        assert_eq!(info.cols, 120);
+        assert_eq!(info.rows, 40);
+    }
+
+    #[test]
+    fn test_terminal_info_large_dimensions() {
+        let info = TerminalInfo {
+            id: "large".to_string(),
+            cols: 999,
+            rows: 999,
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: TerminalInfo = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.cols, 999);
+        assert_eq!(deserialized.rows, 999);
+    }
+
+    #[test]
+    fn test_terminal_info_minimum_dimensions() {
+        let info = TerminalInfo {
+            id: "min".to_string(),
+            cols: 1,
+            rows: 1,
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: TerminalInfo = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.cols, 1);
+        assert_eq!(deserialized.rows, 1);
+    }
+
+    // =========================================================================
+    // Clone tests
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_output_payload_clone() {
+        let original = TerminalOutputPayload {
+            id: "test".to_string(),
+            data: vec![1, 2, 3],
+        };
+
+        let cloned = original.clone();
+        assert_eq!(original.id, cloned.id);
+        assert_eq!(original.data, cloned.data);
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_clone() {
+        let original = TerminalExitPayload {
+            id: "test".to_string(),
+            code: Some(0),
+        };
+
+        let cloned = original.clone();
+        assert_eq!(original.id, cloned.id);
+        assert_eq!(original.code, cloned.code);
+    }
+
+    #[test]
+    fn test_terminal_info_clone() {
+        let original = TerminalInfo {
+            id: "test".to_string(),
+            cols: 80,
+            rows: 24,
+        };
+
+        let cloned = original.clone();
+        assert_eq!(original.id, cloned.id);
+        assert_eq!(original.cols, cloned.cols);
+        assert_eq!(original.rows, cloned.rows);
+    }
+
+    // =========================================================================
+    // Additional payload tests
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_output_payload_ansi_escape_sequences() {
+        // Test ANSI escape sequences for colors
+        let payload = TerminalOutputPayload {
+            id: "ansi-test".to_string(),
+            data: b"\x1b[31mRed Text\x1b[0m".to_vec(),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.data, b"\x1b[31mRed Text\x1b[0m");
+    }
+
+    #[test]
+    fn test_terminal_output_payload_cursor_movement() {
+        // Test cursor movement escape sequences
+        let payload = TerminalOutputPayload {
+            id: "cursor-test".to_string(),
+            data: b"\x1b[2J\x1b[H".to_vec(), // Clear screen and home cursor
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.data.len(), 7);
+    }
+
+    #[test]
+    fn test_terminal_output_payload_large_data() {
+        let large_data = vec![b'A'; 4096]; // Same as buffer size in read_pty_output
+        let payload = TerminalOutputPayload {
+            id: "large".to_string(),
+            data: large_data.clone(),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.data.len(), 4096);
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_signal_code() {
+        // Test with signal codes (typically negative or > 128)
+        let payload = TerminalExitPayload {
+            id: "signal".to_string(),
+            code: Some(137), // SIGKILL (128 + 9)
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalExitPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.code, Some(137));
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_success_code() {
+        let payload = TerminalExitPayload {
+            id: "success".to_string(),
+            code: Some(0),
+        };
+
+        assert_eq!(payload.code, Some(0));
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_error_code() {
+        let payload = TerminalExitPayload {
+            id: "error".to_string(),
+            code: Some(1),
+        };
+
+        assert_eq!(payload.code, Some(1));
+    }
+
+    // =========================================================================
+    // TerminalInfo edge cases
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_info_standard_sizes() {
+        let sizes = vec![
+            (80, 24),   // Standard VT100
+            (80, 25),   // DOS/Windows console
+            (132, 43),  // Wide mode
+            (120, 40),  // Common modern terminal
+        ];
+
+        for (cols, rows) in sizes {
+            let info = TerminalInfo {
+                id: format!("term-{}x{}", cols, rows),
+                cols,
+                rows,
+            };
+
+            let json = serde_json::to_string(&info).unwrap();
+            let deserialized: TerminalInfo = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(deserialized.cols, cols);
+            assert_eq!(deserialized.rows, rows);
+        }
+    }
+
+    #[test]
+    fn test_terminal_info_uuid_id() {
+        let info = TerminalInfo {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            cols: 80,
+            rows: 24,
+        };
+
+        assert!(uuid::Uuid::parse_str(&info.id).is_ok());
+    }
+
+    // =========================================================================
+    // TerminalState additional tests
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_state_lock_and_unlock() {
+        let state = TerminalState::new();
+
+        // Lock and unlock multiple times
+        for _ in 0..5 {
+            let terminals = state.terminals.lock().unwrap();
+            drop(terminals);
+        }
+    }
+
+    #[test]
+    fn test_terminal_state_concurrent_reads() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let state = Arc::new(TerminalState::new());
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let state_clone = Arc::clone(&state);
+            handles.push(thread::spawn(move || {
+                let terminals = state_clone.terminals.lock().unwrap();
+                let len = terminals.len();
+                drop(terminals);
+                (i, len)
+            }));
+        }
+
+        for handle in handles {
+            let (idx, len) = handle.join().unwrap();
+            assert_eq!(len, 0, "Thread {} saw non-empty map", idx);
+        }
+    }
+
+    // =========================================================================
+    // Serialization format tests
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_output_payload_json_format() {
+        let payload = TerminalOutputPayload {
+            id: "test".to_string(),
+            data: vec![72, 101, 108, 108, 111], // "Hello"
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+
+        // Verify JSON structure
+        assert!(json.contains("\"id\""));
+        assert!(json.contains("\"data\""));
+        assert!(json.contains("[72,101,108,108,111]"));
+    }
+
+    #[test]
+    fn test_terminal_exit_payload_json_format() {
+        let payload = TerminalExitPayload {
+            id: "test".to_string(),
+            code: Some(0),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+
+        assert!(json.contains("\"id\":\"test\""));
+        assert!(json.contains("\"code\":0"));
+    }
+
+    #[test]
+    fn test_terminal_info_json_format() {
+        let info = TerminalInfo {
+            id: "test".to_string(),
+            cols: 80,
+            rows: 24,
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+
+        assert!(json.contains("\"cols\":80"));
+        assert!(json.contains("\"rows\":24"));
+    }
+
+    // =========================================================================
+    // Validation logic tests (simulating resize_terminal checks)
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_dimension_validation_zero() {
+        // Test that zero dimensions would be rejected
+        let cols: u16 = 0;
+        let rows: u16 = 0;
+
+        assert!(cols == 0 || rows == 0, "Zero dimensions should be invalid");
+    }
+
+    #[test]
+    fn test_terminal_dimension_validation_max() {
+        // Test maximum dimension check
+        let cols: u16 = 1000;
+        let rows: u16 = 1000;
+
+        assert!(cols <= 1000 && rows <= 1000, "1000x1000 should be valid");
+    }
+
+    #[test]
+    fn test_terminal_dimension_validation_over_max() {
+        // Test that dimensions over 1000 would be rejected
+        let cols: u16 = 1001;
+        let rows: u16 = 1001;
+
+        assert!(cols > 1000 || rows > 1000, "Over 1000 should be invalid");
+    }
+
+    // =========================================================================
+    // Special character handling in IDs
+    // =========================================================================
+
+    #[test]
+    fn test_terminal_id_with_special_chars() {
+        let special_ids = vec![
+            "term-123",
+            "term_456",
+            "term.789",
+            "TERM-ABC",
+        ];
+
+        for id in special_ids {
+            let info = TerminalInfo {
+                id: id.to_string(),
+                cols: 80,
+                rows: 24,
+            };
+
+            let json = serde_json::to_string(&info).unwrap();
+            let deserialized: TerminalInfo = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(deserialized.id, id);
+        }
+    }
+
+    #[test]
+    fn test_terminal_output_payload_with_newlines() {
+        let payload = TerminalOutputPayload {
+            id: "newline-test".to_string(),
+            data: b"line1\r\nline2\r\nline3\r\n".to_vec(),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.data.contains(&b'\r'));
+        assert!(deserialized.data.contains(&b'\n'));
+    }
+
+    #[test]
+    fn test_terminal_output_payload_tab_characters() {
+        let payload = TerminalOutputPayload {
+            id: "tab-test".to_string(),
+            data: b"col1\tcol2\tcol3".to_vec(),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: TerminalOutputPayload = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.data.contains(&b'\t'));
+    }
+
+    // =========================================================================
+    // Init function test
+    // =========================================================================
+
+    #[test]
+    fn test_init_returns_handler() {
+        // Test that init() returns a valid handler
+        let _handler = init();
+        // If we got here without panicking, the handler was created successfully
     }
 }

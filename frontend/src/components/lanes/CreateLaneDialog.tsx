@@ -2,8 +2,14 @@ import { createSignal, Show, createEffect, onCleanup } from 'solid-js';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Dialog, Button, TextField } from '../ui';
 import { createLane } from '../../lib/lane-api';
-import { isGitRepo } from '../../lib/git-api';
+import { isGitRepo, listWorktrees, removeWorktree } from '../../lib/git-api';
+import { WorktreeConflictDialog } from '../WorktreeConflictDialog';
 import type { Lane } from '../../types/lane';
+
+interface WorktreeConflict {
+  branch: string;
+  existingPath: string;
+}
 
 // Rotating placeholder examples
 const PLACEHOLDER_EXAMPLES = [
@@ -36,6 +42,7 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   const [placeholderIndex, setPlaceholderIndex] = createSignal(
     Math.floor(Math.random() * PLACEHOLDER_EXAMPLES.length)
   );
+  const [worktreeConflict, setWorktreeConflict] = createSignal<WorktreeConflict | null>(null);
 
   // Rotate placeholder when dialog is open
   createEffect(() => {
@@ -72,29 +79,32 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     }
   });
 
-  const handleCreate = async () => {
-    const laneName = name().trim();
-    const laneWorkingDir = workingDir().trim();
-
-    // Validation
-    if (!laneName) {
-      setError('Lane name is required');
-      return;
+  // Check for worktree conflict
+  const checkWorktreeConflict = async (dir: string, branchName: string): Promise<WorktreeConflict | null> => {
+    try {
+      const worktrees = await listWorktrees(dir);
+      const existing = worktrees.find(wt => wt.branch === branchName);
+      if (existing && !existing.isMain) {
+        return {
+          branch: branchName,
+          existingPath: existing.path,
+        };
+      }
+    } catch {
+      // Ignore errors (e.g., not a git repo)
     }
+    return null;
+  };
 
-    if (!laneWorkingDir) {
-      setError('Working directory is required');
-      return;
-    }
-
-    setError(null);
+  const doCreateLane = async (laneName: string, laneWorkingDir: string, laneBranch: string | undefined) => {
     setIsCreating(true);
+    setError(null);
 
     try {
       const lane = await createLane({
         name: laneName,
         workingDir: laneWorkingDir,
-        branch: branch().trim() || undefined,
+        branch: laneBranch,
       });
 
       // Reset form
@@ -113,11 +123,85 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     }
   };
 
+  const handleCreate = async () => {
+    const laneName = name().trim();
+    const laneWorkingDir = workingDir().trim();
+    const laneBranch = branch().trim();
+
+    // Validation
+    if (!laneName) {
+      setError('Lane name is required');
+      return;
+    }
+
+    if (!laneWorkingDir) {
+      setError('Working directory is required');
+      return;
+    }
+
+    setError(null);
+
+    // Check for worktree conflict if branch is specified
+    if (laneBranch && isGitRepoDir()) {
+      const conflict = await checkWorktreeConflict(laneWorkingDir, laneBranch);
+      if (conflict) {
+        setWorktreeConflict(conflict);
+        return;
+      }
+    }
+
+    await doCreateLane(laneName, laneWorkingDir, laneBranch || undefined);
+  };
+
+  const handleUseExistingWorktree = async () => {
+    const conflict = worktreeConflict();
+    if (!conflict) return;
+
+    setWorktreeConflict(null);
+    // Create lane - createLane will detect existing worktree and handle it
+    await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+  };
+
+  const handleRemoveAndCreate = async () => {
+    const conflict = worktreeConflict();
+    if (!conflict) return;
+
+    setWorktreeConflict(null);
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      // Remove existing worktree
+      await removeWorktree(workingDir().trim(), conflict.existingPath);
+      // Now create the lane (which will create a new worktree)
+      await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setIsCreating(false);
+    }
+  };
+
+  const handleUseDifferentBranch = async (newBranch: string) => {
+    setWorktreeConflict(null);
+    setBranch(newBranch);
+
+    // Check if new branch also has a conflict
+    const conflict = await checkWorktreeConflict(workingDir().trim(), newBranch);
+    if (conflict) {
+      setWorktreeConflict(conflict);
+      return;
+    }
+
+    // No conflict, proceed with creation
+    await doCreateLane(name().trim(), workingDir().trim(), newBranch);
+  };
+
   const handleCancel = () => {
     setName('');
     setWorkingDir('');
     setBranch('');
     setError(null);
+    setWorktreeConflict(null);
     props.onOpenChange(false);
   };
 
@@ -139,8 +223,9 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   };
 
   return (
+    <>
     <Dialog
-      open={props.open}
+      open={props.open && !worktreeConflict()}
       onOpenChange={props.onOpenChange}
       title="Create New Lane"
       description="Start a new task with a dedicated AI agent and terminal session."
@@ -225,5 +310,21 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
         </div>
       </div>
     </Dialog>
+
+    {/* Worktree conflict dialog */}
+    <Show when={worktreeConflict()}>
+      {(conflict) => (
+        <WorktreeConflictDialog
+          open={true}
+          branch={conflict().branch}
+          existingPath={conflict().existingPath}
+          onUseExisting={handleUseExistingWorktree}
+          onRemoveAndCreate={handleRemoveAndCreate}
+          onUseDifferentBranch={handleUseDifferentBranch}
+          onCancel={() => setWorktreeConflict(null)}
+        />
+      )}
+    </Show>
+    </>
   );
 }

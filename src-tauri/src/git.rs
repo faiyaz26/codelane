@@ -437,21 +437,113 @@ pub async fn git_create_branch(path: String, branch: String) -> Result<(), Strin
     Ok(())
 }
 
+/// Compute the global worktree path for a project and branch.
+/// Worktrees are stored in ~/.codelane/worktrees/<project-name>/<branch>/
+/// This keeps them outside the project directory to avoid tooling conflicts
+/// (ESLint, TypeScript, etc. walking up the directory tree).
+fn get_worktree_path(repo_root: &Path, branch: &str) -> Result<std::path::PathBuf, String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+
+    // Get project name from repo root
+    let project_name = repo_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Could not determine project name from repository path")?;
+
+    // Sanitize branch name for filesystem (replace / with -)
+    let safe_branch = branch.replace('/', "-");
+
+    Ok(home.join(".codelane").join("worktrees").join(project_name).join(safe_branch))
+}
+
 /// Create a git worktree
+/// Returns the path where the worktree was created
 #[tauri::command]
-pub async fn git_worktree_add(path: String, worktree_path: String, branch: String) -> Result<(), String> {
+pub async fn git_worktree_add(path: String, branch: String) -> Result<String, String> {
     let repo_root = find_repo_root(&path)?;
     let work_dir = Path::new(&repo_root);
 
+    // Compute worktree path in global location
+    let worktree_path = get_worktree_path(work_dir, &branch)?;
+    let worktree_path_str = worktree_path.to_string_lossy().to_string();
+
     // Create parent directory if it doesn't exist
-    let worktree_dir = Path::new(&worktree_path);
-    if let Some(parent) = worktree_dir.parent() {
+    if let Some(parent) = worktree_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create worktree directory: {}", e))?;
     }
 
-    run_git(work_dir, &["worktree", "add", &worktree_path, &branch])?;
-    Ok(())
+    run_git(work_dir, &["worktree", "add", &worktree_path_str, &branch])?;
+    Ok(worktree_path_str)
+}
+
+/// Information about a git worktree
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeInfo {
+    /// Path to the worktree directory
+    pub path: String,
+    /// HEAD commit hash
+    pub head: String,
+    /// Branch name (if checked out to a branch)
+    pub branch: Option<String>,
+    /// Whether this is the main worktree
+    pub is_main: bool,
+}
+
+/// List all git worktrees for a repository
+#[tauri::command]
+pub async fn git_worktree_list(path: String) -> Result<Vec<WorktreeInfo>, String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    let output = run_git(work_dir, &["worktree", "list", "--porcelain"])?;
+
+    let mut worktrees = Vec::new();
+    let mut current_worktree: Option<WorktreeInfo> = None;
+
+    for line in output.lines() {
+        if line.starts_with("worktree ") {
+            // Save previous worktree if exists
+            if let Some(wt) = current_worktree.take() {
+                worktrees.push(wt);
+            }
+            // Start new worktree
+            current_worktree = Some(WorktreeInfo {
+                path: line.strip_prefix("worktree ").unwrap_or("").to_string(),
+                head: String::new(),
+                branch: None,
+                is_main: false,
+            });
+        } else if line.starts_with("HEAD ") {
+            if let Some(ref mut wt) = current_worktree {
+                wt.head = line.strip_prefix("HEAD ").unwrap_or("").to_string();
+            }
+        } else if line.starts_with("branch ") {
+            if let Some(ref mut wt) = current_worktree {
+                let branch = line.strip_prefix("branch refs/heads/").unwrap_or(
+                    line.strip_prefix("branch ").unwrap_or("")
+                );
+                wt.branch = Some(branch.to_string());
+            }
+        } else if line == "bare" {
+            // Main/bare worktree indicator - mark as main
+            if let Some(ref mut wt) = current_worktree {
+                wt.is_main = true;
+            }
+        }
+    }
+
+    // Don't forget the last worktree
+    if let Some(wt) = current_worktree {
+        worktrees.push(wt);
+    }
+
+    // Mark the first worktree as main (it's the original repo)
+    if let Some(first) = worktrees.first_mut() {
+        first.is_main = true;
+    }
+
+    Ok(worktrees)
 }
 
 /// Remove a git worktree
@@ -478,33 +570,653 @@ pub async fn git_worktree_remove(path: String, worktree_path: String) -> Result<
     Ok(())
 }
 
-// ============================================================================
-// Module Initialization
-// ============================================================================
-
-/// Initialize and return the git commands for Tauri
-pub fn init() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
-    tauri::generate_handler![
-        git_status,
-        git_diff,
-        git_log,
-        git_branch,
-        git_stage,
-        git_unstage,
-        git_commit,
-        git_discard,
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Helper to create a temporary git repository for testing
+    fn create_test_repo() -> TempDir {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let path = temp_dir.path();
+
+        // Initialize git repo
+        Command::new("git")
+            .current_dir(path)
+            .args(["init"])
+            .output()
+            .expect("Failed to init git repo");
+
+        // Configure git user for commits
+        Command::new("git")
+            .current_dir(path)
+            .args(["config", "user.email", "test@test.com"])
+            .output()
+            .expect("Failed to set git email");
+
+        Command::new("git")
+            .current_dir(path)
+            .args(["config", "user.name", "Test User"])
+            .output()
+            .expect("Failed to set git name");
+
+        temp_dir
+    }
+
+    /// Helper to create a file in the test repo
+    fn create_file(dir: &Path, name: &str, content: &str) {
+        let file_path = dir.join(name);
+        fs::write(file_path, content).expect("Failed to write file");
+    }
+
+    /// Helper to run git command in test repo
+    fn git_cmd(dir: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("Failed to run git command");
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    // =========================================================================
+    // find_repo_root tests
+    // =========================================================================
 
     #[test]
-    fn test_find_repo_root() {
-        // This will only pass if run from within a git repo
-        let result = find_repo_root(".");
-        // Just verify it doesn't panic
-        let _ = result;
+    fn test_find_repo_root_valid_repo() {
+        let temp = create_test_repo();
+        let result = find_repo_root(temp.path().to_str().unwrap());
+        assert!(result.is_ok());
+        // Canonicalize paths for comparison (handles macOS /var vs /private/var)
+        let expected = temp.path().canonicalize().unwrap();
+        let actual = Path::new(&result.unwrap()).canonicalize().unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_find_repo_root_subdirectory() {
+        let temp = create_test_repo();
+        let subdir = temp.path().join("subdir");
+        fs::create_dir(&subdir).expect("Failed to create subdir");
+
+        let result = find_repo_root(subdir.to_str().unwrap());
+        assert!(result.is_ok());
+        // Canonicalize paths for comparison (handles macOS /var vs /private/var)
+        let expected = temp.path().canonicalize().unwrap();
+        let actual = Path::new(&result.unwrap()).canonicalize().unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_find_repo_root_not_a_repo() {
+        let temp = TempDir::new().expect("Failed to create temp dir");
+        let result = find_repo_root(temp.path().to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a git repository"));
+    }
+
+    // =========================================================================
+    // validate_git_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_validate_git_path_valid_repo() {
+        let temp = create_test_repo();
+        let result = validate_git_path(temp.path().to_str().unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_git_path_nonexistent() {
+        let result = validate_git_path("/nonexistent/path/that/does/not/exist");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Path does not exist"));
+    }
+
+    #[test]
+    fn test_validate_git_path_not_a_repo() {
+        let temp = TempDir::new().expect("Failed to create temp dir");
+        let result = validate_git_path(temp.path().to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a git repository"));
+    }
+
+    // =========================================================================
+    // run_git tests
+    // =========================================================================
+
+    #[test]
+    fn test_run_git_valid_command() {
+        let temp = create_test_repo();
+        let result = run_git(temp.path(), &["status"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_git_invalid_command() {
+        let temp = create_test_repo();
+        let result = run_git(temp.path(), &["not-a-real-command"]);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // get_worktree_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_get_worktree_path_simple_branch() {
+        let temp = create_test_repo();
+        let result = get_worktree_path(temp.path(), "feature-branch");
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        let path_str = path.to_string_lossy();
+
+        // Should contain .codelane/worktrees
+        assert!(path_str.contains(".codelane/worktrees"));
+        // Should contain the branch name
+        assert!(path_str.contains("feature-branch"));
+    }
+
+    #[test]
+    fn test_get_worktree_path_branch_with_slash() {
+        let temp = create_test_repo();
+        let result = get_worktree_path(temp.path(), "feature/my-feature");
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        let path_str = path.to_string_lossy();
+
+        // Slash should be replaced with dash
+        assert!(path_str.contains("feature-my-feature"));
+        assert!(!path_str.contains("feature/my-feature"));
+    }
+
+    // =========================================================================
+    // git_status parsing tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_status_empty_repo() {
+        let temp = create_test_repo();
+
+        // Use tokio runtime for async test
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(status.staged.is_empty());
+        assert!(status.unstaged.is_empty());
+        assert!(status.untracked.is_empty());
+    }
+
+    #[test]
+    fn test_git_status_untracked_file() {
+        let temp = create_test_repo();
+        create_file(temp.path(), "new_file.txt", "content");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(status.staged.is_empty());
+        assert!(status.unstaged.is_empty());
+        assert_eq!(status.untracked.len(), 1);
+        assert!(status.untracked.contains(&"new_file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_git_status_staged_file() {
+        let temp = create_test_repo();
+        create_file(temp.path(), "staged.txt", "content");
+        git_cmd(temp.path(), &["add", "staged.txt"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].path, "staged.txt");
+        assert_eq!(status.staged[0].status, "added");
+        assert!(status.unstaged.is_empty());
+        assert!(status.untracked.is_empty());
+    }
+
+    #[test]
+    fn test_git_status_modified_file() {
+        let temp = create_test_repo();
+
+        // Create, stage, and commit a file
+        create_file(temp.path(), "file.txt", "original");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        // Modify the file
+        create_file(temp.path(), "file.txt", "modified");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(status.staged.is_empty());
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "file.txt");
+        assert_eq!(status.unstaged[0].status, "modified");
+    }
+
+    #[test]
+    fn test_git_status_deleted_file() {
+        let temp = create_test_repo();
+
+        // Create, stage, and commit a file
+        create_file(temp.path(), "to_delete.txt", "content");
+        git_cmd(temp.path(), &["add", "to_delete.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        // Delete the file
+        fs::remove_file(temp.path().join("to_delete.txt")).expect("Failed to delete file");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        assert!(status.staged.is_empty());
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "to_delete.txt");
+        assert_eq!(status.unstaged[0].status, "deleted");
+    }
+
+    #[test]
+    fn test_git_status_branch_name() {
+        let temp = create_test_repo();
+
+        // Create initial commit (needed for branch to show)
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let status = result.unwrap();
+        // Default branch is usually "main" or "master"
+        assert!(status.branch.is_some());
+    }
+
+    // =========================================================================
+    // git_is_repo tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_is_repo_true() {
+        let temp = create_test_repo();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_is_repo(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_git_is_repo_false() {
+        let temp = TempDir::new().expect("Failed to create temp dir");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_is_repo(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_git_is_repo_nonexistent_path() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_is_repo("/nonexistent/path".to_string()));
+
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    // =========================================================================
+    // git_branch tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_branch_info() {
+        let temp = create_test_repo();
+
+        // Create initial commit
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        // Create another branch
+        git_cmd(temp.path(), &["branch", "feature-branch"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_branch(temp.path().to_str().unwrap().to_string()));
+
+        assert!(result.is_ok());
+        let info = result.unwrap();
+        assert!(info.current.is_some());
+        assert!(info.branches.len() >= 2); // At least main/master and feature-branch
+        assert!(info.branches.contains(&"feature-branch".to_string()));
+    }
+
+    // =========================================================================
+    // git_branch_exists tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_branch_exists_true() {
+        let temp = create_test_repo();
+
+        // Create initial commit and branch
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+        git_cmd(temp.path(), &["branch", "test-branch"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_branch_exists(
+            temp.path().to_str().unwrap().to_string(),
+            "test-branch".to_string(),
+        ));
+
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_git_branch_exists_false() {
+        let temp = create_test_repo();
+
+        // Create initial commit
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_branch_exists(
+            temp.path().to_str().unwrap().to_string(),
+            "nonexistent-branch".to_string(),
+        ));
+
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    // =========================================================================
+    // git_create_branch tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_create_branch() {
+        let temp = create_test_repo();
+
+        // Create initial commit
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Create new branch
+        let result = rt.block_on(git_create_branch(
+            temp.path().to_str().unwrap().to_string(),
+            "new-branch".to_string(),
+        ));
+        assert!(result.is_ok());
+
+        // Verify it exists
+        let exists = rt.block_on(git_branch_exists(
+            temp.path().to_str().unwrap().to_string(),
+            "new-branch".to_string(),
+        ));
+        assert!(exists.is_ok());
+        assert!(exists.unwrap());
+    }
+
+    // =========================================================================
+    // git_commit tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_commit_success() {
+        let temp = create_test_repo();
+
+        // Stage a file
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_commit(
+            temp.path().to_str().unwrap().to_string(),
+            "Test commit message".to_string(),
+        ));
+
+        assert!(result.is_ok());
+        // Should return a commit hash
+        let hash = result.unwrap();
+        assert!(!hash.is_empty());
+        assert_eq!(hash.len(), 40); // Git SHA-1 hash length
+    }
+
+    #[test]
+    fn test_git_commit_empty_message() {
+        let temp = create_test_repo();
+
+        // Stage a file
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_commit(
+            temp.path().to_str().unwrap().to_string(),
+            "".to_string(),
+        ));
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty"));
+    }
+
+    // =========================================================================
+    // git_stage and git_unstage tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_stage_files() {
+        let temp = create_test_repo();
+
+        // Create untracked files
+        create_file(temp.path(), "file1.txt", "content1");
+        create_file(temp.path(), "file2.txt", "content2");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Stage one file
+        let result = rt.block_on(git_stage(
+            temp.path().to_str().unwrap().to_string(),
+            vec!["file1.txt".to_string()],
+        ));
+        assert!(result.is_ok());
+
+        // Check status - file1 should be staged
+        let status = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+        assert!(status.is_ok());
+        let status = status.unwrap();
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].path, "file1.txt");
+        assert!(status.untracked.contains(&"file2.txt".to_string()));
+    }
+
+    #[test]
+    fn test_git_unstage_files() {
+        let temp = create_test_repo();
+
+        // Create and stage a file
+        create_file(temp.path(), "file.txt", "content");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Unstage the file
+        let result = rt.block_on(git_unstage(
+            temp.path().to_str().unwrap().to_string(),
+            vec!["file.txt".to_string()],
+        ));
+        assert!(result.is_ok());
+
+        // Check status - file should be untracked again
+        let status = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
+        assert!(status.is_ok());
+        let status = status.unwrap();
+        assert!(status.staged.is_empty());
+        assert!(status.untracked.contains(&"file.txt".to_string()));
+    }
+
+    // =========================================================================
+    // git_log tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_log() {
+        let temp = create_test_repo();
+
+        // Create multiple commits
+        create_file(temp.path(), "file1.txt", "content1");
+        git_cmd(temp.path(), &["add", "file1.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "First commit"]);
+
+        create_file(temp.path(), "file2.txt", "content2");
+        git_cmd(temp.path(), &["add", "file2.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Second commit"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_log(temp.path().to_str().unwrap().to_string(), Some(10)));
+
+        assert!(result.is_ok());
+        let commits = result.unwrap();
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].message, "Second commit");
+        assert_eq!(commits[1].message, "First commit");
+        assert!(!commits[0].hash.is_empty());
+        assert_eq!(commits[0].short_hash.len(), 7);
+    }
+
+    // =========================================================================
+    // git_diff tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_diff_unstaged() {
+        let temp = create_test_repo();
+
+        // Create and commit a file
+        create_file(temp.path(), "file.txt", "original");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        // Modify the file
+        create_file(temp.path(), "file.txt", "modified content");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_diff(
+            temp.path().to_str().unwrap().to_string(),
+            None,
+            None,
+        ));
+
+        assert!(result.is_ok());
+        let diff = result.unwrap();
+        assert!(diff.contains("-original"));
+        assert!(diff.contains("+modified content"));
+    }
+
+    #[test]
+    fn test_git_diff_staged() {
+        let temp = create_test_repo();
+
+        // Create and commit a file
+        create_file(temp.path(), "file.txt", "original");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
+
+        // Modify and stage
+        create_file(temp.path(), "file.txt", "staged change");
+        git_cmd(temp.path(), &["add", "file.txt"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_diff(
+            temp.path().to_str().unwrap().to_string(),
+            None,
+            Some(true),
+        ));
+
+        assert!(result.is_ok());
+        let diff = result.unwrap();
+        assert!(diff.contains("-original"));
+        assert!(diff.contains("+staged change"));
+    }
+
+    // =========================================================================
+    // Serialization tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_status_result_serialization() {
+        let status = GitStatusResult {
+            branch: Some("main".to_string()),
+            staged: vec![FileStatus {
+                path: "file.txt".to_string(),
+                status: "added".to_string(),
+            }],
+            unstaged: vec![],
+            untracked: vec!["new.txt".to_string()],
+        };
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"branch\":\"main\""));
+        assert!(json.contains("\"staged\""));
+        assert!(json.contains("\"untracked\""));
+    }
+
+    #[test]
+    fn test_git_commit_serialization() {
+        let commit = GitCommit {
+            hash: "abc123def456".to_string(),
+            short_hash: "abc123d".to_string(),
+            message: "Test commit".to_string(),
+            author: "Test User".to_string(),
+            date: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&commit).unwrap();
+        assert!(json.contains("\"hash\":\"abc123def456\""));
+        assert!(json.contains("\"message\":\"Test commit\""));
+    }
+
+    #[test]
+    fn test_worktree_info_serialization() {
+        let info = WorktreeInfo {
+            path: "/path/to/worktree".to_string(),
+            head: "abc123".to_string(),
+            branch: Some("feature".to_string()),
+            is_main: false,
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"path\":\"/path/to/worktree\""));
+        assert!(json.contains("\"branch\":\"feature\""));
+        assert!(json.contains("\"is_main\":false"));
     }
 }

@@ -95,13 +95,27 @@ export async function createBranch(path: string, branch: string): Promise<void> 
 
 /**
  * Create a git worktree
+ * Returns the path where the worktree was created (in ~/.codelane/worktrees/)
  */
 export async function createWorktree(
   path: string,
-  worktreePath: string,
   branch: string
-): Promise<void> {
-  return invoke<void>('git_worktree_add', { path, worktreePath, branch });
+): Promise<string> {
+  return invoke<string>('git_worktree_add', { path, branch });
+}
+
+/**
+ * List all git worktrees for a repository
+ */
+export interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch: string | null;
+  isMain: boolean;
+}
+
+export async function listWorktrees(path: string): Promise<WorktreeInfo[]> {
+  return invoke<WorktreeInfo[]>('git_worktree_list', { path });
 }
 
 /**

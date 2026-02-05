@@ -93,7 +93,7 @@ export function useGitWatcher(options: UseGitWatcherOptions): UseGitWatcherRetur
     const currentDir = dir;
 
     fileWatchService
-      .watchDirectory(currentDir, () => {
+      .watchDirectory(currentDir, (_event) => {
         // Skip if this effect has been cleaned up
         if (isCancelled) return;
 

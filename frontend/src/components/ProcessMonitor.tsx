@@ -1,73 +1,20 @@
-import { createSignal, onCleanup, createEffect, Show } from 'solid-js';
-import { invoke } from '@tauri-apps/api/core';
-
-interface ProcessStats {
-  pid: number;
-  cpuUsage: number;
-  memoryUsage: number;
-  memoryUsageMb: number;
-}
+import { createEffect, Show } from 'solid-js';
+import { resourceManager, type ProcessStats } from '../services/ResourceManager';
 
 interface ProcessMonitorProps {
   laneId: string | null;
 }
 
 export function ProcessMonitor(props: ProcessMonitorProps) {
-  const [stats, setStats] = createSignal<ProcessStats | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
-
-  let intervalId: number | undefined;
-
-  // Poll for process stats
+  // Update resource manager's active lane when laneId changes
   createEffect(() => {
-    const laneId = props.laneId;
-
-    // Clear previous interval
-    if (intervalId !== undefined) {
-      clearInterval(intervalId);
-      intervalId = undefined;
-    }
-
-    if (!laneId) {
-      setStats(null);
-      setError(null);
-      return;
-    }
-
-    // Fetch stats immediately
-    fetchStatsByLaneId(laneId);
-
-    // Then poll every 2 seconds
-    intervalId = setInterval(() => {
-      fetchStatsByLaneId(laneId);
-    }, 2000) as unknown as number;
+    resourceManager.setActiveLane(props.laneId);
   });
 
-  onCleanup(() => {
-    if (intervalId !== undefined) {
-      clearInterval(intervalId);
-    }
-  });
-
-  const fetchStatsByLaneId = async (laneId: string) => {
-    try {
-      // First, get the PID from terminal state (more reliable than shell command)
-      const pid = await invoke<number | null>('get_terminal_pid_by_lane', { laneId });
-
-      if (!pid) {
-        setStats(null);
-        return;
-      }
-
-      // Then fetch stats for that PID
-      const result = await invoke<ProcessStats>('get_process_stats', { pid });
-      setStats(result);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch process stats:', err);
-      setError(err instanceof Error ? err.message : String(err));
-      setStats(null);
-    }
+  // Get stats from centralized resource manager
+  const stats = () => {
+    if (!props.laneId) return null;
+    return resourceManager.getProcessStats(props.laneId)();
   };
 
   const formatMemory = (mb: number) => {

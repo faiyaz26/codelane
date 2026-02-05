@@ -337,14 +337,17 @@ class EditorStateManager {
     const normalizedPath = path.replace(/\/+$/, '');
 
     try {
+      console.log('[EditorStateManager] Setting up file watcher for:', path, 'parentDir:', parentDir);
       const unsubscribe = await fileWatchService.watchDirectory(
         parentDir,
         (event: FileWatchEvent) => {
           // Normalize event path for comparison
           const eventPath = event.path.replace(/\/+$/, '');
 
+          console.log('[EditorStateManager] File event:', event.kind, 'eventPath:', eventPath, 'watching:', normalizedPath);
           // Only care about modifications to this specific file
           if (eventPath === normalizedPath && event.kind === 'modify') {
+            console.log('[EditorStateManager] Triggering external file change for:', path);
             this.handleExternalFileChange(laneId, path);
           }
         },

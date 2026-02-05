@@ -30,18 +30,14 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     // Check if directory is a git repo
     const isRepo = await isGitRepo(params.workingDir);
     if (isRepo) {
-      // Sanitize branch name for filesystem (replace / with -)
-      const safeBranchName = branch.replace(/\//g, '-');
-      worktreePath = `${params.workingDir}/.codelane-worktrees/${safeBranchName}`;
-
       // Check if branch exists, create if not
       const exists = await branchExists(params.workingDir, branch);
       if (!exists) {
         await createBranch(params.workingDir, branch);
       }
 
-      // Create worktree
-      await createWorktree(params.workingDir, worktreePath, branch);
+      // Create worktree - backend computes path in ~/.codelane/worktrees/
+      worktreePath = await createWorktree(params.workingDir, branch);
     } else {
       // Not a git repo, ignore branch
       branch = undefined;

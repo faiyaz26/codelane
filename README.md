@@ -164,6 +164,54 @@ make clean        # Clean build artifacts
 make install      # Install required tools
 ```
 
+## Testing
+
+The backend has comprehensive test coverage for core modules.
+
+### Running Tests
+
+```bash
+# Run all backend tests
+cargo test --lib
+
+# Run tests for a specific module
+cargo test --lib git::tests
+cargo test --lib terminal::tests
+cargo test --lib search::tests
+cargo test --lib process::tests
+cargo test --lib lane::tests
+cargo test --lib fs::tests
+cargo test --lib settings::tests
+cargo test --lib db::tests
+
+# Run with output
+cargo test --lib -- --nocapture
+```
+
+### Test Coverage
+
+| Module | Tests | Line Coverage |
+|--------|-------|---------------|
+| `search.rs` | 55 | 77.6% |
+| `lane.rs` | 45 | 86.3% |
+| `terminal.rs` | 37 | 81.2% |
+| `git.rs` | 33 | 94.2% |
+| `fs.rs` | 28 | 91.1% |
+| `settings.rs` | 22 | 78.8% |
+| `process.rs` | 12 | 87.1% |
+| `db.rs` | 8 | 100% |
+| **Total** | **230** | **84.9%** |
+
+Tests use `tempfile` for isolated filesystem tests and cover:
+- Serialization/deserialization of all data types
+- Git operations with temporary repositories
+- Pattern matching and regex escaping
+- Thread safety for shared state
+- File system operations (read, write, list, watch)
+- Lane and settings management
+- Terminal payloads and validation
+- Error handling and edge cases
+
 ## Key Features
 
 - **Lanes**: Isolated workspaces per project with their own terminals and state

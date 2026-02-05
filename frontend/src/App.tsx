@@ -12,6 +12,7 @@ import { initPlatform } from './lib/platform';
 import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
 import { tabManager } from './services/TabManager';
+import { resourceManager } from './services/ResourceManager';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
@@ -76,6 +77,9 @@ function App() {
       return;
     }
 
+    // Start centralized resource monitoring
+    resourceManager.start();
+
     // Load agent settings
     try {
       const settings = await getAgentSettings();
@@ -98,6 +102,11 @@ function App() {
     if (savedActiveLaneId) {
       await handleLaneSelect(savedActiveLaneId);
     }
+
+    // Cleanup resource monitoring on unmount
+    onCleanup(() => {
+      resourceManager.stop();
+    });
   });
 
   const loadLanes = async () => {

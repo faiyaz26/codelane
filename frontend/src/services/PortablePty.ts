@@ -35,7 +35,7 @@ interface TerminalExitPayload {
   code: number | null;
 }
 
-// Direct writer - no batching for lowest latency
+// Direct writer - no batching for lowest latency on input
 class DirectWriter {
   private terminalId: string;
 
@@ -52,6 +52,69 @@ class DirectWriter {
 
   dispose() {
     // Nothing to flush
+  }
+}
+
+/**
+ * BatchedReader - Buffers terminal output and flushes once per animation frame
+ *
+ * This prevents frame drops during heavy terminal output (e.g., large git logs,
+ * build output). Data is collected and flushed at most ~60 times per second.
+ */
+class BatchedReader {
+  private buffer: number[] = [];
+  private callback: ((data: Uint8Array) => void) | null = null;
+  private frameScheduled = false;
+  private disposed = false;
+
+  setCallback(callback: (data: Uint8Array) => void) {
+    this.callback = callback;
+  }
+
+  push(data: number[]) {
+    if (this.disposed) return;
+
+    // Append to buffer
+    this.buffer.push(...data);
+
+    // Schedule flush on next animation frame (if not already scheduled)
+    if (!this.frameScheduled) {
+      this.frameScheduled = true;
+      requestAnimationFrame(() => this.flush());
+    }
+  }
+
+  private flush() {
+    this.frameScheduled = false;
+
+    if (this.disposed || this.buffer.length === 0 || !this.callback) {
+      return;
+    }
+
+    // Convert buffered data to Uint8Array and send to callback
+    const data = new Uint8Array(this.buffer);
+    this.buffer = [];
+
+    try {
+      this.callback(data);
+    } catch (err) {
+      console.error('[PortablePty] Callback error:', err);
+    }
+  }
+
+  dispose() {
+    this.disposed = true;
+    // Flush any remaining data
+    if (this.buffer.length > 0 && this.callback) {
+      const data = new Uint8Array(this.buffer);
+      this.buffer = [];
+      try {
+        this.callback(data);
+      } catch {
+        // Ignore errors during dispose
+      }
+    }
+    this.callback = null;
   }
 }
 
@@ -85,8 +148,11 @@ export async function spawn(
     });
   }
 
-  // Create direct writer for this terminal (no batching = lowest latency)
+  // Create direct writer for this terminal (no batching = lowest latency on input)
   const writer = new DirectWriter(terminalId);
+
+  // Create batched reader for output (batches to prevent frame drops)
+  const reader = new BatchedReader();
 
   // Track event listeners for cleanup
   let dataUnlisten: UnlistenFn | null = null;
@@ -109,6 +175,7 @@ export async function spawn(
 
     async kill() {
       writer.dispose();
+      reader.dispose();
 
       // Clean up listeners
       if (dataUnlisten) {
@@ -128,13 +195,16 @@ export async function spawn(
     },
 
     async onData(callback: (data: Uint8Array) => void): Promise<UnlistenFn> {
-      // Listen for terminal output events
+      // Set callback on the batched reader
+      reader.setCallback(callback);
+
+      // Listen for terminal output events - data goes through batched reader
       const unlisten = await listen<TerminalOutputPayload>(
         'terminal-output',
         (event) => {
           if (event.payload.id === terminalId) {
-            // Convert number array to Uint8Array for xterm.js
-            callback(new Uint8Array(event.payload.data));
+            // Push to batched reader - will be flushed on next animation frame
+            reader.push(event.payload.data);
           }
         }
       );

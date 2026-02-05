@@ -253,3 +253,469 @@ pub async fn unwatch_path(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== FileEntry Tests ====================
+
+    #[test]
+    fn test_file_entry_serialization() {
+        let entry = FileEntry {
+            name: "test.txt".to_string(),
+            path: "/path/to/test.txt".to_string(),
+            is_dir: false,
+            is_file: true,
+            is_symlink: false,
+            size: Some(1024),
+            modified: Some(1234567890),
+        };
+
+        let json = serde_json::to_string(&entry).expect("Should serialize");
+        assert!(json.contains("test.txt"));
+        assert!(json.contains("1024"));
+    }
+
+    #[test]
+    fn test_file_entry_deserialization() {
+        let json = r#"{
+            "name": "file.rs",
+            "path": "/src/file.rs",
+            "is_dir": false,
+            "is_file": true,
+            "is_symlink": false,
+            "size": 2048,
+            "modified": 1234567890
+        }"#;
+
+        let entry: FileEntry = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(entry.name, "file.rs");
+        assert_eq!(entry.path, "/src/file.rs");
+        assert!(!entry.is_dir);
+        assert!(entry.is_file);
+        assert_eq!(entry.size, Some(2048));
+    }
+
+    #[test]
+    fn test_file_entry_directory() {
+        let entry = FileEntry {
+            name: "src".to_string(),
+            path: "/project/src".to_string(),
+            is_dir: true,
+            is_file: false,
+            is_symlink: false,
+            size: None,
+            modified: None,
+        };
+
+        assert!(entry.is_dir);
+        assert!(!entry.is_file);
+        assert!(entry.size.is_none());
+    }
+
+    #[test]
+    fn test_file_entry_symlink() {
+        let entry = FileEntry {
+            name: "link".to_string(),
+            path: "/project/link".to_string(),
+            is_dir: false,
+            is_file: false,
+            is_symlink: true,
+            size: None,
+            modified: None,
+        };
+
+        assert!(entry.is_symlink);
+        assert!(!entry.is_dir);
+        assert!(!entry.is_file);
+    }
+
+    #[test]
+    fn test_file_entry_clone() {
+        let entry = FileEntry {
+            name: "clone.txt".to_string(),
+            path: "/test/clone.txt".to_string(),
+            is_dir: false,
+            is_file: true,
+            is_symlink: false,
+            size: Some(512),
+            modified: Some(9876543210),
+        };
+
+        let cloned = entry.clone();
+        assert_eq!(cloned.name, entry.name);
+        assert_eq!(cloned.path, entry.path);
+        assert_eq!(cloned.size, entry.size);
+    }
+
+    // ==================== FileWatchEvent Tests ====================
+
+    #[test]
+    fn test_file_watch_event_serialization() {
+        let event = FileWatchEvent {
+            watch_id: "watch-123".to_string(),
+            path: "/watched/file.txt".to_string(),
+            kind: "modify".to_string(),
+        };
+
+        let json = serde_json::to_string(&event).expect("Should serialize");
+        assert!(json.contains("watch-123"));
+        assert!(json.contains("modify"));
+    }
+
+    #[test]
+    fn test_file_watch_event_deserialization() {
+        let json = r#"{
+            "watch_id": "abc-def",
+            "path": "/some/path",
+            "kind": "create"
+        }"#;
+
+        let event: FileWatchEvent = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(event.watch_id, "abc-def");
+        assert_eq!(event.kind, "create");
+    }
+
+    #[test]
+    fn test_file_watch_event_kinds() {
+        let kinds = vec!["create", "modify", "delete", "rename"];
+        for kind in kinds {
+            let event = FileWatchEvent {
+                watch_id: "test".to_string(),
+                path: "/test".to_string(),
+                kind: kind.to_string(),
+            };
+            assert_eq!(event.kind, kind);
+        }
+    }
+
+    #[test]
+    fn test_file_watch_event_clone() {
+        let event = FileWatchEvent {
+            watch_id: "original".to_string(),
+            path: "/original/path".to_string(),
+            kind: "delete".to_string(),
+        };
+
+        let cloned = event.clone();
+        assert_eq!(cloned.watch_id, event.watch_id);
+        assert_eq!(cloned.path, event.path);
+        assert_eq!(cloned.kind, event.kind);
+    }
+
+    // ==================== FileStats Tests ====================
+
+    #[test]
+    fn test_file_stats_serialization() {
+        let stats = FileStats {
+            modified: Some(1609459200),
+            size: 4096,
+        };
+
+        let json = serde_json::to_string(&stats).expect("Should serialize");
+        assert!(json.contains("1609459200"));
+        assert!(json.contains("4096"));
+    }
+
+    #[test]
+    fn test_file_stats_deserialization() {
+        let json = r#"{"modified": 1609459200, "size": 8192}"#;
+
+        let stats: FileStats = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(stats.modified, Some(1609459200));
+        assert_eq!(stats.size, 8192);
+    }
+
+    #[test]
+    fn test_file_stats_no_modified() {
+        let stats = FileStats {
+            modified: None,
+            size: 1024,
+        };
+
+        let json = serde_json::to_string(&stats).expect("Should serialize");
+        let deserialized: FileStats = serde_json::from_str(&json).expect("Should deserialize");
+        assert!(deserialized.modified.is_none());
+        assert_eq!(deserialized.size, 1024);
+    }
+
+    #[test]
+    fn test_file_stats_clone() {
+        let stats = FileStats {
+            modified: Some(12345),
+            size: 999,
+        };
+
+        let cloned = stats.clone();
+        assert_eq!(cloned.modified, stats.modified);
+        assert_eq!(cloned.size, stats.size);
+    }
+
+    // ==================== FileWatchState Tests ====================
+
+    #[test]
+    fn test_file_watch_state_new() {
+        let state = FileWatchState::new();
+        let watchers = state.watchers.lock().unwrap();
+        assert!(watchers.is_empty());
+    }
+
+    #[test]
+    fn test_file_watch_state_thread_safety() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let state = Arc::new(FileWatchState::new());
+        let mut handles = vec![];
+
+        for i in 0..5 {
+            let state_clone = Arc::clone(&state);
+            handles.push(thread::spawn(move || {
+                let watchers = state_clone.watchers.lock().unwrap();
+                // Just verify we can acquire the lock
+                let _ = watchers.len();
+                i
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread should complete");
+        }
+    }
+
+    // ==================== Sorting Logic Tests ====================
+
+    #[test]
+    fn test_file_entry_sorting_dirs_first() {
+        let mut entries = vec![
+            FileEntry {
+                name: "file.txt".to_string(),
+                path: "/file.txt".to_string(),
+                is_dir: false,
+                is_file: true,
+                is_symlink: false,
+                size: Some(100),
+                modified: None,
+            },
+            FileEntry {
+                name: "src".to_string(),
+                path: "/src".to_string(),
+                is_dir: true,
+                is_file: false,
+                is_symlink: false,
+                size: None,
+                modified: None,
+            },
+            FileEntry {
+                name: "README.md".to_string(),
+                path: "/README.md".to_string(),
+                is_dir: false,
+                is_file: true,
+                is_symlink: false,
+                size: Some(200),
+                modified: None,
+            },
+        ];
+
+        // Apply the same sorting logic as list_directory
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        });
+
+        assert!(entries[0].is_dir, "Directory should be first");
+        assert_eq!(entries[0].name, "src");
+        assert_eq!(entries[1].name, "file.txt"); // 'f' before 'R' case-insensitive
+        assert_eq!(entries[2].name, "README.md");
+    }
+
+    #[test]
+    fn test_file_entry_sorting_alphabetical() {
+        let mut entries = vec![
+            FileEntry {
+                name: "zebra.txt".to_string(),
+                path: "/zebra.txt".to_string(),
+                is_dir: false,
+                is_file: true,
+                is_symlink: false,
+                size: None,
+                modified: None,
+            },
+            FileEntry {
+                name: "Apple.txt".to_string(),
+                path: "/Apple.txt".to_string(),
+                is_dir: false,
+                is_file: true,
+                is_symlink: false,
+                size: None,
+                modified: None,
+            },
+            FileEntry {
+                name: "banana.txt".to_string(),
+                path: "/banana.txt".to_string(),
+                is_dir: false,
+                is_file: true,
+                is_symlink: false,
+                size: None,
+                modified: None,
+            },
+        ];
+
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        });
+
+        assert_eq!(entries[0].name, "Apple.txt");
+        assert_eq!(entries[1].name, "banana.txt");
+        assert_eq!(entries[2].name, "zebra.txt");
+    }
+
+    // ==================== Integration-like Tests ====================
+
+    #[tokio::test]
+    async fn test_read_file_nonexistent() {
+        let result = read_file("/nonexistent/path/file.txt".to_string(), None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read file"));
+    }
+
+    #[tokio::test]
+    async fn test_list_directory_nonexistent() {
+        let result = list_directory("/nonexistent/directory".to_string(), None, None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read directory"));
+    }
+
+    #[tokio::test]
+    async fn test_get_file_stats_nonexistent() {
+        let result = get_file_stats("/nonexistent/file.txt".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to get file stats"));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_real() {
+        // Read a file we know exists
+        let result = read_file(
+            std::env::current_dir()
+                .unwrap()
+                .join("Cargo.toml")
+                .to_string_lossy()
+                .to_string(),
+            None,
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let content = result.unwrap();
+        assert!(content.contains("[package]"));
+    }
+
+    #[tokio::test]
+    async fn test_list_directory_real() {
+        let result = list_directory(
+            std::env::current_dir().unwrap().to_string_lossy().to_string(),
+            None,
+            Some(false),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let entries = result.unwrap();
+        assert!(!entries.is_empty());
+
+        // Should contain Cargo.toml
+        assert!(entries.iter().any(|e| e.name == "Cargo.toml"));
+    }
+
+    #[tokio::test]
+    async fn test_list_directory_hidden_files() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let hidden_file = temp_dir.path().join(".hidden");
+        let normal_file = temp_dir.path().join("normal.txt");
+
+        std::fs::write(&hidden_file, "hidden").unwrap();
+        std::fs::write(&normal_file, "normal").unwrap();
+
+        // Without hidden files
+        let result = list_directory(
+            temp_dir.path().to_string_lossy().to_string(),
+            None,
+            Some(false),
+        )
+        .await
+        .unwrap();
+
+        assert!(!result.iter().any(|e| e.name == ".hidden"));
+        assert!(result.iter().any(|e| e.name == "normal.txt"));
+
+        // With hidden files
+        let result_with_hidden = list_directory(
+            temp_dir.path().to_string_lossy().to_string(),
+            None,
+            Some(true),
+        )
+        .await
+        .unwrap();
+
+        assert!(result_with_hidden.iter().any(|e| e.name == ".hidden"));
+        assert!(result_with_hidden.iter().any(|e| e.name == "normal.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_write_file_and_read() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let file_path = temp_dir.path().join("test_write.txt");
+        let content = "Hello, World!";
+
+        // Write file
+        let write_result = write_file(
+            file_path.to_string_lossy().to_string(),
+            content.to_string(),
+            None,
+        )
+        .await;
+        assert!(write_result.is_ok());
+
+        // Read it back
+        let read_result = read_file(file_path.to_string_lossy().to_string(), None).await;
+        assert!(read_result.is_ok());
+        assert_eq!(read_result.unwrap(), content);
+    }
+
+    #[tokio::test]
+    async fn test_write_file_create_dirs() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let nested_path = temp_dir.path().join("a").join("b").join("c").join("file.txt");
+
+        let result = write_file(
+            nested_path.to_string_lossy().to_string(),
+            "nested content".to_string(),
+            Some(true),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert!(nested_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_get_file_stats_real() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let file_path = temp_dir.path().join("stats_test.txt");
+        let content = "Test content for stats";
+
+        std::fs::write(&file_path, content).unwrap();
+
+        let result = get_file_stats(file_path.to_string_lossy().to_string()).await;
+        assert!(result.is_ok());
+
+        let stats = result.unwrap();
+        assert_eq!(stats.size, content.len() as u64);
+        assert!(stats.modified.is_some());
+    }
+}
