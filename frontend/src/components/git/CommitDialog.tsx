@@ -289,7 +289,20 @@ export function CommitDialog(props: CommitDialogProps) {
                 </div>
               </Show>
 
-              <Show when={!isLoading()}>
+              <Show when={!isLoading() && allFiles().length === 0}>
+                {/* Empty state */}
+                <div class="flex flex-col items-center justify-center py-12 text-center">
+                  <div class="p-3 rounded-full bg-emerald-500/10 mb-3">
+                    <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p class="text-sm text-zed-text-primary font-medium">All clean</p>
+                  <p class="text-xs text-zed-text-tertiary mt-1">No changes to commit — your working directory is clean</p>
+                </div>
+              </Show>
+
+              <Show when={!isLoading() && allFiles().length > 0}>
                 {/* Commit Message */}
                 <div class="px-5 py-4">
                   <label class="block text-xs font-medium text-zed-text-secondary mb-2">
@@ -434,18 +447,6 @@ export function CommitDialog(props: CommitDialogProps) {
                       </FileSection>
                     </Show>
 
-                    {/* Empty state */}
-                    <Show when={allFiles().length === 0}>
-                      <div class="flex flex-col items-center justify-center py-12 text-center">
-                        <div class="p-3 rounded-full bg-emerald-500/10 mb-3">
-                          <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <p class="text-sm text-zed-text-primary font-medium">All clean</p>
-                        <p class="text-xs text-zed-text-tertiary mt-1">No changes to commit — your working directory is clean</p>
-                      </div>
-                    </Show>
                   </div>
                 </div>
               </Show>
@@ -485,7 +486,7 @@ export function CommitDialog(props: CommitDialogProps) {
                     variant="primary"
                     size="md"
                     onClick={handleCommit}
-                    disabled={isCommitting() || !message().trim() || selectedCount() === 0}
+                    disabled={isCommitting() || hasExternalChanges() || !message().trim() || selectedCount() === 0}
                   >
                     {isCommitting() ? (
                       <span class="flex items-center gap-2">
