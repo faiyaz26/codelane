@@ -49,6 +49,7 @@ export function Sidebar(props: SidebarProps) {
           <Switch>
             <Match when={props.activeView === ActivityView.Explorer}>
               <FileExplorer
+                laneId={props.lane.id}
                 workingDir={props.effectiveWorkingDir}
                 onFileSelect={props.onFileSelect}
               />

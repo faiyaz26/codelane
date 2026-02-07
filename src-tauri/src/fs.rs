@@ -205,37 +205,40 @@ pub async fn watch_path(
         watchers.insert(watch_id_for_storage, watcher);
     }
 
-    // Spawn thread to handle events
-    std::thread::spawn(move || {
-        while let Ok(result) = rx.recv() {
-            match result {
-                Ok(event) => {
-                    let kind = match &event.kind {
-                        notify::EventKind::Create(_) => "create",
-                        notify::EventKind::Modify(m) => {
-                            match m {
-                                notify::event::ModifyKind::Name(_) => "rename",
-                                _ => "modify",
+    // Spawn thread to handle events (use Builder to handle spawn failure gracefully)
+    std::thread::Builder::new()
+        .name(format!("file-watch-{}", &watch_id[..8]))
+        .spawn(move || {
+            while let Ok(result) = rx.recv() {
+                match result {
+                    Ok(event) => {
+                        let kind = match &event.kind {
+                            notify::EventKind::Create(_) => "create",
+                            notify::EventKind::Modify(m) => {
+                                match m {
+                                    notify::event::ModifyKind::Name(_) => "rename",
+                                    _ => "modify",
+                                }
                             }
-                        }
-                        notify::EventKind::Remove(_) => "delete",
-                        _ => continue,
-                    };
-
-                    for path in event.paths {
-                        let watch_event = FileWatchEvent {
-                            watch_id: watch_id_for_thread.clone(),
-                            path: path.to_string_lossy().to_string(),
-                            kind: kind.to_string(),
+                            notify::EventKind::Remove(_) => "delete",
+                            _ => continue,
                         };
 
-                        let _ = app.emit("file-watch-event", &watch_event);
+                        for path in event.paths {
+                            let watch_event = FileWatchEvent {
+                                watch_id: watch_id_for_thread.clone(),
+                                path: path.to_string_lossy().to_string(),
+                                kind: kind.to_string(),
+                            };
+
+                            let _ = app.emit("file-watch-event", &watch_event);
+                        }
                     }
+                    Err(_) => {}
                 }
-                Err(_) => {}
             }
-        }
-    });
+        })
+        .map_err(|e| format!("Failed to spawn file watch thread: {}", e))?;
 
     Ok(watch_id)
 }

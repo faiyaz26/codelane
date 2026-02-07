@@ -6,6 +6,7 @@ import { FileTree } from './FileTree';
 import { ChangesView } from './ChangesView';
 
 interface FileExplorerProps {
+  laneId: string;
   workingDir: string;
   onFileSelect?: (path: string) => void;
 }
@@ -15,10 +16,13 @@ export function FileExplorer(props: FileExplorerProps) {
 
   const tree = useFileTree();
 
-  // Load directory and reset state when workingDir changes
+  // Reload file tree when lane or workingDir changes
   createEffect(() => {
+    // Track both laneId and workingDir so switching lanes always refreshes
+    const _laneId = props.laneId;
+    const dir = props.workingDir;
     tree.reset();
-    tree.loadDirectory(props.workingDir);
+    tree.loadDirectory(dir);
   });
 
   // Set up file watching with auto-refresh
@@ -68,6 +72,7 @@ export function FileExplorer(props: FileExplorerProps) {
 
         <Show when={activeTab() === 'changes'}>
           <ChangesView
+            laneId={props.laneId}
             workingDir={props.workingDir}
             onFileSelect={props.onFileSelect}
           />

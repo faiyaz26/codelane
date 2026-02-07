@@ -1,7 +1,8 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
-import { useGitWatcher } from '../../hooks';
+import { useGitService } from '../../hooks/useGitService';
 
 interface ChangesViewProps {
+  laneId: string;
   workingDir: string;
   onFileSelect?: (path: string) => void;
 }
@@ -32,10 +33,10 @@ export function ChangesView(props: ChangesViewProps) {
   const [unstagedCollapsed, setUnstagedCollapsed] = createSignal(false);
   const [untrackedCollapsed, setUntrackedCollapsed] = createSignal(false);
 
-  // Use the shared git watcher hook
-  const gitWatcher = useGitWatcher({
+  // Use centralized git watcher service (shared with TopBar)
+  const gitWatcher = useGitService({
+    laneId: () => props.laneId,
     workingDir: () => props.workingDir,
-    debounceMs: 500,
   });
 
   const allFiles = createMemo(() => {

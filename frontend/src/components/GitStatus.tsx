@@ -1,6 +1,6 @@
-import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
-import { gitWatcherService } from '../services/GitWatcherService';
-import type { GitStatusResult, FileStatus } from '../types/git';
+import { Show, For } from 'solid-js';
+import { useGitService } from '../hooks/useGitService';
+import type { FileStatus } from '../types/git';
 
 interface GitStatusProps {
   laneId: string;
@@ -8,48 +8,17 @@ interface GitStatusProps {
 }
 
 export function GitStatus(props: GitStatusProps) {
-  const [unsubscribe, setUnsubscribe] = createSignal<(() => void) | null>(null);
-
-  // Subscribe to git watcher service for this lane
-  createEffect(() => {
-    // Cleanup previous subscription
-    const prevUnsub = unsubscribe();
-    if (prevUnsub) prevUnsub();
-
-    if (!props.laneId || !props.workingDir) return;
-
-    const { state, unsubscribe: unsub } = gitWatcherService.subscribe(
-      props.laneId,
-      props.workingDir
-    );
-
-    // Store accessor and unsubscribe
-    setUnsubscribe(() => unsub);
-
-    // Create a derived accessor that we can use in the template
-    // The state from gitWatcherService is already reactive
-    onCleanup(() => {
-      unsub();
-    });
+  const git = useGitService({
+    laneId: () => props.laneId,
+    workingDir: () => props.workingDir,
   });
 
-  // Get state from service
-  const gitState = () => {
-    if (!props.laneId || !props.workingDir) {
-      return { isRepo: null, status: null, isLoading: true, error: null, lastUpdated: 0 };
-    }
-    const { state } = gitWatcherService.subscribe(props.laneId, props.workingDir);
-    return state();
-  };
-
-  const status = () => gitState().status;
-  const error = () => gitState().error;
-  const isLoading = () => gitState().isLoading;
+  const status = () => git.gitStatus();
+  const error = () => git.error();
+  const isLoading = () => git.isLoading();
 
   const handleRefresh = () => {
-    if (props.laneId) {
-      gitWatcherService.refresh(props.laneId);
-    }
+    git.refresh();
   };
 
   const getStatusIcon = (fileStatus: FileStatus) => {

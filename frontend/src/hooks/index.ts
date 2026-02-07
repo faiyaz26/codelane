@@ -1,2 +1,2 @@
 export { useResizable, useResizableWithNull } from './useResizable';
-export { useGitWatcher } from './useGitWatcher';
+export { useGitService } from './useGitService';

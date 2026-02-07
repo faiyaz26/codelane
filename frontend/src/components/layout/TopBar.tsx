@@ -2,10 +2,11 @@ import { Show, createSignal } from 'solid-js';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isMacOS } from '../../lib/platform';
 import { initGitRepo } from '../../lib/git-api';
-import { useGitWatcher } from '../../hooks';
+import { useGitService } from '../../hooks/useGitService';
 import { CommitDialog } from '../git';
 
 interface TopBarProps {
+  activeLaneId?: string;
   activeLaneName?: string;
   effectiveWorkingDir?: string;
 }
@@ -14,10 +15,10 @@ export function TopBar(props: TopBarProps) {
   const [commitDialogOpen, setCommitDialogOpen] = createSignal(false);
   const [isInitializing, setIsInitializing] = createSignal(false);
 
-  // Use the shared git watcher hook
-  const gitWatcher = useGitWatcher({
+  // Use centralized git watcher service (shared with ChangesView)
+  const gitWatcher = useGitService({
+    laneId: () => props.activeLaneId,
     workingDir: () => props.effectiveWorkingDir,
-    debounceMs: 300,
   });
 
   const handleInitGit = async () => {

@@ -270,9 +270,12 @@ pub async fn create_terminal(
     let app_clone = app.clone();
 
     // Spawn a background thread to read PTY output and emit events
-    thread::spawn(move || {
-        read_pty_output(reader, id_clone, app_clone);
-    });
+    thread::Builder::new()
+        .name(format!("pty-read-{}", &terminal_id[..8]))
+        .spawn(move || {
+            read_pty_output(reader, id_clone, app_clone);
+        })
+        .map_err(|e| format!("Failed to spawn PTY reader thread: {}", e))?;
 
     // Create the terminal instance (writer taken lazily on first write)
     let instance = TerminalInstance {

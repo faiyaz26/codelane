@@ -469,6 +469,38 @@ class EditorStateManager {
     }
   }
 
+  // Reload all open files for a lane (called on lane switch to pick up external changes)
+  async reloadOpenFiles(laneId: string): Promise<void> {
+    const lane = this.store.lanes[laneId];
+    if (!lane) return;
+
+    const fileIds = Object.keys(lane.openFiles);
+    if (fileIds.length === 0) return;
+
+    await Promise.all(
+      fileIds.map(async (fileId) => {
+        const file = lane.openFiles[fileId];
+        if (!file || file.isLoading) return;
+
+        // Skip files with unsaved local changes - flag them instead
+        if (file.isModified) {
+          try {
+            const stats = await invoke<FileStats>('get_file_stats', { path: file.path });
+            if (stats.modified && file.lastKnownModifiedTime !== undefined && stats.modified > file.lastKnownModifiedTime) {
+              this.updateFile(laneId, fileId, { hasExternalChanges: true });
+            }
+          } catch {
+            // File may have been deleted
+          }
+          return;
+        }
+
+        // Reload unmodified files silently
+        await this.reloadFile(laneId, fileId);
+      })
+    );
+  }
+
   // Set active file
   setActiveFile(laneId: string, fileId: string): void {
     this.ensureLane(laneId);

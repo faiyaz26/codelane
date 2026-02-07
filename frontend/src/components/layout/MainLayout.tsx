@@ -1,4 +1,4 @@
-import { createSignal, Show, createMemo, createEffect, batch } from 'solid-js';
+import { createSignal, Show, createMemo, createEffect, on, batch } from 'solid-js';
 import { TopBar } from './TopBar';
 import { ActivityBar, ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
@@ -117,6 +117,13 @@ export function MainLayout(props: MainLayoutProps) {
     return lane.worktreePath || lane.workingDir;
   };
 
+  // Reload open editor files when switching lanes (pick up external changes)
+  createEffect(on(() => props.activeLaneId, (laneId, prevLaneId) => {
+    if (laneId && laneId !== prevLaneId) {
+      editorStateManager.reloadOpenFiles(laneId);
+    }
+  }, { defer: true }));
+
   // Clear highlights when switching away from search view
   createEffect(() => {
     const view = activeView();
@@ -146,6 +153,7 @@ export function MainLayout(props: MainLayoutProps) {
   return (
     <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
       <TopBar
+        activeLaneId={props.activeLaneId ?? undefined}
         activeLaneName={activeLane()?.name}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
       />
