@@ -13,6 +13,7 @@ pub mod search;
 mod git;
 mod fs;
 
+#[cfg(feature = "devtools")]
 use tauri::Manager;
 
 /// Run the Tauri application
@@ -101,12 +102,12 @@ pub fn run() {
             search::search_cancel,
         ])
         // Window setup
-        .setup(|app| {
-            let window = app.get_webview_window("main").expect("main window not found");
-
-            // Enable devtools in debug mode
-            #[cfg(debug_assertions)]
-            window.open_devtools();
+        .setup(|_app| {
+            #[cfg(feature = "devtools")]
+            {
+                let window = _app.get_webview_window("main").expect("main window not found");
+                window.open_devtools();
+            }
 
             tracing::info!("Codelane window initialized");
             Ok(())

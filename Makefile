@@ -25,7 +25,7 @@ help:
 
 # Development
 dev:
-	pnpm dev
+	pnpm tauri dev --features devtools
 
 frontend:
 	cd frontend && pnpm dev

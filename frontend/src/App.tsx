@@ -30,6 +30,13 @@ function App() {
   // Track terminal IDs for process monitoring
   const [terminalIds, setTerminalIds] = createSignal<Map<string, string>>(new Map());
 
+  // Disable right-click context menu in production
+  onMount(() => {
+    if (!import.meta.env.DEV) {
+      document.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+  });
+
   // Disable autocomplete, autocorrect, and spellcheck on all inputs globally
   onMount(() => {
     const disableInputFeatures = (element: Element) => {
