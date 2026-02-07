@@ -55,13 +55,17 @@ function createInitialState(): LaneGitState {
 
 async function loadGitStatus(entry: LaneWatchEntry): Promise<void> {
   const { workingDir, state } = entry;
+  const current = state.get();
 
-  // Mark as loading
-  state.set({
-    ...state.get(),
-    isLoading: true,
-    error: null,
-  });
+  // Only show loading spinner on initial load (no existing data).
+  // Subsequent refreshes keep existing data visible while loading in background.
+  if (current.status === null && current.isRepo === null) {
+    state.set({
+      ...current,
+      isLoading: true,
+      error: null,
+    });
+  }
 
   try {
     const repoCheck = await isGitRepo(workingDir);
@@ -95,9 +99,13 @@ async function loadGitStatus(entry: LaneWatchEntry): Promise<void> {
   }
 }
 
-function handleFileChange(laneId: string, _event: FileWatchEvent): void {
+function handleFileChange(laneId: string, event: FileWatchEvent): void {
   const entry = laneWatchers.get(laneId);
   if (!entry) return;
+
+  // Ignore changes inside .git directory - git status reads/writes these,
+  // which would create an infinite refresh loop
+  if (event.path.includes('/.git/') || event.path.endsWith('/.git')) return;
 
   // Clear existing debounce
   if (entry.debounceTimeout) {
