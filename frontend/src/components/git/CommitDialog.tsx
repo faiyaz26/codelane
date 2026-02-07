@@ -437,13 +437,13 @@ export function CommitDialog(props: CommitDialogProps) {
                     {/* Empty state */}
                     <Show when={allFiles().length === 0}>
                       <div class="flex flex-col items-center justify-center py-12 text-center">
-                        <div class="p-3 rounded-full bg-zed-bg-surface mb-3">
-                          <svg class="w-6 h-6 text-zed-text-disabled" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <div class="p-3 rounded-full bg-emerald-500/10 mb-3">
+                          <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         </div>
-                        <p class="text-sm text-zed-text-secondary">No changes to commit</p>
-                        <p class="text-xs text-zed-text-disabled mt-1">Your working directory is clean</p>
+                        <p class="text-sm text-zed-text-primary font-medium">All clean</p>
+                        <p class="text-xs text-zed-text-tertiary mt-1">No changes to commit — your working directory is clean</p>
                       </div>
                     </Show>
                   </div>
@@ -465,31 +465,39 @@ export function CommitDialog(props: CommitDialogProps) {
 
             {/* Footer */}
             <div class="px-5 py-4 border-t border-zed-border-default bg-zed-bg-panel/30 flex items-center justify-between">
-              <div class="text-xs text-zed-text-tertiary">
-                <Show when={selectedCount() > 0}>
-                  {selectedCount()} file{selectedCount() !== 1 ? 's' : ''} selected
-                </Show>
-              </div>
-              <div class="flex items-center gap-3">
-                <Button variant="secondary" size="md" onClick={() => props.onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleCommit}
-                  disabled={isCommitting() || !message().trim() || selectedCount() === 0}
-                >
-                  {isCommitting() ? (
-                    <span class="flex items-center gap-2">
-                      <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Committing...
-                    </span>
-                  ) : (
-                    'Commit Changes'
-                  )}
-                </Button>
-              </div>
+              <Show when={allFiles().length > 0} fallback={
+                <div class="flex-1 flex justify-end">
+                  <Button variant="secondary" size="md" onClick={() => props.onOpenChange(false)}>
+                    Close
+                  </Button>
+                </div>
+              }>
+                <div class="text-xs text-zed-text-tertiary">
+                  <Show when={selectedCount() > 0}>
+                    {selectedCount()} file{selectedCount() !== 1 ? 's' : ''} selected
+                  </Show>
+                </div>
+                <div class="flex items-center gap-3">
+                  <Button variant="secondary" size="md" onClick={() => props.onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleCommit}
+                    disabled={isCommitting() || !message().trim() || selectedCount() === 0}
+                  >
+                    {isCommitting() ? (
+                      <span class="flex items-center gap-2">
+                        <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Committing...
+                      </span>
+                    ) : (
+                      'Commit Changes'
+                    )}
+                  </Button>
+                </div>
+              </Show>
             </div>
 
             {/* Close Button */}
