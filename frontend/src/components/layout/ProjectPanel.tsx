@@ -149,7 +149,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
       onClick={handlePanelClick}
     >
       {/* Header */}
-      <div class="panel-header justify-between">
+      <div class="panel-header justify-between pr-2">
         <span class="panel-header-title">Projects</span>
         <button
           class="w-5 h-5 flex items-center justify-center rounded text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover transition-colors"

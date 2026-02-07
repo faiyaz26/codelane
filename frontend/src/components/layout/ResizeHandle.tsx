@@ -17,12 +17,13 @@ export function ResizeHandle(props: ResizeHandleProps) {
     setIsResizing(true);
     props.onResizeStart?.();
 
-    const startX = e.clientX;
+    let lastX = e.clientX;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = props.direction === 'right'
-        ? startX - e.clientX  // Inverted for right-side panels
-        : e.clientX - startX; // Normal for left-side panels
+        ? lastX - e.clientX  // Inverted for right-side panels
+        : e.clientX - lastX; // Normal for left-side panels
+      lastX = e.clientX;
       props.onResize(delta);
     };
 
