@@ -3,12 +3,14 @@ import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import { FileChangeItem, type FileChangeStatus } from './FileChangeItem';
 import { Button } from '../ui/Button';
 import { getGitStatus, stageFiles, unstageFiles, createCommit } from '../../lib/git-api';
+import { useGitService } from '../../hooks/useGitService';
 import type { GitStatusResult } from '../../types/git';
 import { isMacOS } from '../../lib/platform';
 
 interface CommitDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  laneId: string;
   workingDir: string;
   onCommitSuccess?: () => void;
 }
@@ -32,13 +34,35 @@ export function CommitDialog(props: CommitDialogProps) {
   const [unstagedCollapsed, setUnstagedCollapsed] = createSignal(false);
   const [untrackedCollapsed, setUntrackedCollapsed] = createSignal(false);
 
+  // Track external git changes while dialog is open
+  const [hasExternalChanges, setHasExternalChanges] = createSignal(false);
+  const gitService = useGitService({
+    laneId: () => props.laneId,
+    workingDir: () => props.workingDir,
+  });
+
   // Memoize the shortcut key to avoid recreating on every render
   const shortcutKey = createMemo(() => isMacOS() ? '⌘' : 'Ctrl');
 
   // Load git status when dialog opens
   createEffect(() => {
     if (props.open && props.workingDir) {
+      setHasExternalChanges(false);
       loadGitStatus();
+    }
+  });
+
+  // Detect external git status changes while dialog is open
+  createEffect(() => {
+    const externalStatus = gitService.gitStatus();
+    if (!props.open || isLoading() || !gitStatus() || !externalStatus) return;
+
+    // Compare total change count - if it differs, something changed externally
+    const localTotal = (gitStatus()!.staged.length + gitStatus()!.unstaged.length + gitStatus()!.untracked.length);
+    const externalTotal = (externalStatus.staged.length + externalStatus.unstaged.length + externalStatus.untracked.length);
+
+    if (localTotal !== externalTotal) {
+      setHasExternalChanges(true);
     }
   });
 
@@ -244,6 +268,24 @@ export function CommitDialog(props: CommitDialogProps) {
                     <div class="w-8 h-8 border-2 border-zed-accent-blue/30 border-t-zed-accent-blue rounded-full animate-spin" />
                     <span class="text-sm text-zed-text-tertiary">Loading changes...</span>
                   </div>
+                </div>
+              </Show>
+
+              {/* External changes notification */}
+              <Show when={hasExternalChanges()}>
+                <div class="mx-5 mt-4 p-3 rounded-lg bg-zed-accent-blue/10 border border-zed-accent-blue/20 flex items-center justify-between">
+                  <p class="text-sm text-zed-accent-blue flex items-center gap-2">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Repository state has changed
+                  </p>
+                  <button
+                    class="px-3 py-1 text-xs font-medium text-zed-accent-blue hover:bg-zed-accent-blue/10 rounded transition-colors"
+                    onClick={() => { setHasExternalChanges(false); loadGitStatus(); }}
+                  >
+                    Refresh
+                  </button>
                 </div>
               </Show>
 

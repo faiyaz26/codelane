@@ -129,6 +129,7 @@ export function TopBar(props: TopBarProps) {
         <CommitDialog
           open={commitDialogOpen()}
           onOpenChange={setCommitDialogOpen}
+          laneId={props.activeLaneId!}
           workingDir={props.effectiveWorkingDir!}
           onCommitSuccess={handleCommitSuccess}
         />
