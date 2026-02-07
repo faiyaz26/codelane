@@ -103,9 +103,15 @@ function handleFileChange(laneId: string, event: FileWatchEvent): void {
   const entry = laneWatchers.get(laneId);
   if (!entry) return;
 
-  // Ignore changes inside .git directory - git status reads/writes these,
-  // which would create an infinite refresh loop
-  if (event.path.includes('/.git/') || event.path.endsWith('/.git')) return;
+  // Selectively handle .git directory changes:
+  // - Allow .git/HEAD (branch switch) and .git/refs/ (commits, branch ops)
+  // - Ignore everything else in .git/ (objects, logs, index) to avoid
+  //   refresh loops since git status itself can update .git/index
+  if (event.path.includes('/.git/') || event.path.endsWith('/.git')) {
+    const isHeadChange = event.path.endsWith('/.git/HEAD');
+    const isRefsChange = event.path.includes('/.git/refs/');
+    if (!isHeadChange && !isRefsChange) return;
+  }
 
   // Clear existing debounce
   if (entry.debounceTimeout) {
