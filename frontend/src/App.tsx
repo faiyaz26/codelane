@@ -13,6 +13,7 @@ import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
 import { tabManager } from './services/TabManager';
 import { resourceManager } from './services/ResourceManager';
+import codelaneLogoWhite from './assets/codelane-logo-white.png';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
@@ -226,15 +227,7 @@ function App() {
         fallback={
           <div class="h-screen w-screen flex items-center justify-center bg-zed-bg-app text-zed-text-primary">
             <div class="text-center">
-              <svg
-                class="w-12 h-12 mx-auto mb-4 text-zed-accent-blue animate-pulse"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z" />
-              </svg>
+              <img src={codelaneLogoWhite} alt="Codelane" class="w-12 mx-auto mb-4 opacity-60 animate-pulse" />
               <p class="text-zed-text-secondary">Loading...</p>
             </div>
           </div>

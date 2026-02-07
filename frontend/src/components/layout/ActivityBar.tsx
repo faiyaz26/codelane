@@ -1,4 +1,5 @@
 import { For } from 'solid-js';
+import codelaneLogoWhite from '../../assets/codelane-logo-white.png';
 
 export enum ActivityView {
   Explorer = 'explorer',
@@ -153,15 +154,7 @@ export function ActivityBar(props: ActivityBarProps) {
 
         {/* Logo */}
         <div class="w-10 h-10 flex items-center justify-center" title="Codelane">
-          <svg
-            class="w-6 h-6 text-zed-accent-blue"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z" />
-          </svg>
+          <img src={codelaneLogoWhite} alt="Codelane" class="w-7 h-7 object-contain opacity-60" />
         </div>
       </div>
     </div>

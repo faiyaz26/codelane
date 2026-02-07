@@ -79,14 +79,7 @@ pub struct LaneState {
 impl LaneState {
     /// Creates a new LaneState and initializes the storage directory
     pub fn new() -> Self {
-        let storage_dir = dirs::home_dir()
-            .expect("Could not find home directory")
-            .join(".codelane")
-            .join("lanes");
-
-        // Create the storage directory if it doesn't exist
-        fs::create_dir_all(&storage_dir)
-            .expect("Failed to create lanes storage directory");
+        let storage_dir = crate::paths::lanes_dir();
 
         let mut state = Self {
             lanes: Mutex::new(HashMap::new()),

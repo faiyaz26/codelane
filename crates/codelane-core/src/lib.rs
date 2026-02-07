@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod lane;
+pub mod paths;
 pub mod project;
 
 mod error;

@@ -438,22 +438,17 @@ pub async fn git_create_branch(path: String, branch: String) -> Result<(), Strin
 }
 
 /// Compute the global worktree path for a project and branch.
-/// Worktrees are stored in ~/.codelane/worktrees/<project-name>/<branch>/
+/// Worktrees are stored in ~/.codelane/<env>/worktrees/<project-name>/<branch>/
 /// This keeps them outside the project directory to avoid tooling conflicts
 /// (ESLint, TypeScript, etc. walking up the directory tree).
 fn get_worktree_path(repo_root: &Path, branch: &str) -> Result<std::path::PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-
     // Get project name from repo root
     let project_name = repo_root
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or("Could not determine project name from repository path")?;
 
-    // Sanitize branch name for filesystem (replace / with -)
-    let safe_branch = branch.replace('/', "-");
-
-    Ok(home.join(".codelane").join("worktrees").join(project_name).join(safe_branch))
+    Ok(crate::paths::worktree_path(project_name, branch))
 }
 
 /// Create a git worktree
@@ -714,8 +709,8 @@ mod tests {
         let path = result.unwrap();
         let path_str = path.to_string_lossy();
 
-        // Should contain .codelane/worktrees
-        assert!(path_str.contains(".codelane/worktrees"));
+        // Should contain .codelane/<env>/worktrees
+        assert!(path_str.contains(".codelane/dev/worktrees"));
         // Should contain the branch name
         assert!(path_str.contains("feature-branch"));
     }

@@ -2,15 +2,11 @@
 
 use std::path::PathBuf;
 
+use crate::paths;
+
 /// Get the database file path
 pub fn get_db_path() -> PathBuf {
-    let home = std::env::var("HOME").expect("HOME environment variable not set");
-    let codelane_dir = PathBuf::from(home).join(".codelane");
-
-    // Ensure directory exists
-    std::fs::create_dir_all(&codelane_dir).expect("Failed to create .codelane directory");
-
-    codelane_dir.join("codelane.db")
+    paths::db_path()
 }
 
 /// Get the database URL for tauri-plugin-sql
@@ -67,7 +63,6 @@ mod tests {
 
     #[test]
     fn test_init_schema_contains_sql() {
-        // Schema should contain common SQL keywords
         assert!(INIT_SCHEMA.contains("CREATE") || INIT_SCHEMA.contains("create"));
     }
 

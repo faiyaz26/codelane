@@ -4,6 +4,7 @@
 //! Commands are organized by domain: lane, git, and filesystem operations.
 
 pub mod lane;
+pub mod paths;
 pub mod settings;
 pub mod db;
 pub mod process;

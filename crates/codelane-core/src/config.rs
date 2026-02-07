@@ -316,13 +316,9 @@ impl AgentSettings {
         Ok(())
     }
 
-    /// Get the settings file path (~/.codelane/settings.json)
+    /// Get the settings file path (~/.codelane/<env>/settings.json)
     pub fn settings_path() -> crate::Result<PathBuf> {
-        let home = std::env::var("HOME")
-            .map_err(|_| crate::Error::Config("Could not determine home directory".into()))?;
-
-        let codelane_dir = PathBuf::from(home).join(".codelane");
-        Ok(codelane_dir.join("settings.json"))
+        crate::paths::settings_path()
     }
 }
 
