@@ -4,7 +4,7 @@ import codelaneLogoWhite from '../../assets/codelane-logo-white.png';
 export enum ActivityView {
   Explorer = 'explorer',
   Search = 'search',
-  Git = 'git',
+  CodeReview = 'code-review',
   Extensions = 'extensions',
 }
 

@@ -10,7 +10,6 @@ import { ResizeHandle } from './ResizeHandle';
 import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
 import { editorStateManager } from '../../services/EditorStateManager';
-import { getLanguageDisplayName } from '../editor/types';
 import type { Lane } from '../../types/lane';
 
 interface MainLayoutProps {
@@ -68,20 +67,6 @@ export function MainLayout(props: MainLayoutProps) {
     const laneId = props.activeLaneId;
     if (!laneId) return false;
     return editorStateManager.hasOpenFiles(laneId) || selectedFile() !== undefined;
-  });
-
-  const fileInfo = createMemo(() => {
-    const laneId = props.activeLaneId;
-    if (!laneId) return null;
-
-    const activeFileId = editorStateManager.getActiveFileId(laneId);
-    if (!activeFileId) return null;
-
-    const files = editorStateManager.getOpenFiles(laneId);
-    const file = files[activeFileId];
-    if (!file) return null;
-
-    return { language: getLanguageDisplayName(file.language) };
   });
 
   // Actions
@@ -237,10 +222,7 @@ export function MainLayout(props: MainLayoutProps) {
         />
       </div>
 
-      <StatusBar
-        activeLane={activeLane()}
-        fileInfo={fileInfo()}
-      />
+      <StatusBar />
     </div>
   );
 }
