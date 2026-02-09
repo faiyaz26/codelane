@@ -6,6 +6,14 @@ import type { FileChangeStats } from '../../types/git';
 
 export type FileSortOrder = 'alphabetical' | 'smart' | 'smart-dependencies' | 'change-size' | 'none';
 
+interface GitCommit {
+  hash: string;
+  short_hash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 interface CodeReviewChangesProps {
   laneId: string;
   workingDir: string;
@@ -16,6 +24,10 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
   const [sortOrder, setSortOrder] = createSignal<FileSortOrder>('smart');
   const [sortedFiles, setSortedFiles] = createSignal<FileChangeStats[]>([]);
+  const [selectedCommit, setSelectedCommit] = createSignal<GitCommit | null>(null);
+  const [commits, setCommits] = createSignal<GitCommit[]>([]);
+  const [splitPosition, setSplitPosition] = createSignal(60); // % for top panel
+  const [isResizing, setIsResizing] = createSignal(false);
 
   // Watch for git changes (auto-refreshes when files change)
   const gitChanges = useGitChanges({
@@ -23,8 +35,8 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     workingDir: props.workingDir,
   });
 
-  // Load sort order from localStorage
-  onMount(() => {
+  // Load commits on mount
+  onMount(async () => {
     const saved = localStorage.getItem('codelane:fileSortOrder');
     if (saved && ['alphabetical', 'smart', 'smart-dependencies', 'change-size', 'none'].includes(saved)) {
       setSortOrder(saved as FileSortOrder);
@@ -36,6 +48,17 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     };
     window.addEventListener('fileSortOrderChanged', handleSortOrderChange as EventListener);
 
+    // Load commit history
+    try {
+      const commitHistory = await invoke<GitCommit[]>('git_log', {
+        path: props.workingDir,
+        count: 50,
+      });
+      setCommits(commitHistory);
+    } catch (error) {
+      console.error('Failed to load commit history:', error);
+    }
+
     onCleanup(() => {
       window.removeEventListener('fileSortOrderChanged', handleSortOrderChange as EventListener);
     });
@@ -43,6 +66,31 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
 
   // Sort files whenever changes or sort order updates
   createEffect(async () => {
+    const commit = selectedCommit();
+
+    // If a commit is selected, get its changes
+    if (commit) {
+      try {
+        const commitChanges = await invoke<FileChangeStats[]>('git_commit_changes', {
+          path: props.workingDir,
+          commitHash: commit.hash,
+        });
+
+        // Sort the commit changes
+        const sorted = await invoke<FileChangeStats[]>('git_sort_files', {
+          files: commitChanges,
+          sortOrder: sortOrder(),
+          workingDir: props.workingDir,
+        });
+        setSortedFiles(sorted);
+      } catch (error) {
+        console.error('Failed to load commit changes:', error);
+        setSortedFiles([]);
+      }
+      return;
+    }
+
+    // Otherwise show uncommitted changes
     const files = gitChanges.changes();
     const order = sortOrder();
 
@@ -70,6 +118,50 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     // Open file in diff view mode
     await editorStateManager.openFileDiff(props.laneId, file.path, props.workingDir);
   };
+
+  const handleCommitClick = (commit: GitCommit) => {
+    setSelectedCommit(commit);
+    setSelectedFile(null);
+  };
+
+  const handleShowUncommitted = () => {
+    setSelectedCommit(null);
+    setSelectedFile(null);
+  };
+
+  const handleMouseDown = (e: MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing()) return;
+
+    const container = document.getElementById('split-container');
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const newPosition = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // Clamp between 30% and 80%
+    if (newPosition >= 30 && newPosition <= 80) {
+      setSplitPosition(newPosition);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+  };
+
+  onMount(() => {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    onCleanup(() => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    });
+  });
 
   const getStatusColor = (status: FileChangeStats['status']) => {
     switch (status) {
@@ -121,9 +213,22 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     localStorage.setItem('codelane:fileSortOrder', newOrder);
   };
 
-  const totalAdditions = () => gitChanges.changes().reduce((sum, f) => sum + f.additions, 0);
-  const totalDeletions = () => gitChanges.changes().reduce((sum, f) => sum + f.deletions, 0);
-  const fileCount = () => gitChanges.changes().length;
+  const totalAdditions = () => sortedFiles().reduce((sum, f) => sum + f.additions, 0);
+  const totalDeletions = () => sortedFiles().reduce((sum, f) => sum + f.deletions, 0);
+  const fileCount = () => sortedFiles().length;
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    return date.toLocaleDateString();
+  };
 
   const getSortIcon = () => {
     switch (sortOrder()) {
@@ -156,180 +261,247 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   };
 
   return (
-    <div class="flex flex-col h-full overflow-hidden">
-      {/* Summary Header */}
-      <div class="px-3 py-2 border-b border-zed-border-subtle bg-zed-bg-panel">
-        <div class="flex items-center justify-between mb-1">
-          <div class="text-xs text-zed-text-tertiary">
-            <Show when={!gitChanges.isLoading()} fallback={<span>Loading...</span>}>
-              {fileCount()} {fileCount() === 1 ? 'file' : 'files'} changed
-            </Show>
-          </div>
+    <div id="split-container" class="flex flex-col h-full overflow-hidden">
+      {/* Top Panel: File Changes */}
+      <div class="flex flex-col overflow-hidden" style={{ height: `${splitPosition()}%` }}>
+        {/* Summary Header */}
+        <div class="px-3 py-2 border-b border-zed-border-subtle bg-zed-bg-panel flex-shrink-0">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <div class="text-xs text-zed-text-tertiary">
+                <Show when={!gitChanges.isLoading()} fallback={<span>Loading...</span>}>
+                  {fileCount()} {fileCount() === 1 ? 'file' : 'files'} changed
+                </Show>
+              </div>
+              {/* Show Uncommitted Button */}
+              <Show when={selectedCommit()}>
+                <button
+                  onClick={handleShowUncommitted}
+                  class="px-2 py-0.5 text-xs bg-zed-accent-blue text-white rounded hover:bg-zed-accent-blue/80 transition-colors"
+                  title="Show uncommitted changes"
+                >
+                  Show Uncommitted
+                </button>
+              </Show>
+            </div>
 
-          {/* Sort Order Dropdown */}
-          <div class="relative group">
-            <button
-              class="flex items-center gap-1.5 px-2 py-1 text-xs text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
-              title="Change sort order"
-            >
-              {getSortIcon()}
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+            {/* Sort Order Dropdown */}
+            <div class="relative group">
+              <button
+                class="flex items-center gap-1.5 px-2 py-1 text-xs text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
+                title="Change sort order"
+              >
+                {getSortIcon()}
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-            {/* Dropdown Menu */}
-            <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 bg-zed-bg-overlay border border-zed-border-default rounded-md shadow-lg z-10">
-              <div class="py-1">
-                <button
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
-                    sortOrder() === 'smart' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
-                  }`}
-                  onClick={() => handleSortOrderChange('smart')}
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                  <span>Smart (Recommended)</span>
-                </button>
-                <button
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
-                    sortOrder() === 'smart-dependencies' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
-                  }`}
-                  onClick={() => handleSortOrderChange('smart-dependencies')}
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <span>Smart + Dependencies</span>
-                </button>
-                <button
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
-                    sortOrder() === 'alphabetical' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
-                  }`}
-                  onClick={() => handleSortOrderChange('alphabetical')}
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
-                  </svg>
-                  <span>Alphabetical</span>
-                </button>
-                <button
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
-                    sortOrder() === 'change-size' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
-                  }`}
-                  onClick={() => handleSortOrderChange('change-size')}
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                  </svg>
-                  <span>Change Size</span>
-                </button>
-                <button
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
-                    sortOrder() === 'none' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
-                  }`}
-                  onClick={() => handleSortOrderChange('none')}
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                  </svg>
-                  <span>Git Order</span>
-                </button>
+              {/* Dropdown Menu */}
+              <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 bg-zed-bg-overlay border border-zed-border-default rounded-md shadow-lg z-10">
+                <div class="py-1">
+                  <button
+                    class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                      sortOrder() === 'smart' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                    }`}
+                    onClick={() => handleSortOrderChange('smart')}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    <span>Smart (Recommended)</span>
+                  </button>
+                  <button
+                    class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                      sortOrder() === 'smart-dependencies' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                    }`}
+                    onClick={() => handleSortOrderChange('smart-dependencies')}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span>Smart + Dependencies</span>
+                  </button>
+                  <button
+                    class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                      sortOrder() === 'alphabetical' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                    }`}
+                    onClick={() => handleSortOrderChange('alphabetical')}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+                    </svg>
+                    <span>Alphabetical</span>
+                  </button>
+                  <button
+                    class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                      sortOrder() === 'change-size' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                    }`}
+                    onClick={() => handleSortOrderChange('change-size')}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                    </svg>
+                    <span>Change Size</span>
+                  </button>
+                  <button
+                    class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                      sortOrder() === 'none' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                    }`}
+                    onClick={() => handleSortOrderChange('none')}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span>Git Order</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+
+          <div class="flex items-center gap-3 text-xs font-mono">
+            <span class="text-green-400">+{totalAdditions()}</span>
+            <span class="text-red-400">-{totalDeletions()}</span>
+          </div>
         </div>
 
-        <div class="flex items-center gap-3 text-xs font-mono">
-          <span class="text-green-400">+{totalAdditions()}</span>
-          <span class="text-red-400">-{totalDeletions()}</span>
-        </div>
-      </div>
-
-      {/* File List */}
-      <div class="flex-1 overflow-y-auto">
-        <Show
-          when={!gitChanges.isLoading()}
-          fallback={
-            <div class="p-4 text-center text-zed-text-tertiary text-sm">
-              Loading changes...
-            </div>
-          }
-        >
+        {/* File List */}
+        <div class="flex-1 overflow-y-auto">
           <Show
-            when={fileCount() > 0}
+            when={!gitChanges.isLoading() || selectedCommit()}
             fallback={
               <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                No changes to review
+                Loading changes...
               </div>
             }
           >
-            <For each={sortedFiles()}>
-              {(file) => (
+            <Show
+              when={fileCount() > 0}
+              fallback={
+                <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                  No changes to review
+                </div>
+              }
+            >
+              <For each={sortedFiles()}>
+                {(file) => (
+                  <button
+                    onClick={() => handleFileClick(file)}
+                    class={`w-full flex items-start gap-2 px-2 py-1.5 hover:bg-zed-bg-hover transition-colors text-left border-b border-zed-border-subtle/50 ${
+                      selectedFile() === file.path ? 'bg-zed-bg-hover' : ''
+                    }`}
+                  >
+                    {/* Status Badge */}
+                    <div
+                      class={`w-4 h-4 flex items-center justify-center text-xs font-bold rounded flex-shrink-0 ${getStatusColor(
+                        file.status
+                      )}`}
+                    >
+                      {getStatusIcon(file.status)}
+                    </div>
+
+                    {/* File Info */}
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm text-zed-text-primary font-medium truncate">
+                        {getFileName(file.path)}
+                      </div>
+                      {getFilePath(file.path) && (
+                        <div class="text-xs text-zed-text-tertiary truncate">
+                          {getFilePath(file.path)}
+                        </div>
+                      )}
+                      {file.status !== 'deleted' && file.status !== 'added' && (
+                        <div class="text-xs font-mono">
+                          <span class="text-green-400">+{file.additions}</span>
+                          <span class="text-zed-text-tertiary mx-1">/</span>
+                          <span class="text-red-400">-{file.deletions}</span>
+                        </div>
+                      )}
+                      {file.status === 'added' && (
+                        <div class="text-xs font-mono text-green-400">
+                          +{file.additions} lines
+                        </div>
+                      )}
+                      {file.status === 'deleted' && (
+                        <div class="text-xs font-mono text-red-400">
+                          -{file.deletions} lines
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chevron */}
+                    <svg
+                      class="w-3 h-3 text-zed-text-tertiary flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </For>
+            </Show>
+          </Show>
+        </div>
+      </div>
+
+      {/* Resize Handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        class="h-1 bg-zed-border-default hover:bg-zed-accent-blue cursor-ns-resize flex-shrink-0 transition-colors"
+        classList={{
+          'bg-zed-accent-blue': isResizing(),
+        }}
+      />
+
+      {/* Bottom Panel: Commit History */}
+      <div class="flex flex-col overflow-hidden" style={{ height: `${100 - splitPosition()}%` }}>
+        {/* Commit History Header */}
+        <div class="px-3 py-2 border-b border-zed-border-subtle bg-zed-bg-panel flex-shrink-0">
+          <div class="text-xs font-medium text-zed-text-primary">Commit History</div>
+        </div>
+
+        {/* Commit List */}
+        <div class="flex-1 overflow-y-auto">
+          <Show
+            when={commits().length > 0}
+            fallback={
+              <div class="p-4 text-center text-zed-text-tertiary text-sm">
+                No commits found
+              </div>
+            }
+          >
+            <For each={commits()}>
+              {(commit) => (
                 <button
-                  onClick={() => handleFileClick(file)}
-                  class={`w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-zed-bg-hover transition-colors text-left border-b border-zed-border-subtle/50 ${
-                    selectedFile() === file.path ? 'bg-zed-bg-hover' : ''
+                  onClick={() => handleCommitClick(commit)}
+                  class={`w-full flex flex-col gap-1 px-2 py-1.5 hover:bg-zed-bg-hover transition-colors text-left border-b border-zed-border-subtle/50 ${
+                    selectedCommit()?.hash === commit.hash ? 'bg-zed-bg-hover border-l-2 border-l-zed-accent-blue' : ''
                   }`}
                 >
-                  {/* Status Badge */}
-                  <div
-                    class={`w-5 h-5 flex items-center justify-center text-xs font-bold rounded flex-shrink-0 mt-0.5 ${getStatusColor(
-                      file.status
-                    )}`}
-                  >
-                    {getStatusIcon(file.status)}
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-mono text-zed-text-tertiary">{commit.short_hash}</span>
+                    <span class="text-xs text-zed-text-primary font-medium truncate flex-1">
+                      {commit.message}
+                    </span>
                   </div>
-
-                  {/* File Info */}
-                  <div class="flex-1 min-w-0">
-                    <div class="text-sm text-zed-text-primary font-medium truncate">
-                      {getFileName(file.path)}
-                    </div>
-                    {getFilePath(file.path) && (
-                      <div class="text-xs text-zed-text-tertiary truncate mt-0.5">
-                        {getFilePath(file.path)}
-                      </div>
-                    )}
-                    {file.status !== 'deleted' && file.status !== 'added' && (
-                      <div class="text-xs mt-1 font-mono">
-                        <span class="text-green-400">+{file.additions}</span>
-                        <span class="text-zed-text-tertiary mx-1">/</span>
-                        <span class="text-red-400">-{file.deletions}</span>
-                      </div>
-                    )}
-                    {file.status === 'added' && (
-                      <div class="text-xs mt-1 font-mono text-green-400">
-                        +{file.additions} lines
-                      </div>
-                    )}
-                    {file.status === 'deleted' && (
-                      <div class="text-xs mt-1 font-mono text-red-400">
-                        -{file.deletions} lines
-                      </div>
-                    )}
+                  <div class="flex items-center gap-2 text-xs text-zed-text-tertiary">
+                    <span class="truncate">{commit.author}</span>
+                    <span>•</span>
+                    <span>{formatDate(commit.date)}</span>
                   </div>
-
-                  {/* Chevron */}
-                  <svg
-                    class="w-4 h-4 text-zed-text-tertiary flex-shrink-0 mt-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
                 </button>
               )}
             </For>
           </Show>
-        </Show>
+        </div>
       </div>
     </div>
   );

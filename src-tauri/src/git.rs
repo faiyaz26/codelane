@@ -306,6 +306,53 @@ pub async fn git_changes_with_stats(path: String) -> Result<Vec<FileChangeStats>
     Ok(changes)
 }
 
+/// Get files changed in a specific commit with statistics
+#[tauri::command]
+pub async fn git_commit_changes(path: String, commit_hash: String) -> Result<Vec<FileChangeStats>, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    // Get the list of files changed in this commit with numstat
+    let args = vec!["show", "--numstat", "--format=", &commit_hash];
+    let output = run_git(work_dir, &args)?;
+
+    let mut changes = Vec::new();
+
+    for line in output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Format: <additions>\t<deletions>\t<filename>
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() != 3 {
+            continue;
+        }
+
+        let additions = parts[0].parse::<u32>().unwrap_or(0);
+        let deletions = parts[1].parse::<u32>().unwrap_or(0);
+        let path = parts[2].to_string();
+
+        // Determine status by checking if file exists in parent commit
+        let status = if additions > 0 && deletions == 0 {
+            "added"
+        } else if additions == 0 && deletions > 0 {
+            "deleted"
+        } else {
+            "modified"
+        };
+
+        changes.push(FileChangeStats {
+            path,
+            status: status.to_string(),
+            additions,
+            deletions,
+        });
+    }
+
+    Ok(changes)
+}
+
 /// Maximum number of files to apply dependency analysis to prevent performance degradation
 const MAX_FILES_FOR_DEPENDENCY_ANALYSIS: usize = 50;
 
