@@ -1,133 +1,48 @@
-// DiffViewer - main orchestrator for diff viewing with syntax highlighting
+// DiffViewer using @git-diff-view with Shiki highlighting
+import { createSignal, createMemo, Show, onMount } from 'solid-js';
+import { DiffView, DiffModeEnum } from '@git-diff-view/solid';
+import { initDiffHighlighter, getDiffHighlighter } from './diff/shikiHighlighter';
+import { detectLanguage } from './types';
+import type { DiffViewMode } from './diff/types';
 
-import { createMemo, createSignal, createEffect, Show } from 'solid-js';
-import { detectLanguage, getShikiLanguage } from './types';
-import { parseDiff } from './diff/DiffParser';
-import { highlightDiff, highlightLines } from './diff/DiffHighlighter';
-import { fetchExpandedContextAbove, fetchExpandedContextBelow } from './diff/DiffExpansion';
-import { DiffViewUnified } from './diff/DiffViewUnified';
-import { DiffViewSplit } from './diff/DiffViewSplit';
-import type { DiffViewMode, ExpandedContext } from './diff/types';
+// Import styles
+import '@git-diff-view/solid/styles/diff-view.css';
 
 interface DiffViewerProps {
   diff: string;
   fileName: string;
-  filePath?: string; // Relative path for git operations
-  workingDir?: string; // Working directory for git commands
+  filePath?: string;
+  workingDir?: string;
 }
 
 export function DiffViewer(props: DiffViewerProps) {
-  const [highlightedLines, setHighlightedLines] = createSignal<Map<string, string>>(new Map());
-  const [isHighlighting, setIsHighlighting] = createSignal(true);
+  const [highlighterReady, setHighlighterReady] = createSignal(false);
   const [viewMode, setViewMode] = createSignal<DiffViewMode>('unified');
-  const [expandedHunks, setExpandedHunks] = createSignal<Map<number, ExpandedContext>>(new Map());
 
-  // Parse diff into structured data
-  const parsedDiff = createMemo(() => parseDiff(props.diff));
-
-  // Highlight code when diff changes
-  createEffect(() => {
-    const diff = parsedDiff();
-    const language = detectLanguage(props.fileName);
-    const shikiLang = getShikiLanguage(language);
-
-    setIsHighlighting(true);
-
-    (async () => {
-      try {
-        const highlighted = await highlightDiff(diff, shikiLang);
-        setHighlightedLines(highlighted);
-      } catch (error) {
-        console.error('Syntax highlighting failed:', error);
-      } finally {
-        setIsHighlighting(false);
-      }
-    })();
+  // Initialize highlighter on mount
+  onMount(async () => {
+    await initDiffHighlighter();
+    setHighlighterReady(true);
   });
 
-  // Handle expand above button click
-  const handleExpandAbove = async (hunkIndex: number) => {
-    if (!props.workingDir || !props.filePath) {
-      console.warn('Cannot expand: missing workingDir or filePath');
-      return;
-    }
+  // Build the data object for DiffView
+  const diffData = createMemo(() => {
+    const diffText = props.diff;
+    if (!diffText || diffText.trim().length === 0) return null;
 
-    const diff = parsedDiff();
-    const hunk = diff.hunks[hunkIndex];
-    if (!hunk) return;
+    const language = detectLanguage(props.fileName);
 
-    const expanded = expandedHunks();
-    const currentExpanded = expanded.get(hunkIndex);
-    const currentlyExpandedAbove = currentExpanded?.above?.lines.length || 0;
+    return {
+      oldFile: { fileName: props.fileName, fileLang: language, content: '' },
+      newFile: { fileName: props.fileName, fileLang: language, content: '' },
+      hunks: [diffText],
+    };
+  });
 
-    const context = await fetchExpandedContextAbove(
-      props.workingDir,
-      props.filePath,
-      hunk,
-      currentlyExpandedAbove
-    );
-
-    if (context) {
-      // Highlight the expanded lines
-      const language = detectLanguage(props.fileName);
-      const shikiLang = getShikiLanguage(language);
-      const highlightedLinesArray = await highlightLines(context.lines, shikiLang);
-
-      const newExpanded = new Map(expanded);
-      const existing = newExpanded.get(hunkIndex) || {};
-      newExpanded.set(hunkIndex, {
-        ...existing,
-        above: {
-          ...context,
-          highlightedLines: highlightedLinesArray,
-        },
-      });
-      setExpandedHunks(newExpanded);
-    }
-  };
-
-  // Handle expand below button click
-  const handleExpandBelow = async (hunkIndex: number) => {
-    if (!props.workingDir || !props.filePath) {
-      console.warn('Cannot expand: missing workingDir or filePath');
-      return;
-    }
-
-    const diff = parsedDiff();
-    const hunk = diff.hunks[hunkIndex];
-    if (!hunk) return;
-
-    const expanded = expandedHunks();
-    const currentExpanded = expanded.get(hunkIndex);
-    const currentlyExpandedBelow = currentExpanded?.below?.lines.length || 0;
-    const nextHunk = diff.hunks[hunkIndex + 1];
-
-    const context = await fetchExpandedContextBelow(
-      props.workingDir,
-      props.filePath,
-      hunk,
-      currentlyExpandedBelow,
-      nextHunk
-    );
-
-    if (context) {
-      // Highlight the expanded lines
-      const language = detectLanguage(props.fileName);
-      const shikiLang = getShikiLanguage(language);
-      const highlightedLinesArray = await highlightLines(context.lines, shikiLang);
-
-      const newExpanded = new Map(expanded);
-      const existing = newExpanded.get(hunkIndex) || {};
-      newExpanded.set(hunkIndex, {
-        ...existing,
-        below: {
-          ...context,
-          highlightedLines: highlightedLinesArray,
-        },
-      });
-      setExpandedHunks(newExpanded);
-    }
-  };
+  const highlighter = createMemo(() => {
+    if (!highlighterReady()) return undefined;
+    return getDiffHighlighter() ?? undefined;
+  });
 
   return (
     <div class="h-full w-full overflow-auto bg-zed-bg-app">
@@ -174,41 +89,26 @@ export function DiffViewer(props: DiffViewerProps) {
               >
                 Split
               </button>
-              <Show when={isHighlighting()}>
-                <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(highlighting...)</span>
+              <Show when={!highlighterReady()}>
+                <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(initializing...)</span>
               </Show>
-            </div>
-
-            {/* Stats */}
-            <div class="flex items-center gap-3 text-xs font-mono">
-              <span class="text-green-400">+{parsedDiff().additions}</span>
-              <span class="text-red-400">-{parsedDiff().deletions}</span>
             </div>
           </div>
         </div>
 
-        {/* Diff Content */}
-        <Show
-          when={viewMode() === 'unified'}
-          fallback={
-            /* Split View */
-            <DiffViewSplit
-              parsedDiff={parsedDiff()}
-              highlightedLines={highlightedLines()}
-              expandedHunks={expandedHunks()}
-              onExpandAbove={handleExpandAbove}
-              onExpandBelow={handleExpandBelow}
+        {/* Diff Content - use data prop so component handles all initialization */}
+        <Show when={diffData()}>
+          {(data) => (
+            <DiffView
+              data={data()}
+              registerHighlighter={highlighter()}
+              diffViewMode={viewMode() === 'split' ? DiffModeEnum.Split : DiffModeEnum.Unified}
+              diffViewWrap={true}
+              diffViewHighlight={highlighterReady()}
+              diffViewTheme="dark"
+              diffViewFontSize={14}
             />
-          }
-        >
-          {/* Unified View */}
-          <DiffViewUnified
-            parsedDiff={parsedDiff()}
-            highlightedLines={highlightedLines()}
-            expandedHunks={expandedHunks()}
-            onExpandAbove={handleExpandAbove}
-            onExpandBelow={handleExpandBelow}
-          />
+          )}
         </Show>
       </Show>
     </div>

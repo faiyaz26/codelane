@@ -160,97 +160,62 @@ export function MainLayout(props: MainLayoutProps) {
             <div class="flex-1 flex flex-col overflow-hidden min-w-0">
               {/* Main content row */}
               <div class="flex-1 flex overflow-hidden">
-                <Show
-                  when={activeView() === ActivityView.CodeReview}
-                  fallback={
-                    <>
-                      {/* Agent Terminal - Left */}
-                      <AgentTerminalPanel
-                        lanes={props.lanes}
-                        activeLaneId={props.activeLaneId}
-                        initializedLanes={props.initializedLanes}
-                        showEditor={showEditor()}
-                        panelWidth={agentPanelWidth()}
-                        onTerminalReady={props.onTerminalReady}
-                        onTerminalExit={props.onTerminalExit}
-                        onAgentFailed={props.onAgentFailed}
-                        onReloadTerminal={props.onReloadTerminal}
-                      />
+                {/* Agent Terminal - Always rendered, hidden in Code Review view */}
+                <div style={{ display: activeView() === ActivityView.CodeReview ? 'none' : 'contents' }}>
+                  <AgentTerminalPanel
+                    lanes={props.lanes}
+                    activeLaneId={props.activeLaneId}
+                    initializedLanes={props.initializedLanes}
+                    showEditor={showEditor()}
+                    panelWidth={agentPanelWidth()}
+                    onTerminalReady={props.onTerminalReady}
+                    onTerminalExit={props.onTerminalExit}
+                    onAgentFailed={props.onAgentFailed}
+                    onReloadTerminal={props.onReloadTerminal}
+                  />
+                </div>
 
-                      {/* Editor - Center */}
-                      <Show when={showEditor() && props.activeLaneId}>
-                        <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
-                        <div class="flex flex-col overflow-hidden min-w-0 flex-1">
-                          <EditorPanel
-                            laneId={props.activeLaneId!}
-                            basePath={getEffectiveWorkingDir(lane())}
-                            selectedFilePath={selectedFile()}
-                            onAllFilesClosed={() => setSelectedFile(undefined)}
-                          />
-                        </div>
-                      </Show>
-
-                      {/* Sidebar resize handle */}
-                      <Show when={!sidebarCollapsed()}>
-                        <ResizeHandle direction="right" onResize={handleSidebarResize} />
-                      </Show>
-
-                      {/* Sidebar */}
-                      <Sidebar
-                        lane={lane()}
-                        effectiveWorkingDir={getEffectiveWorkingDir(lane())}
-                        activeView={activeView()}
-                        width={sidebarWidth()}
-                        collapsed={sidebarCollapsed()}
-                        onFileSelect={setSelectedFile}
-                        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                      />
-                    </>
-                  }
-                >
-                  {/* Code Review View - Completely Different Layout */}
-                  <>
-                    {/* Chat - Left (25% when diff is open, flexible otherwise) */}
-                    <div
-                      class="flex-shrink-0 overflow-hidden"
-                      style={{
-                        width: showEditor() && props.activeLaneId ? '25%' : 'auto',
-                        'flex-grow': showEditor() && props.activeLaneId ? '0' : '1',
-                      }}
-                    >
-                      <CodeReviewChat laneId={props.activeLaneId!} />
-                    </div>
-
-                    {/* Diff Editor - Center (when file is selected) */}
-                    <Show when={showEditor() && props.activeLaneId}>
-                      <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
-                      <div class="flex flex-col overflow-hidden min-w-0 flex-1">
-                        <EditorPanel
-                          laneId={props.activeLaneId!}
-                          basePath={getEffectiveWorkingDir(lane())}
-                          selectedFilePath={selectedFile()}
-                          onAllFilesClosed={() => setSelectedFile(undefined)}
-                        />
-                      </div>
-                    </Show>
-
-                    {/* Sidebar resize handle */}
-                    <Show when={!sidebarCollapsed()}>
-                      <ResizeHandle direction="right" onResize={handleSidebarResize} />
-                    </Show>
-
-                    {/* Changes - Right Sidebar */}
-                    <Sidebar
-                      lane={lane()}
-                      effectiveWorkingDir={getEffectiveWorkingDir(lane())}
-                      activeView={activeView()}
-                      width={sidebarWidth()}
-                      collapsed={sidebarCollapsed()}
-                      onFileSelect={setSelectedFile}
-                      onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                    />
-                  </>
+                {/* Code Review Chat - Only shown in Code Review view */}
+                <Show when={activeView() === ActivityView.CodeReview}>
+                  <div
+                    class="flex-shrink-0 overflow-hidden"
+                    style={{
+                      width: showEditor() && props.activeLaneId ? '25%' : 'auto',
+                      'flex-grow': showEditor() && props.activeLaneId ? '0' : '1',
+                    }}
+                  >
+                    <CodeReviewChat laneId={props.activeLaneId!} />
+                  </div>
                 </Show>
+
+                {/* Editor - Center (shared by all views) */}
+                <Show when={showEditor() && props.activeLaneId}>
+                  <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
+                  <div class="flex flex-col overflow-hidden min-w-0 flex-1">
+                    <EditorPanel
+                      laneId={props.activeLaneId!}
+                      basePath={getEffectiveWorkingDir(lane())}
+                      selectedFilePath={selectedFile()}
+                      onAllFilesClosed={() => setSelectedFile(undefined)}
+                    />
+                  </div>
+                </Show>
+
+                {/* Sidebar resize handle */}
+                <Show when={!sidebarCollapsed()}>
+                  <ResizeHandle direction="right" onResize={handleSidebarResize} />
+                </Show>
+
+                {/* Sidebar (shared by all views) */}
+                <Sidebar
+                  lane={lane()}
+                  effectiveWorkingDir={getEffectiveWorkingDir(lane())}
+                  activeView={activeView()}
+                  width={sidebarWidth()}
+                  collapsed={sidebarCollapsed()}
+                  onFileSelect={setSelectedFile}
+                  onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                />
               </div>
 
               {/* Bottom Panel */}

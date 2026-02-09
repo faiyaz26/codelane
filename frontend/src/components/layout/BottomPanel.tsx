@@ -12,10 +12,8 @@ export function BottomPanel(props: BottomPanelProps) {
   return (
     <For each={Array.from(props.initializedLanes)}>
       {(laneId) => {
-        const lane = createMemo(() => {
-          if (laneId !== props.activeLaneId) return undefined;
-          return props.lanes.find((l) => l.id === laneId);
-        });
+        const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+        const isActive = createMemo(() => props.activeLaneId === laneId);
 
         return (
           <Show when={lane()}>
@@ -25,7 +23,11 @@ export function BottomPanel(props: BottomPanelProps) {
               // Use worktree path if available, otherwise use workingDir
               const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
 
-              return <TabPanel laneId={id} workingDir={effectiveWorkingDir} />;
+              return (
+                <div style={{ display: isActive() ? 'contents' : 'none' }}>
+                  <TabPanel laneId={id} workingDir={effectiveWorkingDir} />
+                </div>
+              );
             }}
           </Show>
         );

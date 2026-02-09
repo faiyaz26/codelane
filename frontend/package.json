@@ -9,7 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@git-diff-view/core": "^0.0.39",
+    "@git-diff-view/shiki": "^0.0.39",
+    "@git-diff-view/solid": "^0.0.12",
     "@kobalte/core": "^0.13.11",
+    "@pierre/diffs": "^1.0.10",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-sql": "^2.3.1",

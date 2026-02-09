@@ -387,8 +387,28 @@ class EditorStateManager {
     this.updateFile(laneId, fileId, { isLoading: true });
 
     try {
-      // Get the diff for this file (using relative path)
-      const diff = await getGitDiff(workingDir, relativePath, false);
+      // Try unstaged diff first
+      let diff = await getGitDiff(workingDir, relativePath, false);
+
+      // If empty, try staged diff (file might be staged)
+      if (!diff || diff.trim().length === 0) {
+        diff = await getGitDiff(workingDir, relativePath, true);
+      }
+
+      // If still empty, file is likely untracked - read content and build synthetic diff
+      if (!diff || diff.trim().length === 0) {
+        try {
+          const fullPath = `${workingDir}/${relativePath}`.replace(/\/+/g, '/');
+          const content = await invoke<string>('read_file', { path: fullPath });
+          if (content && content.length > 0) {
+            const lines = content.split('\n');
+            const addedLines = lines.map(line => `+${line}`).join('\n');
+            diff = `--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${lines.length} @@\n${addedLines}`;
+          }
+        } catch {
+          // File might not exist or can't be read
+        }
+      }
 
       // Check if file still exists (might have been closed while loading)
       if (this.store.lanes[laneId]?.openFiles[fileId]) {
