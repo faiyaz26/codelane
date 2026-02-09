@@ -1,10 +1,11 @@
 // DiffViewer using @git-diff-view with Shiki highlighting
-import { createSignal, createEffect, Show, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, onMount, onCleanup } from 'solid-js';
 import { DiffView, DiffModeEnum } from '@git-diff-view/solid';
+import { DiffFile } from '@git-diff-view/core';
 import { invoke } from '@tauri-apps/api/core';
 import { initDiffHighlighter, getDiffHighlighter } from './diff/shikiHighlighter';
 import { getFileAtRevision } from '../../lib/git-api';
-import { detectLanguage } from './types';
+import { detectLanguage, getShikiLanguage } from './types';
 import type { DiffViewMode } from './diff/types';
 
 // Import styles
@@ -23,6 +24,7 @@ export function DiffViewer(props: DiffViewerProps) {
   const [oldContent, setOldContent] = createSignal('');
   const [newContent, setNewContent] = createSignal('');
   const [dataReady, setDataReady] = createSignal(false);
+  const [diffFileInstance, setDiffFileInstance] = createSignal<DiffFile | null>(null);
 
   // Initialize highlighter on mount
   onMount(async () => {
@@ -30,7 +32,7 @@ export function DiffViewer(props: DiffViewerProps) {
     setHighlighterReady(true);
   });
 
-  // Fetch file contents for expansion support
+  // Fetch file contents for expansion and syntax highlighting
   createEffect(async () => {
     const diffText = props.diff;
     const filePath = props.filePath;
@@ -66,18 +68,43 @@ export function DiffViewer(props: DiffViewerProps) {
     setDataReady(true);
   });
 
-  const getDiffData = () => {
+  // Create and fully initialize DiffFile when all data is ready.
+  // Using diffFile prop (instead of data prop) ensures we control the
+  // initialization order, avoiding SolidJS effect ordering issues in the library.
+  createEffect(() => {
     const diffText = props.diff;
-    if (!diffText || diffText.trim().length === 0) return null;
+    const ready = dataReady();
+    const hlReady = highlighterReady();
+    const old = oldContent();
+    const newC = newContent();
 
-    const language = detectLanguage(props.fileName);
+    if (!diffText || diffText.trim().length === 0 || !ready || !hlReady) {
+      setDiffFileInstance(null);
+      return;
+    }
 
-    return {
-      oldFile: { fileName: props.fileName, fileLang: language, content: oldContent() },
-      newFile: { fileName: props.fileName, fileLang: language, content: newContent() },
-      hunks: [diffText],
-    };
-  };
+    const lang = getShikiLanguage(detectLanguage(props.fileName));
+
+    const file = new DiffFile(
+      props.fileName,
+      old,
+      props.fileName,
+      newC,
+      [diffText],
+      lang,
+      lang
+    );
+
+    file.initTheme('dark');
+    file.initRaw();
+    file.initSyntax({ registerHighlighter: getDiffHighlighter()! });
+    file.buildSplitDiffLines();
+    file.buildUnifiedDiffLines();
+
+    setDiffFileInstance(file);
+
+    onCleanup(() => file.clear());
+  });
 
   return (
     <div class="h-full w-full overflow-auto bg-zed-bg-app">
@@ -131,12 +158,11 @@ export function DiffViewer(props: DiffViewerProps) {
           </div>
         </div>
 
-        {/* Diff Content - render once highlighter and file content are ready */}
-        <Show when={dataReady() && highlighterReady() && getDiffData()}>
-          {(data) => (
+        {/* Diff Content - render once DiffFile is fully initialized */}
+        <Show when={diffFileInstance()}>
+          {(file) => (
             <DiffView
-              data={data()}
-              registerHighlighter={getDiffHighlighter()!}
+              diffFile={file()}
               diffViewMode={viewMode() === 'split' ? DiffModeEnum.Split : DiffModeEnum.Unified}
               diffViewWrap={true}
               diffViewHighlight={true}
