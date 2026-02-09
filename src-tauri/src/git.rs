@@ -58,6 +58,19 @@ pub struct GitBranchInfo {
     pub branches: Vec<String>,
 }
 
+/// File change with statistics
+#[derive(Debug, Clone, Serialize)]
+pub struct FileChangeStats {
+    /// File path relative to repository root
+    pub path: String,
+    /// Status type: "modified", "added", "deleted", "renamed", "copied"
+    pub status: String,
+    /// Number of lines added
+    pub additions: u32,
+    /// Number of lines deleted
+    pub deletions: u32,
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -222,6 +235,88 @@ pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) 
     }
 
     run_git(work_dir, &args)
+}
+
+/// Get all changed files with line statistics
+#[tauri::command]
+pub async fn git_changes_with_stats(path: String) -> Result<Vec<FileChangeStats>, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    // Get status to know which files changed
+    let status = git_status(path.clone()).await?;
+
+    let mut changes = Vec::new();
+
+    // Process staged files
+    for file_status in &status.staged {
+        let stats = get_file_stats(work_dir, &file_status.path, true)?;
+        changes.push(FileChangeStats {
+            path: file_status.path.clone(),
+            status: file_status.status.clone(),
+            additions: stats.0,
+            deletions: stats.1,
+        });
+    }
+
+    // Process unstaged files
+    for file_status in &status.unstaged {
+        let stats = get_file_stats(work_dir, &file_status.path, false)?;
+        changes.push(FileChangeStats {
+            path: file_status.path.clone(),
+            status: file_status.status.clone(),
+            additions: stats.0,
+            deletions: stats.1,
+        });
+    }
+
+    // Process untracked files (all additions)
+    for file_path in &status.untracked {
+        // Count lines in the file
+        let file_full_path = work_dir.join(file_path);
+        let additions = if file_full_path.exists() {
+            std::fs::read_to_string(&file_full_path)
+                .map(|content| content.lines().count() as u32)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        changes.push(FileChangeStats {
+            path: file_path.clone(),
+            status: "added".to_string(),
+            additions,
+            deletions: 0,
+        });
+    }
+
+    Ok(changes)
+}
+
+/// Helper function to get line statistics for a file
+fn get_file_stats(work_dir: &Path, file_path: &str, staged: bool) -> Result<(u32, u32), String> {
+    let mut args = vec!["diff", "--numstat", "--color=never"];
+
+    if staged {
+        args.push("--cached");
+    }
+
+    args.push("--");
+    args.push(file_path);
+
+    let output = run_git(work_dir, &args)?;
+
+    // Parse numstat output: "additions\tdeletions\tfilename"
+    if let Some(line) = output.lines().next() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 {
+            let additions = parts[0].parse::<u32>().unwrap_or(0);
+            let deletions = parts[1].parse::<u32>().unwrap_or(0);
+            return Ok((additions, deletions));
+        }
+    }
+
+    Ok((0, 0))
 }
 
 /// Get the commit log for a repository or worktree

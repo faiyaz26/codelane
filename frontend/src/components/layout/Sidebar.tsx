@@ -2,6 +2,7 @@ import { Show, Switch, Match } from 'solid-js';
 import { ActivityView } from './ActivityBar';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { SearchPanel } from '../search';
+import { CodeReviewChanges } from './CodeReviewChanges';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -23,8 +24,8 @@ export function Sidebar(props: SidebarProps) {
         return 'Explorer';
       case ActivityView.Search:
         return 'Search';
-      case ActivityView.Git:
-        return 'Source Control';
+      case ActivityView.CodeReview:
+        return 'Code Review';
       case ActivityView.Extensions:
         return 'Extensions';
       default:
@@ -63,12 +64,14 @@ export function Sidebar(props: SidebarProps) {
                 }}
               />
             </Match>
-          <Match when={props.activeView === ActivityView.Git}>
-            <PlaceholderView
-              icon={
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-              }
-              message="Source Control coming soon"
+          <Match when={props.activeView === ActivityView.CodeReview}>
+            <CodeReviewChanges
+              laneId={props.lane.id}
+              workingDir={props.effectiveWorkingDir}
+              onFileSelect={(path) => {
+                // Open file in editor to show diff
+                props.onFileSelect(path);
+              }}
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>

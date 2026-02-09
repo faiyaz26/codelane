@@ -4,6 +4,8 @@ export { StatusBar } from './StatusBar';
 export { MainLayout } from './MainLayout';
 export { WelcomeScreen } from './WelcomeScreen';
 export { AgentTerminalPanel } from './AgentTerminalPanel';
+export { CodeReviewChat } from './CodeReviewChat';
+export { CodeReviewChanges } from './CodeReviewChanges';
 export { Sidebar } from './Sidebar';
 export { BottomPanel } from './BottomPanel';
 export { ResizeHandle } from './ResizeHandle';

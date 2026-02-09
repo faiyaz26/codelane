@@ -4,6 +4,7 @@
 import { createMemo, createEffect, createSignal, on, For, Show } from 'solid-js';
 import { EditorTabs } from './EditorTabs';
 import { FileViewer } from './FileViewer';
+import { DiffViewer } from './DiffViewer';
 import { UnsavedChangesModal, type UnsavedChangesResult } from './UnsavedChangesModal';
 import { ExternalChangeModal, type ExternalChangeResult } from './ExternalChangeModal';
 import type { EditorTab } from './types';
@@ -234,8 +235,16 @@ export function EditorPanel(props: EditorPanelProps) {
                     style={{ display: fileId === activeFileId() ? 'block' : 'none' }}
                     data-file-id={fileId}
                   >
-                    {/* Access file() reactively so content updates are reflected */}
-                    <FileViewer file={file()!} laneId={props.laneId} />
+                    {/* Show DiffViewer for diff mode, otherwise show regular FileViewer */}
+                    <Show
+                      when={file()!.isDiffView && file()!.diffContent !== undefined}
+                      fallback={<FileViewer file={file()!} laneId={props.laneId} />}
+                    >
+                      <DiffViewer
+                        diff={file()!.diffContent!}
+                        fileName={file()!.name}
+                      />
+                    </Show>
                   </div>
                 </Show>
               );

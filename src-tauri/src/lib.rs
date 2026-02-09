@@ -67,6 +67,7 @@ pub fn run() {
             // Git commands
             git::git_status,
             git::git_diff,
+            git::git_changes_with_stats,
             git::git_log,
             git::git_branch,
             git::git_stage,

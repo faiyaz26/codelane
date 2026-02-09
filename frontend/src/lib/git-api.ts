@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { GitStatusResult, GitCommit, GitBranchInfo } from '../types/git';
+import type { GitStatusResult, GitCommit, GitBranchInfo, FileChangeStats } from '../types/git';
 
 /**
  * Get git status for a repository
@@ -21,6 +21,13 @@ export async function getGitDiff(
   staged?: boolean
 ): Promise<string> {
   return invoke<string>('git_diff', { path, file, staged });
+}
+
+/**
+ * Get all changed files with line statistics (additions/deletions)
+ */
+export async function getChangesWithStats(path: string): Promise<FileChangeStats[]> {
+  return invoke<FileChangeStats[]>('git_changes_with_stats', { path });
 }
 
 /**

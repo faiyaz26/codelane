@@ -26,3 +26,10 @@ export interface GitBranchInfo {
   current: string | null;
   branches: string[];
 }
+
+export interface FileChangeStats {
+  path: string;
+  status: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'unknown';
+  additions: number;
+  deletions: number;
+}

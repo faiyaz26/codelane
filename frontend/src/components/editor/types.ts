@@ -19,6 +19,9 @@ export interface OpenFile {
   // External change tracking
   lastKnownModifiedTime?: number; // Unix timestamp when file was last loaded/saved
   hasExternalChanges?: boolean; // Flag set when external modification detected
+  // Diff view mode
+  diffContent?: string; // If set, show diff instead of regular content
+  isDiffView?: boolean; // Flag to indicate this is a diff view
 }
 
 // Check if a file is a markdown file

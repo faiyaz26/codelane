@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { OpenFile } from '../components/editor/types';
 import { detectLanguage, isMarkdownFile } from '../components/editor/types';
 import { fileWatchService, type FileWatchEvent } from './FileWatchService';
+import { getGitDiff } from '../lib/git-api';
 
 interface FileStats {
   modified: number | null;
@@ -242,6 +243,67 @@ class EditorStateManager {
     await this.loadFileContent(laneId, id, path);
   }
 
+  // Open a file in diff view mode (for code review)
+  // path is relative to workingDir (e.g., "src/file.ts")
+  async openFileDiff(laneId: string, relativePath: string, workingDir: string): Promise<void> {
+    this.ensureLane(laneId);
+
+    // Construct full path for the file
+    const fullPath = `${workingDir}/${relativePath}`.replace(/\/+/g, '/');
+
+    // Check path index for O(1) lookup
+    const existing = this.store.pathIndex[fullPath];
+    if (existing && existing.laneId === laneId) {
+      // File already open, check if it's in diff mode
+      const file = this.store.lanes[laneId].openFiles[existing.fileId];
+      if (file?.isDiffView) {
+        // Already in diff mode, just activate it
+        this.batchUpdate(() => {
+          this.updateLane(laneId, (lane) => {
+            lane.activeFileId = existing.fileId;
+            lane.renderedFiles.add(existing.fileId);
+          });
+        });
+        return;
+      }
+      // File is open in normal mode, close it and reopen in diff mode
+      this.closeFile(laneId, existing.fileId);
+    }
+
+    // Create new file entry for diff view
+    const id = crypto.randomUUID();
+    const name = relativePath.split('/').pop() || 'Untitled';
+    const language = detectLanguage(name);
+
+    const newFile: OpenFile = {
+      id,
+      path: fullPath,
+      name,
+      content: null,
+      isLoading: false,
+      isModified: false,
+      error: null,
+      language,
+      isDiffView: true,
+      diffContent: undefined,
+    };
+
+    // Batch all updates
+    this.batchUpdate(() => {
+      this.setStore(
+        produce((store) => {
+          store.lanes[laneId].openFiles[id] = newFile;
+          store.pathIndex[fullPath] = { laneId, fileId: id };
+          store.lanes[laneId].activeFileId = id;
+          store.lanes[laneId].renderedFiles.add(id);
+        })
+      );
+    });
+
+    // Load diff content asynchronously
+    await this.loadFileDiff(laneId, id, relativePath, workingDir);
+  }
+
   // Clear scroll-to-line target after scrolling
   clearScrollToLine(laneId: string, fileId: string): void {
     const lane = this.store.lanes[laneId];
@@ -308,6 +370,37 @@ class EditorStateManager {
       }
     } catch (err) {
       console.error('Failed to read file:', err);
+      this.updateFile(laneId, fileId, {
+        error: err instanceof Error ? err.message : String(err),
+        isLoading: false,
+      });
+    }
+  }
+
+  // Load diff content for a file
+  // relativePath is relative to workingDir (e.g., "src/file.ts")
+  private async loadFileDiff(laneId: string, fileId: string, relativePath: string, workingDir: string): Promise<void> {
+    const lane = this.store.lanes[laneId];
+    if (!lane || !lane.openFiles[fileId]) return;
+
+    // Set loading state
+    this.updateFile(laneId, fileId, { isLoading: true });
+
+    try {
+      // Get the diff for this file (using relative path)
+      const diff = await getGitDiff(workingDir, relativePath, false);
+
+      // Check if file still exists (might have been closed while loading)
+      if (this.store.lanes[laneId]?.openFiles[fileId]) {
+        this.batchUpdate(() => {
+          this.updateFile(laneId, fileId, {
+            diffContent: diff,
+            isLoading: false,
+          });
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load diff:', err);
 
       // Check if file still exists
       if (this.store.lanes[laneId]?.openFiles[fileId]) {
