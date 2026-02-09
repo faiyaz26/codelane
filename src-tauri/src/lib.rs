@@ -12,6 +12,9 @@ pub mod terminal;
 pub mod search;
 mod git;
 mod fs;
+mod file_sorter;
+mod import_analyzer;
+mod dependency_graph;
 
 #[cfg(feature = "devtools")]
 use tauri::Manager;
@@ -69,6 +72,7 @@ pub fn run() {
             git::git_diff,
             git::git_show_file,
             git::git_changes_with_stats,
+            git::git_sort_files,
             git::git_log,
             git::git_branch,
             git::git_stage,

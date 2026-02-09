@@ -132,6 +132,9 @@ pub struct GitConfig {
 
     /// Enable AI explanations for changes
     pub explain_changes: bool,
+
+    /// File sort order for code review
+    pub file_sort_order: FileSortOrder,
 }
 
 impl Default for GitConfig {
@@ -140,8 +143,25 @@ impl Default for GitConfig {
             auto_fetch_interval: 5,
             show_untracked: true,
             explain_changes: true,
+            file_sort_order: FileSortOrder::Smart,
         }
     }
+}
+
+/// File sorting strategy for code review
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileSortOrder {
+    /// Alphabetical by path (default Git behavior)
+    Alphabetical,
+    /// Smart heuristic-based sorting (config → types → impl → tests → generated → docs)
+    Smart,
+    /// Smart + dependency-aware sorting using tree-sitter import analysis
+    SmartDependencies,
+    /// Sort by change size (largest first)
+    ChangeSize,
+    /// No sorting (git order)
+    None,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

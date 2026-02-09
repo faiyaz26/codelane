@@ -1,7 +1,10 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, createEffect, onMount, onCleanup } from 'solid-js';
+import { invoke } from '@tauri-apps/api/core';
 import { useGitChanges } from '../../hooks/useGitChanges';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { FileChangeStats } from '../../types/git';
+
+export type FileSortOrder = 'alphabetical' | 'smart' | 'smart-dependencies' | 'change-size' | 'none';
 
 interface CodeReviewChangesProps {
   laneId: string;
@@ -11,11 +14,55 @@ interface CodeReviewChangesProps {
 
 export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
+  const [sortOrder, setSortOrder] = createSignal<FileSortOrder>('smart');
+  const [sortedFiles, setSortedFiles] = createSignal<FileChangeStats[]>([]);
 
   // Watch for git changes (auto-refreshes when files change)
   const gitChanges = useGitChanges({
     laneId: props.laneId,
     workingDir: props.workingDir,
+  });
+
+  // Load sort order from localStorage
+  onMount(() => {
+    const saved = localStorage.getItem('codelane:fileSortOrder');
+    if (saved && ['alphabetical', 'smart', 'smart-dependencies', 'change-size', 'none'].includes(saved)) {
+      setSortOrder(saved as FileSortOrder);
+    }
+
+    // Listen for sort order changes from settings
+    const handleSortOrderChange = (event: CustomEvent<FileSortOrder>) => {
+      setSortOrder(event.detail);
+    };
+    window.addEventListener('fileSortOrderChanged', handleSortOrderChange as EventListener);
+
+    onCleanup(() => {
+      window.removeEventListener('fileSortOrderChanged', handleSortOrderChange as EventListener);
+    });
+  });
+
+  // Sort files whenever changes or sort order updates
+  createEffect(async () => {
+    const files = gitChanges.changes();
+    const order = sortOrder();
+
+    if (files.length === 0) {
+      setSortedFiles([]);
+      return;
+    }
+
+    try {
+      const sorted = await invoke<FileChangeStats[]>('git_sort_files', {
+        files,
+        sortOrder: order,
+        workingDir: props.workingDir,
+      });
+      setSortedFiles(sorted);
+    } catch (error) {
+      console.error('Failed to sort files:', error);
+      // Fallback to unsorted
+      setSortedFiles(files);
+    }
   });
 
   const handleFileClick = async (file: FileChangeStats) => {
@@ -69,19 +116,131 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     return parts.slice(0, -1).join('/');
   };
 
+  const handleSortOrderChange = (newOrder: FileSortOrder) => {
+    setSortOrder(newOrder);
+    localStorage.setItem('codelane:fileSortOrder', newOrder);
+  };
+
   const totalAdditions = () => gitChanges.changes().reduce((sum, f) => sum + f.additions, 0);
   const totalDeletions = () => gitChanges.changes().reduce((sum, f) => sum + f.deletions, 0);
   const fileCount = () => gitChanges.changes().length;
+
+  const getSortIcon = () => {
+    switch (sortOrder()) {
+      case 'smart':
+      case 'smart-dependencies':
+        return (
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        );
+      case 'alphabetical':
+        return (
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+          </svg>
+        );
+      case 'change-size':
+        return (
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+          </svg>
+        );
+      default:
+        return (
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+        );
+    }
+  };
 
   return (
     <div class="flex flex-col h-full overflow-hidden">
       {/* Summary Header */}
       <div class="px-3 py-2 border-b border-zed-border-subtle bg-zed-bg-panel">
-        <div class="text-xs text-zed-text-tertiary mb-1">
-          <Show when={!gitChanges.isLoading()} fallback={<span>Loading...</span>}>
-            {fileCount()} {fileCount() === 1 ? 'file' : 'files'} changed
-          </Show>
+        <div class="flex items-center justify-between mb-1">
+          <div class="text-xs text-zed-text-tertiary">
+            <Show when={!gitChanges.isLoading()} fallback={<span>Loading...</span>}>
+              {fileCount()} {fileCount() === 1 ? 'file' : 'files'} changed
+            </Show>
+          </div>
+
+          {/* Sort Order Dropdown */}
+          <div class="relative group">
+            <button
+              class="flex items-center gap-1.5 px-2 py-1 text-xs text-zed-text-tertiary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors"
+              title="Change sort order"
+            >
+              {getSortIcon()}
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 bg-zed-bg-overlay border border-zed-border-default rounded-md shadow-lg z-10">
+              <div class="py-1">
+                <button
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                    sortOrder() === 'smart' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                  }`}
+                  onClick={() => handleSortOrderChange('smart')}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <span>Smart (Recommended)</span>
+                </button>
+                <button
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                    sortOrder() === 'smart-dependencies' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                  }`}
+                  onClick={() => handleSortOrderChange('smart-dependencies')}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>Smart + Dependencies</span>
+                </button>
+                <button
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                    sortOrder() === 'alphabetical' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                  }`}
+                  onClick={() => handleSortOrderChange('alphabetical')}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+                  </svg>
+                  <span>Alphabetical</span>
+                </button>
+                <button
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                    sortOrder() === 'change-size' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                  }`}
+                  onClick={() => handleSortOrderChange('change-size')}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  <span>Change Size</span>
+                </button>
+                <button
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-zed-bg-hover transition-colors flex items-center gap-2 ${
+                    sortOrder() === 'none' ? 'text-zed-accent-blue' : 'text-zed-text-primary'
+                  }`}
+                  onClick={() => handleSortOrderChange('none')}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  <span>Git Order</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="flex items-center gap-3 text-xs font-mono">
           <span class="text-green-400">+{totalAdditions()}</span>
           <span class="text-red-400">-{totalDeletions()}</span>
@@ -106,7 +265,7 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
               </div>
             }
           >
-            <For each={gitChanges.changes()}>
+            <For each={sortedFiles()}>
               {(file) => (
                 <button
                   onClick={() => handleFileClick(file)}

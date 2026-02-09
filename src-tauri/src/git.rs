@@ -59,7 +59,7 @@ pub struct GitBranchInfo {
 }
 
 /// File change with statistics
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct FileChangeStats {
     /// File path relative to repository root
     pub path: String,
@@ -304,6 +304,56 @@ pub async fn git_changes_with_stats(path: String) -> Result<Vec<FileChangeStats>
     }
 
     Ok(changes)
+}
+
+/// Maximum number of files to apply dependency analysis to prevent performance degradation
+const MAX_FILES_FOR_DEPENDENCY_ANALYSIS: usize = 50;
+
+/// Sort files according to the specified order
+#[tauri::command]
+pub async fn git_sort_files(
+    files: Vec<FileChangeStats>,
+    sort_order: String,
+    working_dir: Option<String>,
+) -> Result<Vec<FileChangeStats>, String> {
+    use crate::file_sorter;
+    use std::collections::HashMap;
+
+    let sorted_files = match sort_order.as_str() {
+        "smart" => file_sorter::sort_files_smart(files),
+        "smart-dependencies" => {
+            // Performance guard: Only do dependency analysis for reasonable file counts
+            if files.len() > MAX_FILES_FOR_DEPENDENCY_ANALYSIS {
+                // Fall back to regular smart sort for large changesets
+                eprintln!(
+                    "Too many files ({}) for dependency analysis, falling back to smart sort",
+                    files.len()
+                );
+                file_sorter::sort_files_smart(files)
+            } else {
+                // For dependency-aware sorting, we need file contents
+                let work_dir = working_dir.ok_or("working_dir required for smart-dependencies sorting")?;
+                let work_path = Path::new(&work_dir);
+
+                // Read file contents for supported languages only
+                let mut file_contents = HashMap::new();
+                for file in &files {
+                    let file_path = work_path.join(&file.path);
+                    if let Ok(content) = std::fs::read_to_string(&file_path) {
+                        file_contents.insert(file.path.clone(), content);
+                    }
+                }
+
+                file_sorter::sort_files_smart_dependencies(files, file_contents)
+            }
+        }
+        "alphabetical" => file_sorter::sort_files_alphabetical(files),
+        "change-size" => file_sorter::sort_files_by_size(files),
+        "none" => files, // No sorting
+        _ => return Err(format!("Unknown sort order: {}", sort_order)),
+    };
+
+    Ok(sorted_files)
 }
 
 /// Helper function to get line statistics for a file
