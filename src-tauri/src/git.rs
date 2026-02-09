@@ -237,6 +237,19 @@ pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) 
     run_git(work_dir, &args)
 }
 
+/// Get file content at a specific revision
+#[tauri::command]
+pub async fn git_show_file(path: String, file: String, revision: Option<String>) -> Result<String, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    let rev = revision.unwrap_or_else(|| "HEAD".to_string());
+    let file_spec = format!("{}:{}", rev, file);
+
+    let args = vec!["show", &file_spec];
+    run_git(work_dir, &args)
+}
+
 /// Get all changed files with line statistics
 #[tauri::command]
 pub async fn git_changes_with_stats(path: String) -> Result<Vec<FileChangeStats>, String> {

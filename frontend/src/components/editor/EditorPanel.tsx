@@ -243,6 +243,8 @@ export function EditorPanel(props: EditorPanelProps) {
                       <DiffViewer
                         diff={file()!.diffContent!}
                         fileName={file()!.name}
+                        filePath={file()!.path.replace(props.basePath + '/', '')}
+                        workingDir={props.basePath}
                       />
                     </Show>
                   </div>

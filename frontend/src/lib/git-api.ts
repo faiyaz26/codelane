@@ -31,6 +31,13 @@ export async function getChangesWithStats(path: string): Promise<FileChangeStats
 }
 
 /**
+ * Get file content at a specific revision (e.g., 'HEAD', 'HEAD~1')
+ */
+export async function getFileAtRevision(path: string, file: string, revision: string = 'HEAD'): Promise<string> {
+  return invoke<string>('git_show_file', { path, file, revision });
+}
+
+/**
  * Get commit log
  */
 export async function getGitLog(path: string, count?: number): Promise<GitCommit[]> {
