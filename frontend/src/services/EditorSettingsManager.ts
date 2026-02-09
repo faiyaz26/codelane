@@ -3,13 +3,16 @@
 import { createSignal, createRoot, type Accessor } from 'solid-js';
 
 export type MarkdownDefaultMode = 'preview' | 'source';
+export type DiffViewDefaultMode = 'unified' | 'split';
 
 export interface EditorSettings {
   markdownDefaultMode: MarkdownDefaultMode;
+  diffViewDefaultMode: DiffViewDefaultMode;
 }
 
 const DEFAULT_SETTINGS: EditorSettings = {
   markdownDefaultMode: 'preview',
+  diffViewDefaultMode: 'unified',
 };
 
 const STORAGE_KEY = 'codelane-editor-settings';
@@ -64,5 +67,13 @@ export const editorSettingsManager = {
 
   setMarkdownDefaultMode(mode: MarkdownDefaultMode) {
     updateSettings({ markdownDefaultMode: mode });
+  },
+
+  getDiffViewDefaultMode(): DiffViewDefaultMode {
+    return settings().diffViewDefaultMode;
+  },
+
+  setDiffViewDefaultMode(mode: DiffViewDefaultMode) {
+    updateSettings({ diffViewDefaultMode: mode });
   },
 };

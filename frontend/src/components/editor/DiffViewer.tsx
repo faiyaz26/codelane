@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { initDiffHighlighter, getDiffHighlighter } from './diff/shikiHighlighter';
 import { getFileAtRevision } from '../../lib/git-api';
 import { detectLanguage, getShikiLanguage } from './types';
+import { editorSettingsManager } from '../../services/EditorSettingsManager';
 import type { DiffViewMode } from './diff/types';
 
 // Import styles
@@ -20,7 +21,7 @@ interface DiffViewerProps {
 
 export function DiffViewer(props: DiffViewerProps) {
   const [highlighterReady, setHighlighterReady] = createSignal(false);
-  const [viewMode, setViewMode] = createSignal<DiffViewMode>('unified');
+  const [viewMode, setViewMode] = createSignal<DiffViewMode>(editorSettingsManager.getDiffViewDefaultMode());
   const [oldContent, setOldContent] = createSignal('');
   const [newContent, setNewContent] = createSignal('');
   const [dataReady, setDataReady] = createSignal(false);

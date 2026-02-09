@@ -38,11 +38,6 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
     icon: 'git',
     label: 'Code Review',
   },
-  {
-    id: ActivityView.Extensions,
-    icon: 'extensions',
-    label: 'Extensions',
-  },
 ];
 
 function ActivityIcon(props: { icon: string; class?: string }) {
@@ -71,19 +66,12 @@ function ActivityIcon(props: { icon: string; class?: string }) {
       );
     case 'git':
       return (
-        <svg class={props.class} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"
-          />
+        <svg class={props.class} fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <circle cx="5" cy="6" r="3" />
+          <path d="M5 9v12" />
+          <circle cx="19" cy="18" r="3" />
+          <path d="m15 9l-3-3l3-3" />
+          <path d="M12 6h5a2 2 0 0 1 2 2v7" />
         </svg>
       );
     case 'extensions':

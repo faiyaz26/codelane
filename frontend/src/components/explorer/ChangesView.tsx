@@ -1,5 +1,6 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { useGitService } from '../../hooks/useGitService';
+import { editorStateManager } from '../../services/EditorStateManager';
 
 interface ChangesViewProps {
   laneId: string;
@@ -82,10 +83,11 @@ export function ChangesView(props: ChangesViewProps) {
 
   const totalChanges = createMemo(() => allFiles().length);
 
-  const handleFileClick = (file: FileEntry) => {
-    if (file.status !== 'deleted' && props.onFileSelect) {
-      props.onFileSelect(file.fullPath);
-    }
+  const handleFileClick = async (file: FileEntry) => {
+    if (file.status === 'deleted') return;
+    // Open in diff view mode (same as Code Review)
+    await editorStateManager.openFileDiff(props.laneId, file.path, props.workingDir);
+    props.onFileSelect?.(file.fullPath);
   };
 
   return (
