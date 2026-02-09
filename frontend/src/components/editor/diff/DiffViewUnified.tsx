@@ -8,7 +8,8 @@ interface DiffViewUnifiedProps {
   parsedDiff: ParsedDiff;
   highlightedLines: Map<string, string>;
   expandedHunks: Map<number, ExpandedContext>;
-  onExpand?: (hunkIndex: number) => void;
+  onExpandAbove?: (hunkIndex: number) => void;
+  onExpandBelow?: (hunkIndex: number) => void;
 }
 
 export function DiffViewUnified(props: DiffViewUnifiedProps) {
@@ -17,16 +18,20 @@ export function DiffViewUnified(props: DiffViewUnifiedProps) {
       <For each={props.parsedDiff.hunks}>
         {(hunk, index) => {
           const hunkIndex = index();
-          const canExpandAbove = hunkIndex > 0 || hunk.newStart > 1;
+          const canExpandAbove = hunk.newStart > 1;
+          const nextHunk = props.parsedDiff.hunks[hunkIndex + 1];
+          const canExpandBelow = !nextHunk || (hunk.newStart + hunk.newLines < nextHunk.newStart);
 
           return (
             <DiffHunk
               hunk={hunk}
               hunkIndex={hunkIndex}
               highlightedLines={props.highlightedLines}
-              onExpand={props.onExpand}
+              onExpandAbove={props.onExpandAbove}
+              onExpandBelow={props.onExpandBelow}
               expandedContext={props.expandedHunks.get(hunkIndex)}
               canExpandAbove={canExpandAbove}
+              canExpandBelow={canExpandBelow}
             />
           );
         }}

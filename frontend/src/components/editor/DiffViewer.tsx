@@ -3,8 +3,8 @@
 import { createMemo, createSignal, createEffect, Show } from 'solid-js';
 import { detectLanguage, getShikiLanguage } from './types';
 import { parseDiff } from './diff/DiffParser';
-import { highlightDiff } from './diff/DiffHighlighter';
-import { fetchExpandedContext } from './diff/DiffExpansion';
+import { highlightDiff, highlightLines } from './diff/DiffHighlighter';
+import { fetchExpandedContextAbove, fetchExpandedContextBelow } from './diff/DiffExpansion';
 import { DiffViewUnified } from './diff/DiffViewUnified';
 import { DiffViewSplit } from './diff/DiffViewSplit';
 import type { DiffViewMode, ExpandedContext } from './diff/types';
@@ -45,34 +45,87 @@ export function DiffViewer(props: DiffViewerProps) {
     })();
   });
 
-  // Handle expand button click
-  const handleExpand = async (hunkIndex: number) => {
+  // Handle expand above button click
+  const handleExpandAbove = async (hunkIndex: number) => {
+    if (!props.workingDir || !props.filePath) {
+      console.warn('Cannot expand: missing workingDir or filePath');
+      return;
+    }
+
+    const diff = parsedDiff();
+    const hunk = diff.hunks[hunkIndex];
+    if (!hunk) return;
+
     const expanded = expandedHunks();
+    const currentExpanded = expanded.get(hunkIndex);
+    const currentlyExpandedAbove = currentExpanded?.above?.lines.length || 0;
 
-    if (expanded.has(hunkIndex)) {
-      // Collapse - remove from map
+    const context = await fetchExpandedContextAbove(
+      props.workingDir,
+      props.filePath,
+      hunk,
+      currentlyExpandedAbove
+    );
+
+    if (context) {
+      // Highlight the expanded lines
+      const language = detectLanguage(props.fileName);
+      const shikiLang = getShikiLanguage(language);
+      const highlightedLinesArray = await highlightLines(context.lines, shikiLang);
+
       const newExpanded = new Map(expanded);
-      newExpanded.delete(hunkIndex);
+      const existing = newExpanded.get(hunkIndex) || {};
+      newExpanded.set(hunkIndex, {
+        ...existing,
+        above: {
+          ...context,
+          highlightedLines: highlightedLinesArray,
+        },
+      });
       setExpandedHunks(newExpanded);
-    } else {
-      // Expand - fetch context
-      if (!props.workingDir || !props.filePath) {
-        console.warn('Cannot expand: missing workingDir or filePath');
-        return;
-      }
+    }
+  };
 
-      const diff = parsedDiff();
-      const hunk = diff.hunks[hunkIndex];
+  // Handle expand below button click
+  const handleExpandBelow = async (hunkIndex: number) => {
+    if (!props.workingDir || !props.filePath) {
+      console.warn('Cannot expand: missing workingDir or filePath');
+      return;
+    }
 
-      if (!hunk) return;
+    const diff = parsedDiff();
+    const hunk = diff.hunks[hunkIndex];
+    if (!hunk) return;
 
-      const context = await fetchExpandedContext(props.workingDir, props.filePath, hunk);
+    const expanded = expandedHunks();
+    const currentExpanded = expanded.get(hunkIndex);
+    const currentlyExpandedBelow = currentExpanded?.below?.lines.length || 0;
+    const nextHunk = diff.hunks[hunkIndex + 1];
 
-      if (context) {
-        const newExpanded = new Map(expanded);
-        newExpanded.set(hunkIndex, context);
-        setExpandedHunks(newExpanded);
-      }
+    const context = await fetchExpandedContextBelow(
+      props.workingDir,
+      props.filePath,
+      hunk,
+      currentlyExpandedBelow,
+      nextHunk
+    );
+
+    if (context) {
+      // Highlight the expanded lines
+      const language = detectLanguage(props.fileName);
+      const shikiLang = getShikiLanguage(language);
+      const highlightedLinesArray = await highlightLines(context.lines, shikiLang);
+
+      const newExpanded = new Map(expanded);
+      const existing = newExpanded.get(hunkIndex) || {};
+      newExpanded.set(hunkIndex, {
+        ...existing,
+        below: {
+          ...context,
+          highlightedLines: highlightedLinesArray,
+        },
+      });
+      setExpandedHunks(newExpanded);
     }
   };
 
@@ -139,7 +192,13 @@ export function DiffViewer(props: DiffViewerProps) {
           when={viewMode() === 'unified'}
           fallback={
             /* Split View */
-            <DiffViewSplit parsedDiff={parsedDiff()} />
+            <DiffViewSplit
+              parsedDiff={parsedDiff()}
+              highlightedLines={highlightedLines()}
+              expandedHunks={expandedHunks()}
+              onExpandAbove={handleExpandAbove}
+              onExpandBelow={handleExpandBelow}
+            />
           }
         >
           {/* Unified View */}
@@ -147,7 +206,8 @@ export function DiffViewer(props: DiffViewerProps) {
             parsedDiff={parsedDiff()}
             highlightedLines={highlightedLines()}
             expandedHunks={expandedHunks()}
-            onExpand={handleExpand}
+            onExpandAbove={handleExpandAbove}
+            onExpandBelow={handleExpandBelow}
           />
         </Show>
       </Show>
