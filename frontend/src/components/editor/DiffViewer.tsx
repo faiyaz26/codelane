@@ -1,7 +1,9 @@
 // DiffViewer using @git-diff-view with Shiki highlighting
-import { createSignal, createMemo, Show, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, onMount } from 'solid-js';
 import { DiffView, DiffModeEnum } from '@git-diff-view/solid';
+import { invoke } from '@tauri-apps/api/core';
 import { initDiffHighlighter, getDiffHighlighter } from './diff/shikiHighlighter';
+import { getFileAtRevision } from '../../lib/git-api';
 import { detectLanguage } from './types';
 import type { DiffViewMode } from './diff/types';
 
@@ -18,6 +20,9 @@ interface DiffViewerProps {
 export function DiffViewer(props: DiffViewerProps) {
   const [highlighterReady, setHighlighterReady] = createSignal(false);
   const [viewMode, setViewMode] = createSignal<DiffViewMode>('unified');
+  const [oldContent, setOldContent] = createSignal('');
+  const [newContent, setNewContent] = createSignal('');
+  const [dataReady, setDataReady] = createSignal(false);
 
   // Initialize highlighter on mount
   onMount(async () => {
@@ -25,24 +30,54 @@ export function DiffViewer(props: DiffViewerProps) {
     setHighlighterReady(true);
   });
 
-  // Build the data object for DiffView
-  const diffData = createMemo(() => {
+  // Fetch file contents for expansion support
+  createEffect(async () => {
+    const diffText = props.diff;
+    const filePath = props.filePath;
+    const workingDir = props.workingDir;
+
+    if (!diffText || diffText.trim().length === 0) {
+      setDataReady(false);
+      return;
+    }
+
+    let oldFileContent = '';
+    let newFileContent = '';
+
+    if (workingDir && filePath) {
+      // Fetch old content from HEAD (may fail for new files)
+      try {
+        oldFileContent = await getFileAtRevision(workingDir, filePath, 'HEAD');
+      } catch {
+        // New file - no old content
+      }
+
+      // Fetch current file content from working directory
+      try {
+        const fullPath = `${workingDir}/${filePath}`.replace(/\/+/g, '/');
+        newFileContent = await invoke<string>('read_file', { path: fullPath });
+      } catch {
+        // Deleted file - no new content
+      }
+    }
+
+    setOldContent(oldFileContent);
+    setNewContent(newFileContent);
+    setDataReady(true);
+  });
+
+  const getDiffData = () => {
     const diffText = props.diff;
     if (!diffText || diffText.trim().length === 0) return null;
 
     const language = detectLanguage(props.fileName);
 
     return {
-      oldFile: { fileName: props.fileName, fileLang: language, content: '' },
-      newFile: { fileName: props.fileName, fileLang: language, content: '' },
+      oldFile: { fileName: props.fileName, fileLang: language, content: oldContent() },
+      newFile: { fileName: props.fileName, fileLang: language, content: newContent() },
       hunks: [diffText],
     };
-  });
-
-  const highlighter = createMemo(() => {
-    if (!highlighterReady()) return undefined;
-    return getDiffHighlighter() ?? undefined;
-  });
+  };
 
   return (
     <div class="h-full w-full overflow-auto bg-zed-bg-app">
@@ -89,22 +124,22 @@ export function DiffViewer(props: DiffViewerProps) {
               >
                 Split
               </button>
-              <Show when={!highlighterReady()}>
-                <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(initializing...)</span>
+              <Show when={!highlighterReady() || !dataReady()}>
+                <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(loading...)</span>
               </Show>
             </div>
           </div>
         </div>
 
-        {/* Diff Content - use data prop so component handles all initialization */}
-        <Show when={diffData()}>
+        {/* Diff Content - render once highlighter and file content are ready */}
+        <Show when={dataReady() && highlighterReady() && getDiffData()}>
           {(data) => (
             <DiffView
               data={data()}
-              registerHighlighter={highlighter()}
+              registerHighlighter={getDiffHighlighter()!}
               diffViewMode={viewMode() === 'split' ? DiffModeEnum.Split : DiffModeEnum.Unified}
               diffViewWrap={true}
-              diffViewHighlight={highlighterReady()}
+              diffViewHighlight={true}
               diffViewTheme="dark"
               diffViewFontSize={14}
             />
