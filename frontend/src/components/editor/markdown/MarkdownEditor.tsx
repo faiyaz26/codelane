@@ -222,6 +222,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       return;
     }
 
+    // Don't show toolbar for readonly files
+    if (props.file.isReadonly) {
+      setShowToolbar(false);
+      return;
+    }
+
     if (hasSelection && coords) {
       setToolbarPosition(coords);
       setShowToolbar(true);
@@ -296,6 +302,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     tipTapEditor = createTipTapEditor({
       element: editorRef,
       content: props.file.content || '',
+      editable: !props.file.isReadonly,
       onReady: (_editor, normalizedContent) => {
         // Set the original content for modification tracking
         saveManager.setOriginalContent(normalizedContent);
@@ -401,6 +408,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
               onInput={handleSourceChange}
               onScroll={handleSourceScroll}
               spellcheck={false}
+              readOnly={props.file.isReadonly}
             />
           </div>
         </Show>

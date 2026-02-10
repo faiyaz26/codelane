@@ -22,6 +22,9 @@ export interface OpenFile {
   // Diff view mode
   diffContent?: string; // If set, show diff instead of regular content
   isDiffView?: boolean; // Flag to indicate this is a diff view
+  // Temporary file mode
+  isTemporary?: boolean; // Flag to indicate this is a temporary file (not saved to disk)
+  isReadonly?: boolean; // Flag to indicate this file is read-only
 }
 
 // Check if a file is a markdown file

@@ -22,35 +22,22 @@ pub async fn ai_generate_review(
     prompt: String,
     working_dir: String,
 ) -> Result<AIReviewResult, String> {
-    // Determine which CLI command to use
-    let (cmd_name, args) = match tool.as_str() {
-        "claude" => ("claude", vec!["--no-input"]),
-        "aider" => ("aider", vec!["--no-auto-commits", "--yes"]),
-        "opencode" => ("opencode", vec![]),
-        "gemini" => ("gemini", vec!["chat"]),
-        _ => return Err(format!("Unsupported AI tool: {}", tool)),
-    };
-
-    // Check if command exists
-    if !command_exists(cmd_name) {
-        return Ok(AIReviewResult {
-            success: false,
-            content: String::new(),
-            error: Some(format!(
-                "Command '{}' not found. Please install {} first.",
-                cmd_name, tool
-            )),
-        });
-    }
-
     // Build the full prompt
     let full_prompt = format!(
         "{}\n\n# Code Changes\n\n```diff\n{}\n```\n\nPlease provide a concise code review.",
         prompt, diff_content
     );
 
-    // Execute the command
-    match execute_ai_command(cmd_name, &args, &full_prompt, &working_dir) {
+    // Execute based on tool type
+    let result = match tool.as_str() {
+        "claude" => execute_claude(&full_prompt, &working_dir),
+        "aider" => execute_aider(&full_prompt, &working_dir),
+        "opencode" => execute_opencode(&full_prompt, &working_dir),
+        "gemini" => execute_gemini(&full_prompt, &working_dir),
+        _ => return Err(format!("Unsupported AI tool: {}", tool)),
+    };
+
+    match result {
         Ok(output) => Ok(AIReviewResult {
             success: true,
             content: output,
@@ -75,16 +62,20 @@ fn command_exists(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Execute an AI CLI command with the given prompt
-fn execute_ai_command(
-    cmd: &str,
-    args: &[&str],
-    prompt: &str,
-    working_dir: &str,
-) -> Result<String, String> {
-    let mut command = Command::new(cmd);
+/// Execute Claude Code CLI
+fn execute_claude(prompt: &str, working_dir: &str) -> Result<String, String> {
+    if !command_exists("claude") {
+        return Err("Claude Code CLI not found. Install: npm install -g @anthropic-ai/claude-code".to_string());
+    }
+
+    // Write prompt to temp file
+    let temp_dir = std::env::temp_dir();
+    let prompt_file = temp_dir.join(format!("codelane_prompt_{}.txt", std::process::id()));
+    std::fs::write(&prompt_file, prompt)
+        .map_err(|e| format!("Failed to write prompt file: {}", e))?;
+
+    let mut command = Command::new("claude");
     command
-        .args(args)
         .current_dir(working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -92,18 +83,83 @@ fn execute_ai_command(
 
     let mut child = command
         .spawn()
-        .map_err(|e| format!("Failed to spawn command: {}", e))?;
+        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
 
     // Write prompt to stdin
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(prompt.as_bytes())
             .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        // Drop stdin to close the pipe
         drop(stdin);
     }
 
-    // Wait for output
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for output: {}", e))?;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(prompt_file);
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Claude error: {}", stderr))
+    }
+}
+
+/// Execute Aider CLI
+fn execute_aider(prompt: &str, working_dir: &str) -> Result<String, String> {
+    if !command_exists("aider") {
+        return Err("Aider not found. Install: pip install aider-chat".to_string());
+    }
+
+    let mut command = Command::new("aider");
+    command
+        .arg("--yes")
+        .arg("--no-auto-commits")
+        .arg("--message")
+        .arg(prompt)
+        .current_dir(working_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let output = command
+        .output()
+        .map_err(|e| format!("Failed to execute aider: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Aider error: {}", stderr))
+    }
+}
+
+/// Execute OpenCode CLI
+fn execute_opencode(prompt: &str, working_dir: &str) -> Result<String, String> {
+    if !command_exists("opencode") {
+        return Err("OpenCode not found. Install: npm install -g opencode".to_string());
+    }
+
+    let mut command = Command::new("opencode");
+    command
+        .current_dir(working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn opencode: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(prompt.as_bytes())
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+        drop(stdin);
+    }
+
     let output = child
         .wait_with_output()
         .map_err(|e| format!("Failed to wait for output: {}", e))?;
@@ -111,7 +167,45 @@ fn execute_ai_command(
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("OpenCode error: {}", stderr))
+    }
+}
+
+/// Execute Gemini CLI
+fn execute_gemini(prompt: &str, working_dir: &str) -> Result<String, String> {
+    if !command_exists("gemini") {
+        return Err("Gemini CLI not found. Install: npm install -g @google/generative-ai-cli".to_string());
+    }
+
+    let mut command = Command::new("gemini");
+    command
+        .arg("chat")
+        .current_dir(working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn gemini: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(prompt.as_bytes())
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+        drop(stdin);
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for output: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Gemini error: {}", stderr))
     }
 }
 

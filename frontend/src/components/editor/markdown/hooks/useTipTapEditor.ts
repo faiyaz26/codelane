@@ -11,6 +11,7 @@ import CodeBlockShiki from 'tiptap-extension-code-block-shiki';
 export interface TipTapEditorOptions {
   element: HTMLElement;
   content: string;
+  editable?: boolean;
   onReady?: (editor: Editor, normalizedContent: string) => void;
   onContentChange?: (markdown: string) => void;
   onSelectionChange?: (editor: Editor, hasSelection: boolean, coords?: { x: number; y: number }) => void;
@@ -46,6 +47,7 @@ export function createTipTapEditor(options: TipTapEditorOptions): TipTapEditorIn
   // Create editor synchronously
   const ed = new Editor({
     element: options.element,
+    editable: options.editable ?? true,
     extensions: [
       StarterKit.configure({
         heading: {

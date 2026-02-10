@@ -142,6 +142,8 @@ export function MainLayout(props: MainLayoutProps) {
         activeLaneId={props.activeLaneId ?? undefined}
         activeLaneName={activeLane()?.name}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
+        activeView={activeView()}
+        onNavigateToCodeReview={() => setActiveView(ActivityView.CodeReview)}
       />
 
       <div class="flex-1 flex overflow-hidden">

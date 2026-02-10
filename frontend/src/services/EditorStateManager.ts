@@ -304,6 +304,55 @@ class EditorStateManager {
     await this.loadFileDiff(laneId, id, relativePath, workingDir);
   }
 
+  // Open a temporary markdown file with content (for AI summaries)
+  // These files are read-only and not saved to disk
+  async openTemporaryMarkdown(laneId: string, title: string, content: string): Promise<void> {
+    this.ensureLane(laneId);
+
+    // Use a unique ID with timestamp to allow multiple temp files
+    const timestamp = Date.now();
+    const id = `temp-${timestamp}`;
+    const virtualPath = `temp://${title}`;
+
+    // Check if already open
+    const existing = this.store.pathIndex[virtualPath];
+    if (existing && existing.laneId === laneId) {
+      // Update content and activate
+      this.batchUpdate(() => {
+        this.updateFile(laneId, existing.fileId, {
+          content,
+          isLoading: false,
+        });
+        this.setActiveFile(laneId, existing.fileId);
+      });
+      return;
+    }
+
+    const newFile: OpenFile = {
+      id,
+      path: virtualPath,
+      name: title,
+      content,
+      isLoading: false,
+      isModified: false,
+      error: null,
+      language: 'markdown',
+      isTemporary: true,
+      isReadonly: true,
+    };
+
+    this.batchUpdate(() => {
+      this.setStore(
+        produce((store) => {
+          store.lanes[laneId].openFiles[id] = newFile;
+          store.pathIndex[virtualPath] = { laneId, fileId: id };
+          store.lanes[laneId].activeFileId = id;
+          store.lanes[laneId].renderedFiles.add(id);
+        })
+      );
+    });
+  }
+
   // Clear scroll-to-line target after scrolling
   clearScrollToLine(laneId: string, fileId: string): void {
     const lane = this.store.lanes[laneId];
