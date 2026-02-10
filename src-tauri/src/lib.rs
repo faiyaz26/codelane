@@ -15,6 +15,7 @@ mod fs;
 mod file_sorter;
 mod import_analyzer;
 mod dependency_graph;
+mod ai;
 
 #[cfg(feature = "devtools")]
 use tauri::Manager;
@@ -88,6 +89,10 @@ pub fn run() {
             git::git_worktree_add,
             git::git_worktree_list,
             git::git_worktree_remove,
+            // AI code review commands
+            ai::ai_generate_review,
+            ai::ai_test_tool,
+            ai::ai_get_available_tools,
             // Filesystem commands
             fs::read_file,
             fs::write_file,

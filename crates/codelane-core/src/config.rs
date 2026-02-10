@@ -20,6 +20,9 @@ pub struct AppConfig {
     /// Git settings
     pub git: GitConfig,
 
+    /// AI code review settings
+    pub ai: AIConfig,
+
     /// Theme settings
     pub theme: ThemeConfig,
 }
@@ -31,6 +34,7 @@ impl Default for AppConfig {
             terminal: TerminalConfig::default(),
             editor: EditorConfig::default(),
             git: GitConfig::default(),
+            ai: AIConfig::default(),
             theme: ThemeConfig::default(),
         }
     }
@@ -195,6 +199,50 @@ pub enum AgentType {
     Aider,
     /// Traditional shell (backward compatibility)
     Shell,
+}
+
+/// AI code review configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AIConfig {
+    /// Whether AI code review is enabled
+    pub enabled: bool,
+
+    /// Which AI tool to use
+    pub tool: AITool,
+
+    /// Custom command for the AI tool (if not using default)
+    pub custom_command: Option<String>,
+
+    /// Additional arguments to pass to the AI tool
+    pub additional_args: Vec<String>,
+}
+
+impl Default for AIConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            tool: AITool::Claude,
+            custom_command: None,
+            additional_args: Vec::new(),
+        }
+    }
+}
+
+/// AI tool for code review
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AITool {
+    /// Claude Code CLI (claude)
+    Claude,
+    /// Aider CLI (aider)
+    Aider,
+    /// OpenCode CLI (opencode)
+    OpenCode,
+    /// Gemini CLI (gemini)
+    Gemini,
+    /// Custom command
+    Custom,
 }
 
 /// CLI agent configuration

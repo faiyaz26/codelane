@@ -2,6 +2,7 @@ import { createSignal, For, Show, createEffect, onMount, onCleanup } from 'solid
 import { invoke } from '@tauri-apps/api/core';
 import { useGitChanges } from '../../hooks/useGitChanges';
 import { editorStateManager } from '../../services/EditorStateManager';
+import { aiReviewService, type AITool } from '../../services/AIReviewService';
 import type { FileChangeStats } from '../../types/git';
 
 export type FileSortOrder = 'alphabetical' | 'smart' | 'smart-dependencies' | 'change-size' | 'none';
@@ -28,6 +29,9 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const [commits, setCommits] = createSignal<GitCommit[]>([]);
   const [splitPosition, setSplitPosition] = createSignal(60); // % for top panel
   const [isResizing, setIsResizing] = createSignal(false);
+  const [aiReview, setAiReview] = createSignal<string | null>(null);
+  const [isGeneratingReview, setIsGeneratingReview] = createSignal(false);
+  const [showAiReview, setShowAiReview] = createSignal(false);
 
   // Watch for git changes (auto-refreshes when files change)
   const gitChanges = useGitChanges({
@@ -127,6 +131,51 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const handleShowUncommitted = () => {
     setSelectedCommit(null);
     setSelectedFile(null);
+  };
+
+  const handleGenerateAIReview = async () => {
+    setIsGeneratingReview(true);
+    setShowAiReview(true);
+    setAiReview(null);
+
+    try {
+      // Get AI tool from localStorage
+      const tool = (localStorage.getItem('codelane:aiTool') || 'claude') as AITool;
+
+      // Get diffs for all files
+      const files = sortedFiles();
+      let diffContent = '';
+
+      for (const file of files) {
+        try {
+          const diff = await invoke<string>('git_diff', {
+            path: props.workingDir,
+            file: file.path,
+            staged: false,
+          });
+          diffContent += `\n\n# File: ${file.path}\n${diff}`;
+        } catch (error) {
+          console.error(`Failed to get diff for ${file.path}:`, error);
+        }
+      }
+
+      // Generate review
+      const result = await aiReviewService.generateReview({
+        tool,
+        diffContent,
+        workingDir: props.workingDir,
+      });
+
+      if (result.success) {
+        setAiReview(result.content);
+      } else {
+        setAiReview(`**Error**: ${result.error || 'Failed to generate review'}`);
+      }
+    } catch (error) {
+      setAiReview(`**Error**: ${error}`);
+    } finally {
+      setIsGeneratingReview(false);
+    }
   };
 
   const handleMouseDown = (e: MouseEvent) => {
@@ -283,6 +332,17 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
                   Show Uncommitted
                 </button>
               </Show>
+              {/* AI Review Button */}
+              <Show when={fileCount() > 0}>
+                <button
+                  onClick={handleGenerateAIReview}
+                  disabled={isGeneratingReview()}
+                  class="px-2 py-0.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                  title="Generate AI code review"
+                >
+                  {isGeneratingReview() ? '🤖 Generating...' : '🤖 AI Review'}
+                </button>
+              </Show>
             </div>
 
             {/* Sort Order Dropdown */}
@@ -365,6 +425,47 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
             <span class="text-red-400">-{totalDeletions()}</span>
           </div>
         </div>
+
+        {/* AI Review Panel */}
+        <Show when={showAiReview()}>
+          <div class="border-b border-zed-border-subtle bg-zed-bg-panel">
+            <div class="px-3 py-2 flex items-center justify-between border-b border-zed-border-subtle/50">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span class="text-xs font-medium text-zed-text-primary">AI Code Review</span>
+              </div>
+              <button
+                onClick={() => setShowAiReview(false)}
+                class="text-zed-text-tertiary hover:text-zed-text-primary transition-colors"
+                title="Close AI review"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="px-3 py-2 max-h-64 overflow-y-auto">
+              <Show
+                when={aiReview()}
+                fallback={
+                  <div class="flex items-center gap-2 text-xs text-zed-text-tertiary">
+                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Generating AI review...</span>
+                  </div>
+                }
+              >
+                <div class="text-xs text-zed-text-primary whitespace-pre-wrap prose prose-sm max-w-none">
+                  {aiReview()}
+                </div>
+              </Show>
+            </div>
+          </div>
+        </Show>
 
         {/* File List */}
         <div class="flex-1 overflow-y-auto">
