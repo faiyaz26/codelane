@@ -245,11 +245,14 @@ class EditorStateManager {
 
   // Open a file in diff view mode (for code review)
   // path is relative to workingDir (e.g., "src/file.ts")
-  async openFileDiff(laneId: string, relativePath: string, workingDir: string): Promise<void> {
+  // commitHash is optional - if provided, shows diff for that commit instead of uncommitted changes
+  async openFileDiff(laneId: string, relativePath: string, workingDir: string, commitHash?: string): Promise<void> {
     this.ensureLane(laneId);
 
     // Construct full path for the file
-    const fullPath = `${workingDir}/${relativePath}`.replace(/\/+/g, '/');
+    // Include commit hash in path if viewing a commit, to allow multiple versions of same file
+    const pathSuffix = commitHash ? `@${commitHash}` : '';
+    const fullPath = `${workingDir}/${relativePath}${pathSuffix}`.replace(/\/+/g, '/');
 
     // Check path index for O(1) lookup
     const existing = this.store.pathIndex[fullPath];
@@ -301,7 +304,7 @@ class EditorStateManager {
     });
 
     // Load diff content asynchronously
-    await this.loadFileDiff(laneId, id, relativePath, workingDir);
+    await this.loadFileDiff(laneId, id, relativePath, workingDir, commitHash);
   }
 
   // Open a temporary markdown file with content (for AI summaries)
@@ -428,7 +431,8 @@ class EditorStateManager {
 
   // Load diff content for a file
   // relativePath is relative to workingDir (e.g., "src/file.ts")
-  private async loadFileDiff(laneId: string, fileId: string, relativePath: string, workingDir: string): Promise<void> {
+  // commitHash is optional - if provided, loads diff for that specific commit
+  private async loadFileDiff(laneId: string, fileId: string, relativePath: string, workingDir: string, commitHash?: string): Promise<void> {
     const lane = this.store.lanes[laneId];
     if (!lane || !lane.openFiles[fileId]) return;
 
@@ -436,26 +440,38 @@ class EditorStateManager {
     this.updateFile(laneId, fileId, { isLoading: true });
 
     try {
-      // Try unstaged diff first
-      let diff = await getGitDiff(workingDir, relativePath, false);
+      let diff: string;
 
-      // If empty, try staged diff (file might be staged)
-      if (!diff || diff.trim().length === 0) {
-        diff = await getGitDiff(workingDir, relativePath, true);
-      }
+      // If commit hash provided, get diff for that specific commit
+      if (commitHash) {
+        diff = await invoke<string>('git_commit_file_diff', {
+          path: workingDir,
+          commitHash: commitHash,
+          file: relativePath,
+        });
+      } else {
+        // Otherwise, get uncommitted changes diff
+        // Try unstaged diff first
+        diff = await getGitDiff(workingDir, relativePath, false);
 
-      // If still empty, file is likely untracked - read content and build synthetic diff
-      if (!diff || diff.trim().length === 0) {
-        try {
-          const fullPath = `${workingDir}/${relativePath}`.replace(/\/+/g, '/');
-          const content = await invoke<string>('read_file', { path: fullPath });
-          if (content && content.length > 0) {
-            const lines = content.split('\n');
-            const addedLines = lines.map(line => `+${line}`).join('\n');
-            diff = `--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${lines.length} @@\n${addedLines}`;
+        // If empty, try staged diff (file might be staged)
+        if (!diff || diff.trim().length === 0) {
+          diff = await getGitDiff(workingDir, relativePath, true);
+        }
+
+        // If still empty, file is likely untracked - read content and build synthetic diff
+        if (!diff || diff.trim().length === 0) {
+          try {
+            const fullPath = `${workingDir}/${relativePath}`.replace(/\/+/g, '/');
+            const content = await invoke<string>('read_file', { path: fullPath });
+            if (content && content.length > 0) {
+              const lines = content.split('\n');
+              const addedLines = lines.map(line => `+${line}`).join('\n');
+              diff = `--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${lines.length} @@\n${addedLines}`;
+            }
+          } catch {
+            // File might not exist or can't be read
           }
-        } catch {
-          // File might not exist or can't be read
         }
       }
 

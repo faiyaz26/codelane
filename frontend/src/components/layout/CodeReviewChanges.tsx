@@ -116,7 +116,14 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const handleFileClick = async (file: FileChangeStats) => {
     setSelectedFile(file.path);
     // Open file in diff view mode
-    await editorStateManager.openFileDiff(props.laneId, file.path, props.workingDir);
+    // Pass commit hash if a commit is selected, otherwise show uncommitted changes
+    const commit = selectedCommit();
+    await editorStateManager.openFileDiff(
+      props.laneId,
+      file.path,
+      props.workingDir,
+      commit?.hash
+    );
   };
 
   const handleCommitClick = (commit: GitCommit) => {

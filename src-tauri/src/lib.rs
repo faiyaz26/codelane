@@ -74,6 +74,7 @@ pub fn run() {
             git::git_show_file,
             git::git_changes_with_stats,
             git::git_commit_changes,
+            git::git_commit_file_diff,
             git::git_sort_files,
             git::git_log,
             git::git_branch,

@@ -353,6 +353,20 @@ pub async fn git_commit_changes(path: String, commit_hash: String) -> Result<Vec
     Ok(changes)
 }
 
+/// Get diff for a specific file in a specific commit
+#[tauri::command]
+pub async fn git_commit_file_diff(path: String, commit_hash: String, file: String) -> Result<String, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    // Use git diff to get just the diff for this specific file in this commit
+    // Format: git diff <commit>^..<commit> -- <file>
+    // This shows the changes introduced by the commit for this file
+    let commit_range = format!("{}^..{}", commit_hash, commit_hash);
+    let args = vec!["diff", "--color=never", &commit_range, "--", &file];
+    run_git(work_dir, &args)
+}
+
 /// Maximum number of files to apply dependency analysis to prevent performance degradation
 const MAX_FILES_FOR_DEPENDENCY_ANALYSIS: usize = 50;
 
