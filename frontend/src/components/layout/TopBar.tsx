@@ -142,19 +142,22 @@ export function TopBar(props: TopBarProps) {
   };
 
   return (
-    <div
-      class="h-11 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center select-none"
-      onMouseDown={handleTitleBarMouseDown}
-    >
+    <div class="h-11 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center select-none">
       {/* macOS traffic light spacer (left side) */}
       <Show when={isMacOS()}>
-        <div class="w-[78px] flex-shrink-0" />
+        <div class="w-[78px] flex-shrink-0" data-tauri-drag-region />
       </Show>
 
-      {/* Active lane name - centered */}
-      <div class="flex-1 flex items-center justify-center">
+      {/* Active lane name - centered - this area is draggable */}
+      <div
+        class="flex-1 flex items-center justify-center"
+        data-tauri-drag-region
+        onMouseDown={handleTitleBarMouseDown}
+      >
         <Show when={props.activeLaneName}>
-          <span class="text-sm font-medium text-zed-text-secondary">{props.activeLaneName}</span>
+          <span class="text-sm font-medium text-zed-text-secondary" data-tauri-drag-region>
+            {props.activeLaneName}
+          </span>
         </Show>
       </div>
 
@@ -216,7 +219,7 @@ export function TopBar(props: TopBarProps) {
 
       {/* Windows/Linux window controls spacer (right side) */}
       <Show when={!isMacOS()}>
-        <div class="w-[138px] flex-shrink-0" />
+        <div class="w-[138px] flex-shrink-0" data-tauri-drag-region />
       </Show>
 
       {/* Commit Dialog */}
