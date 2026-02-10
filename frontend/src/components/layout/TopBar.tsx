@@ -58,8 +58,9 @@ export function TopBar(props: TopBarProps) {
     setIsGeneratingReview(true);
 
     try {
-      // Get AI tool from localStorage
+      // Get AI tool and model from localStorage
       const tool = (localStorage.getItem('codelane:aiTool') || 'claude') as AITool;
+      const model = localStorage.getItem(`codelane:aiModel:${tool}`) || undefined;
 
       // Get list of changed files
       const status = gitWatcher.gitStatus();
@@ -89,11 +90,12 @@ export function TopBar(props: TopBarProps) {
         }
       }
 
-      // Generate review
+      // Generate review with selected model
       const result = await aiReviewService.generateReview({
         tool,
         diffContent,
         workingDir: props.effectiveWorkingDir,
+        model,
       });
 
       // Open result in temporary markdown file

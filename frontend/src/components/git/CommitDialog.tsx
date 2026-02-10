@@ -6,6 +6,8 @@ import { getGitStatus, stageFiles, unstageFiles, createCommit } from '../../lib/
 import { useGitService } from '../../hooks/useGitService';
 import type { GitStatusResult } from '../../types/git';
 import { isMacOS } from '../../lib/platform';
+import { invoke } from '@tauri-apps/api/core';
+import { aiReviewService, type AITool } from '../../services/AIReviewService';
 
 interface CommitDialogProps {
   open: boolean;
@@ -25,6 +27,7 @@ export function CommitDialog(props: CommitDialogProps) {
   const [message, setMessage] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
   const [isCommitting, setIsCommitting] = createSignal(false);
+  const [isGenerating, setIsGenerating] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [gitStatus, setGitStatus] = createSignal<GitStatusResult | null>(null);
   const [selectedFiles, setSelectedFiles] = createSignal<Set<string>>(new Set());
@@ -231,6 +234,61 @@ export function CommitDialog(props: CommitDialogProps) {
     }
   };
 
+  const handleAutoGenerateCommitMessage = async () => {
+    const selected = selectedFiles();
+    if (selected.size === 0) {
+      setError('Please select at least one file to generate commit message');
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      // Get AI tool and model from localStorage
+      const tool = (localStorage.getItem('codelane:aiTool') || 'claude') as AITool;
+      const model = localStorage.getItem(`codelane:aiModel:${tool}`) || undefined;
+
+      // Get diffs for selected files
+      let diffContent = '';
+      for (const filePath of selected) {
+        try {
+          const diff = await invoke<string>('git_diff', {
+            path: props.workingDir,
+            file: filePath,
+            staged: false,
+          });
+          diffContent += `\n\n# File: ${filePath}\n${diff}`;
+        } catch (error) {
+          console.error(`Failed to get diff for ${filePath}:`, error);
+        }
+      }
+
+      if (!diffContent.trim()) {
+        setError('No changes found to generate commit message');
+        return;
+      }
+
+      // Generate commit message with selected model
+      const result = await aiReviewService.generateCommitSummary(
+        tool,
+        diffContent,
+        props.workingDir,
+        model
+      );
+
+      if (result.success) {
+        setMessage(result.content.trim());
+      } else {
+        setError(result.error || 'Failed to generate commit message');
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <KobalteDialog open={props.open} onOpenChange={props.onOpenChange}>
       <KobalteDialog.Portal>
@@ -305,9 +363,31 @@ export function CommitDialog(props: CommitDialogProps) {
               <Show when={!isLoading() && allFiles().length > 0}>
                 {/* Commit Message */}
                 <div class="px-5 py-4">
-                  <label class="block text-xs font-medium text-zed-text-secondary mb-2">
-                    Commit Message
-                  </label>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-zed-text-secondary">
+                      Commit Message
+                    </label>
+                    <button
+                      class="px-2.5 py-1 text-xs font-medium text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      onClick={handleAutoGenerateCommitMessage}
+                      disabled={isGenerating() || selectedCount() === 0}
+                      title="Generate commit message using AI"
+                    >
+                      {isGenerating() ? (
+                        <>
+                          <div class="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                          </svg>
+                          Auto Generate
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <textarea
                     class="w-full h-24 px-3 py-2.5 text-sm bg-zed-bg-app border border-zed-border-default rounded-lg text-zed-text-primary placeholder-zed-text-disabled resize-none transition-all focus:outline-none focus:border-zed-accent-blue focus:ring-1 focus:ring-zed-accent-blue/30"
                     placeholder="Describe your changes..."

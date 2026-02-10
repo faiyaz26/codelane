@@ -3,7 +3,7 @@
 import { createSignal, onMount } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
 import type { AgentSettings } from '../../types/agent';
-import { aiReviewService, type AITool } from '../../services/AIReviewService';
+import { aiReviewService, type AITool, AI_MODELS } from '../../services/AIReviewService';
 
 interface AgentsSettingsProps {
   settings: AgentSettings;
@@ -13,6 +13,7 @@ interface AgentsSettingsProps {
 
 export function AgentsSettings(props: AgentsSettingsProps) {
   const [aiTool, setAiTool] = createSignal<AITool>('claude');
+  const [aiModel, setAiModel] = createSignal<string>('haiku');
   const [availableTools, setAvailableTools] = createSignal<AITool[]>([]);
   const [testingTool, setTestingTool] = createSignal(false);
 
@@ -23,6 +24,15 @@ export function AgentsSettings(props: AgentsSettingsProps) {
       setAiTool(savedTool as AITool);
     }
 
+    // Load saved model for current tool
+    const savedModel = localStorage.getItem(`codelane:aiModel:${aiTool()}`);
+    if (savedModel) {
+      setAiModel(savedModel);
+    } else {
+      // Set default model (first option for each tool)
+      setAiModel(AI_MODELS[aiTool()][0].value);
+    }
+
     // Load available AI tools
     const tools = await aiReviewService.getAvailableTools();
     setAvailableTools(tools);
@@ -31,6 +41,19 @@ export function AgentsSettings(props: AgentsSettingsProps) {
   const handleAIToolChange = (tool: AITool) => {
     setAiTool(tool);
     localStorage.setItem('codelane:aiTool', tool);
+
+    // Load saved model for new tool or use default
+    const savedModel = localStorage.getItem(`codelane:aiModel:${tool}`);
+    if (savedModel) {
+      setAiModel(savedModel);
+    } else {
+      setAiModel(AI_MODELS[tool][0].value);
+    }
+  };
+
+  const handleAIModelChange = (model: string) => {
+    setAiModel(model);
+    localStorage.setItem(`codelane:aiModel:${aiTool()}`, model);
   };
 
   const handleTestAITool = async () => {
@@ -83,9 +106,9 @@ export function AgentsSettings(props: AgentsSettingsProps) {
           </div>
         </div>
 
-        {/* AI Code Review Settings */}
+        {/* AI Code Changes Summary Settings */}
         <div>
-          <h3 class="text-sm font-medium text-zed-text-primary mb-4">AI Code Review</h3>
+          <h3 class="text-sm font-medium text-zed-text-primary mb-4">AI Code Changes Summary</h3>
 
           {/* AI Tool Selection */}
           <div class="p-4 rounded-lg bg-zed-bg-surface border border-zed-border-default">
@@ -93,7 +116,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               <div class="flex-1 mr-4">
                 <p class="text-sm font-medium text-zed-text-primary">AI Tool</p>
                 <p class="text-xs text-zed-text-tertiary mt-1">
-                  Choose which local AI CLI tool to use for code reviews
+                  Choose which local AI CLI tool to use for code summaries
                 </p>
               </div>
               <div class="flex items-center gap-2">
@@ -118,8 +141,33 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               </div>
             </div>
 
+            {/* Model selection */}
+            <div class="mt-4 pt-4 border-t border-zed-border-subtle">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 mr-4">
+                  <p class="text-sm font-medium text-zed-text-primary">Model</p>
+                  <p class="text-xs text-zed-text-tertiary mt-1">
+                    Select which model to use for code summaries
+                  </p>
+                </div>
+                <select
+                  class="px-3 py-2 text-sm rounded-md bg-zed-bg-panel border border-zed-border-default text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue"
+                  value={aiModel()}
+                  onChange={(e) => handleAIModelChange(e.target.value)}
+                >
+                  {AI_MODELS[aiTool()].map((model) => (
+                    <option value={model.value}>{model.label}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Model description */}
+              <div class="mt-2 text-xs text-zed-text-disabled">
+                {AI_MODELS[aiTool()].find(m => m.value === aiModel())?.description}
+              </div>
+            </div>
+
             {/* Tool descriptions */}
-            <div class="text-xs text-zed-text-disabled">
+            <div class="mt-4 pt-4 border-t border-zed-border-subtle text-xs text-zed-text-disabled">
               {aiTool() === 'claude' && (
                 <div>
                   <p class="mb-2">

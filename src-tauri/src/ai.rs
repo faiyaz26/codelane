@@ -1,7 +1,7 @@
-//! AI code review integration via CLI tools
+//! AI code changes summary integration via CLI tools
 //!
 //! Provides commands to invoke local AI CLI tools (claude-code, aider, opencode, gemini)
-//! for code review, summaries, and feedback.
+//! for code changes summaries and feedback.
 
 use serde::Serialize;
 use std::process::{Command, Stdio};
@@ -14,26 +14,27 @@ pub struct AIReviewResult {
     pub error: Option<String>,
 }
 
-/// Generate a code review summary using the configured AI tool
+/// Generate a code changes summary with feedback using the configured AI tool
 #[tauri::command]
 pub async fn ai_generate_review(
     tool: String,
     diff_content: String,
     prompt: String,
     working_dir: String,
+    model: Option<String>,
 ) -> Result<AIReviewResult, String> {
     // Build the full prompt
     let full_prompt = format!(
-        "{}\n\n# Code Changes\n\n```diff\n{}\n```\n\nPlease provide a concise code review.",
+        "{}\n\n# Code Changes\n\n```diff\n{}\n```\n\nPlease provide a concise summary and feedback.",
         prompt, diff_content
     );
 
     // Execute based on tool type
     let result = match tool.as_str() {
-        "claude" => execute_claude(&full_prompt, &working_dir),
-        "aider" => execute_aider(&full_prompt, &working_dir),
-        "opencode" => execute_opencode(&full_prompt, &working_dir),
-        "gemini" => execute_gemini(&full_prompt, &working_dir),
+        "claude" => execute_claude(&full_prompt, &working_dir, model.as_deref()),
+        "aider" => execute_aider(&full_prompt, &working_dir, model.as_deref()),
+        "opencode" => execute_opencode(&full_prompt, &working_dir, model.as_deref()),
+        "gemini" => execute_gemini(&full_prompt, &working_dir, model.as_deref()),
         _ => return Err(format!("Unsupported AI tool: {}", tool)),
     };
 
@@ -63,7 +64,7 @@ fn command_exists(cmd: &str) -> bool {
 }
 
 /// Execute Claude Code CLI
-fn execute_claude(prompt: &str, working_dir: &str) -> Result<String, String> {
+fn execute_claude(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
     if !command_exists("claude") {
         return Err("Claude Code CLI not found. Install: npm install -g @anthropic-ai/claude-code".to_string());
     }
@@ -80,6 +81,11 @@ fn execute_claude(prompt: &str, working_dir: &str) -> Result<String, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Add model selection if provided
+    if let Some(model_name) = model {
+        command.arg("--model").arg(model_name);
+    }
 
     let mut child = command
         .spawn()
@@ -109,7 +115,7 @@ fn execute_claude(prompt: &str, working_dir: &str) -> Result<String, String> {
 }
 
 /// Execute Aider CLI
-fn execute_aider(prompt: &str, working_dir: &str) -> Result<String, String> {
+fn execute_aider(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
     if !command_exists("aider") {
         return Err("Aider not found. Install: pip install aider-chat".to_string());
     }
@@ -124,6 +130,11 @@ fn execute_aider(prompt: &str, working_dir: &str) -> Result<String, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    // Add model selection if provided
+    if let Some(model_name) = model {
+        command.arg("--model").arg(model_name);
+    }
+
     let output = command
         .output()
         .map_err(|e| format!("Failed to execute aider: {}", e))?;
@@ -137,7 +148,7 @@ fn execute_aider(prompt: &str, working_dir: &str) -> Result<String, String> {
 }
 
 /// Execute OpenCode CLI
-fn execute_opencode(prompt: &str, working_dir: &str) -> Result<String, String> {
+fn execute_opencode(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
     if !command_exists("opencode") {
         return Err("OpenCode not found. Install: npm install -g opencode".to_string());
     }
@@ -148,6 +159,11 @@ fn execute_opencode(prompt: &str, working_dir: &str) -> Result<String, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Add model selection if provided (opencode uses --model flag)
+    if let Some(model_name) = model {
+        command.arg("--model").arg(model_name);
+    }
 
     let mut child = command
         .spawn()
@@ -173,7 +189,7 @@ fn execute_opencode(prompt: &str, working_dir: &str) -> Result<String, String> {
 }
 
 /// Execute Gemini CLI
-fn execute_gemini(prompt: &str, working_dir: &str) -> Result<String, String> {
+fn execute_gemini(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
     if !command_exists("gemini") {
         return Err("Gemini CLI not found. Install: npm install -g @google/generative-ai-cli".to_string());
     }
@@ -185,6 +201,11 @@ fn execute_gemini(prompt: &str, working_dir: &str) -> Result<String, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Add model selection if provided
+    if let Some(model_name) = model {
+        command.arg("--model").arg(model_name);
+    }
 
     let mut child = command
         .spawn()

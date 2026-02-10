@@ -1,7 +1,7 @@
 /**
- * AI Code Review Service
+ * AI Code Changes Summary Service
  *
- * Handles interaction with local AI CLI tools for code review generation
+ * Handles interaction with local AI CLI tools for code changes summary and feedback generation
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -19,11 +19,35 @@ export interface AIReviewRequest {
   diffContent: string;
   workingDir: string;
   customPrompt?: string;
+  model?: string;
 }
+
+// Model options for each tool
+export const AI_MODELS: Record<AITool, Array<{ value: string; label: string; description: string }>> = {
+  claude: [
+    { value: 'haiku', label: 'Claude 3.5 Haiku', description: 'Fast and cost-effective (Recommended)' },
+    { value: 'sonnet', label: 'Claude 3.5 Sonnet', description: 'Balanced performance' },
+    { value: 'opus', label: 'Claude 3 Opus', description: 'Most capable' },
+  ],
+  aider: [
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast and affordable (Recommended)' },
+    { value: 'gpt-4o', label: 'GPT-4o', description: 'Most capable OpenAI model' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', description: 'Fastest' },
+  ],
+  opencode: [
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Free via GitHub Copilot (Recommended)' },
+    { value: 'gpt-4o', label: 'GPT-4o', description: 'More capable' },
+  ],
+  gemini: [
+    { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash', description: 'Fast and efficient (Recommended)' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Most capable' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Faster' },
+  ],
+};
 
 export class AIReviewService {
   /**
-   * Generate a code review summary
+   * Generate a code changes summary with feedback
    */
   async generateReview(request: AIReviewRequest): Promise<AIReviewResult> {
     const prompt = request.customPrompt || this.getDefaultPrompt();
@@ -34,6 +58,7 @@ export class AIReviewService {
         diffContent: request.diffContent,
         prompt,
         workingDir: request.workingDir,
+        model: request.model || null,
       });
 
       return result;
@@ -52,23 +77,60 @@ export class AIReviewService {
   async generateCommitSummary(
     tool: AITool,
     diffContent: string,
-    workingDir: string
+    workingDir: string,
+    model?: string
   ): Promise<AIReviewResult> {
-    const prompt = `Analyze these code changes and generate a concise commit message.
+    const prompt = `Generate a commit message for these code changes. Output ONLY the commit message text with no additional commentary, formatting, or markdown code blocks.
 
-Format:
-- First line: Short summary (50 chars max)
+Format requirements:
+- First line: Short summary in imperative mood (50 chars max)
 - Blank line
 - Body: Explain what changed and why (wrap at 72 chars)
 
-Be specific and use imperative mood (e.g., "Add feature" not "Added feature").`;
+Example output format:
+Add user authentication feature
 
-    return this.generateReview({
+Implement JWT-based authentication with login and signup endpoints.
+Add middleware for protected routes and session management.
+
+Do NOT include any of the following in your response:
+- Phrases like "Here's the commit message:"
+- Markdown code blocks (\`\`\`)
+- Explanatory text before or after the commit message
+- Any formatting markers
+
+Output the commit message directly.`;
+
+    const result = await this.generateReview({
       tool,
       diffContent,
       workingDir,
       customPrompt: prompt,
+      model,
     });
+
+    // Clean up the response - remove common unwanted patterns
+    if (result.success && result.content) {
+      let cleaned = result.content;
+
+      // Remove common prefixes
+      cleaned = cleaned.replace(/^Here's the commit message:\s*/i, '');
+      cleaned = cleaned.replace(/^Commit message:\s*/i, '');
+      cleaned = cleaned.replace(/^The commit message is:\s*/i, '');
+
+      // Remove markdown code blocks
+      cleaned = cleaned.replace(/^```[a-z]*\n/gm, '');
+      cleaned = cleaned.replace(/\n```$/gm, '');
+      cleaned = cleaned.replace(/^```\s*/gm, '');
+      cleaned = cleaned.replace(/\s*```$/gm, '');
+
+      // Trim whitespace
+      cleaned = cleaned.trim();
+
+      result.content = cleaned;
+    }
+
+    return result;
   }
 
   /**
@@ -80,7 +142,7 @@ Be specific and use imperative mood (e.g., "Add feature" not "Added feature").`;
     diffContent: string,
     workingDir: string
   ): Promise<AIReviewResult> {
-    const prompt = `Review the changes in ${filePath} and provide:
+    const prompt = `Analyze the changes in ${filePath} and provide:
 
 1. **Code Quality**: Any style or maintainability concerns
 2. **Potential Bugs**: Logic errors or edge cases
@@ -127,7 +189,7 @@ Be concise and actionable.`;
    * Get the default review prompt
    */
   private getDefaultPrompt(): string {
-    return `You are an expert code reviewer. Analyze these changes and provide a structured review.
+    return `You are an expert code analyst. Analyze these changes and provide a structured summary with feedback.
 
 ## Instructions
 
