@@ -1,6 +1,8 @@
-# Codelane
-
-**Agentic Development Environment** - A modern desktop application that enables parallel feature development across multiple project lanes with AI agents and human-in-the-loop code review.
+<div align="center">
+  <img src="assets/icons/codelane_logo.png" alt="Codelane Logo" width="120" height="120">
+  <h1>Codelane</h1>
+  <p><strong>Agentic Development Environment</strong> - A modern desktop application that enables parallel feature development across multiple project lanes with AI agents and human-in-the-loop code review.</p>
+</div>
 
 Built on Tauri and SolidJS for exceptional performance, Codelane empowers developers to work on multiple tasks simultaneously while maintaining control through intelligent code review, dependency-aware navigation, and comprehensive git management.
 
@@ -75,51 +77,6 @@ make build
 
 # Output in src-tauri/target/release/bundle/
 ```
-
-## Project Structure
-
-```
-codelane/
-├── frontend/               # SolidJS frontend
-│   ├── src/
-│   │   ├── App.tsx         # Main app component
-│   │   └── index.css       # Tailwind styles
-│   ├── package.json
-│   └── vite.config.ts      # Vite + Tauri configuration
-│
-├── src-tauri/              # Tauri backend (native shell)
-│   ├── src/
-│   │   ├── main.rs         # Tauri entry point
-│   │   ├── terminal.rs     # PTY commands
-│   │   ├── git.rs          # Git commands
-│   │   └── fs.rs           # Filesystem commands
-│   └── tauri.conf.json     # Tauri configuration
-│
-├── crates/                 # Rust backend crates
-│   ├── codelane-core/      # Core types (Lane, Config)
-│   ├── codelane-terminal/  # Terminal emulation
-│   ├── codelane-editor/    # Monaco editor integration
-│   ├── codelane-git/       # Git operations
-│   ├── codelane-lsp/       # LSP client
-│   ├── codelane-review/    # Code review
-│   ├── codelane-plugin/    # WASM plugins
-│   └── codelane-ui/        # Shared UI components
-│
-└── Makefile                # Build commands
-```
-
-## Crate Overview
-
-| Crate | Purpose |
-|-------|---------|
-| `codelane-core` | Core types: `Lane`, `LaneManager`, `AppConfig`, ID types |
-| `codelane-terminal` | PTY spawning, ANSI parsing, 256-color support |
-| `codelane-editor` | Monaco Editor types, JS bridge for WebView interop |
-| `codelane-git` | Git operations using CLI commands |
-| `codelane-lsp` | Language Server Protocol client (tower-lsp) |
-| `codelane-review` | Code review types: comments, checklists, suggestions |
-| `codelane-plugin` | WASM plugin system with wasmtime |
-| `codelane-ui` | Shared UI components and hooks |
 
 ## Architecture
 
@@ -210,9 +167,9 @@ The backend has ~250 tests covering core functionality. Tests use `tempfile` for
 - **Quick Switching**: Seamlessly switch between projects without losing context
 
 ### 🤖 AI-Powered Development
-- **Code Review Automation**: Integrated with Claude Code, Aider, OpenCode, and Gemini CLI
+- **Code Review Automation**: Integrated with Claude Code, Cursor, and Aider
 - **Smart File Sorting**: AI-driven file organization with dependency analysis
-- **Intelligent Navigation**: Tree-sitter powered code structure understanding
+- **Dependency Analysis**: Tree-sitter powered code structure understanding
 
 ### 📟 Integrated Terminal
 - **Full ANSI Support**: 256 colors, cursor control, scroll regions via xterm.js
