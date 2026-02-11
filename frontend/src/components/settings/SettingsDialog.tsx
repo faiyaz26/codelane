@@ -9,9 +9,7 @@ import type { AgentSettings } from '../../types/agent';
 // Import settings page components
 import { GeneralSettings } from './GeneralSettings';
 import { AgentsSettings } from './AgentsSettings';
-import { ModelsSettings } from './ModelsSettings';
 import { AppearanceSettings } from './AppearanceSettings';
-import { ApiKeysSettings } from './ApiKeysSettings';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
 
@@ -161,19 +159,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     />
                   </Show>
 
-                  {/* Models Tab */}
-                  <Show when={activeTab() === 'models'}>
-                    <ModelsSettings />
-                  </Show>
-
                   {/* Appearance Tab */}
                   <Show when={activeTab() === 'appearance'}>
                     <AppearanceSettings />
-                  </Show>
-
-                  {/* API Keys Tab */}
-                  <Show when={activeTab() === 'api-keys'}>
-                    <ApiKeysSettings />
                   </Show>
                 </Show>
               </div>

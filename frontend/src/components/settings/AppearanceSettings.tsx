@@ -49,13 +49,6 @@ export function AppearanceSettings() {
           </div>
         </div>
 
-        {/* Additional Settings Placeholder */}
-        <div class="pt-4 border-t border-zed-border-subtle">
-          <h3 class="text-sm font-medium text-zed-text-primary mb-3">More Options</h3>
-          <div class="p-4 rounded-lg bg-zed-bg-surface border border-zed-border-default text-center">
-            <p class="text-sm text-zed-text-tertiary">Font size, editor preferences, and more coming soon</p>
-          </div>
-        </div>
       </div>
     </div>
   );
