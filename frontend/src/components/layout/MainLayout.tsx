@@ -21,6 +21,7 @@ interface MainLayoutProps {
   onLaneRenamed: (lane: Lane) => void;
   onNewLane: () => void;
   onSettingsOpen: () => void;
+  onAboutOpen: () => void;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
@@ -239,6 +240,7 @@ export function MainLayout(props: MainLayoutProps) {
           activeView={activeView()}
           onViewChange={setActiveView}
           onSettingsOpen={props.onSettingsOpen}
+          onAboutOpen={props.onAboutOpen}
           sidebarCollapsed={sidebarCollapsed()}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
         />

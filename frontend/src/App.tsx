@@ -4,6 +4,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { MainLayout } from './components/layout';
 import { CreateLaneDialog } from './components/lanes';
 import { SettingsDialog } from './components/SettingsDialog';
+import { AboutDialog } from './components/AboutDialog';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings } from './lib/settings-api';
@@ -18,6 +19,7 @@ import codelaneLogoWhite from './assets/codelane-logo-white.png';
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [aboutOpen, setAboutOpen] = createSignal(false);
   const [lanes, setLanes] = createSignal<Lane[]>([]);
   const [activeLaneId, setActiveLaneIdSignal] = createSignal<string | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
@@ -249,6 +251,7 @@ function App() {
           onLaneRenamed={handleLaneRenamed}
           onNewLane={() => setDialogOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
+          onAboutOpen={() => setAboutOpen(true)}
           onTerminalReady={handleTerminalReady}
           onTerminalExit={handleTerminalExit}
           onAgentFailed={handleAgentFailed}
@@ -268,6 +271,12 @@ function App() {
         open={settingsOpen()}
         onOpenChange={setSettingsOpen}
         onSettingsSaved={handleSettingsSaved}
+      />
+
+      {/* About Dialog */}
+      <AboutDialog
+        open={aboutOpen()}
+        onOpenChange={setAboutOpen}
       />
 
       {/* Notification Toast */}

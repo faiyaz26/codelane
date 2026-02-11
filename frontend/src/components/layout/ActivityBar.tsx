@@ -12,6 +12,7 @@ interface ActivityBarProps {
   activeView: ActivityView;
   onViewChange: (view: ActivityView) => void;
   onSettingsOpen: () => void;
+  onAboutOpen: () => void;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
@@ -170,9 +171,13 @@ export function ActivityBar(props: ActivityBarProps) {
         </button>
 
         {/* Logo */}
-        <div class="w-10 h-10 flex items-center justify-center" title="Codelane">
-          <img src={codelaneLogoWhite} alt="Codelane" class="w-7 h-7 object-contain opacity-60" />
-        </div>
+        <button
+          class="w-10 h-10 flex items-center justify-center rounded hover:bg-zed-bg-hover transition-colors cursor-pointer"
+          onClick={props.onAboutOpen}
+          title="About Codelane"
+        >
+          <img src={codelaneLogoWhite} alt="Codelane" class="w-7 h-7 object-contain opacity-60 hover:opacity-100 transition-opacity" />
+        </button>
       </div>
     </div>
   );
