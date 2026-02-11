@@ -4,6 +4,18 @@ import { useGitChanges } from '../../hooks/useGitChanges';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { FileChangeStats } from '../../types/git';
 
+interface GitBranchInfo {
+  current: string | null;
+  branches: string[];
+}
+
+interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch: string | null;
+  is_main: boolean;
+}
+
 export type FileSortOrder = 'alphabetical' | 'smart' | 'smart-dependencies' | 'change-size' | 'none';
 
 interface GitCommit {
@@ -28,6 +40,8 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
   const [commits, setCommits] = createSignal<GitCommit[]>([]);
   const [splitPosition, setSplitPosition] = createSignal(60); // % for top panel
   const [isResizing, setIsResizing] = createSignal(false);
+  const [branchInfo, setBranchInfo] = createSignal<GitBranchInfo | null>(null);
+  const [worktreeName, setWorktreeName] = createSignal<string | null>(null);
 
   // Watch for git changes (auto-refreshes when files change)
   const gitChanges = useGitChanges({
@@ -57,6 +71,34 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
       setCommits(commitHistory);
     } catch (error) {
       console.error('Failed to load commit history:', error);
+    }
+
+    // Load branch info
+    try {
+      const branch = await invoke<GitBranchInfo>('git_branch', {
+        path: props.workingDir,
+      });
+      setBranchInfo(branch);
+    } catch (error) {
+      console.error('Failed to load branch info:', error);
+    }
+
+    // Load worktree info
+    try {
+      const worktrees = await invoke<WorktreeInfo[]>('git_worktree_list', {
+        path: props.workingDir,
+      });
+      // Find the worktree that matches the current working directory
+      const currentWorktree = worktrees.find(wt =>
+        props.workingDir.startsWith(wt.path) || wt.path.startsWith(props.workingDir)
+      );
+      if (currentWorktree && !currentWorktree.is_main) {
+        // Extract worktree name from path (last segment)
+        const pathParts = currentWorktree.path.split('/');
+        setWorktreeName(pathParts[pathParts.length - 1]);
+      }
+    } catch (error) {
+      console.error('Failed to load worktree info:', error);
     }
 
     onCleanup(() => {
@@ -271,6 +313,37 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     <div id="split-container" class="flex flex-col h-full overflow-hidden">
       {/* Top Panel: File Changes */}
       <div class="flex flex-col overflow-hidden" style={{ height: `${splitPosition()}%` }}>
+        {/* Branch & Worktree Info */}
+        <Show when={branchInfo()?.current || worktreeName()}>
+          <div class="px-3 py-1.5 border-b border-zed-border-subtle bg-zed-bg-app flex items-center gap-2 flex-shrink-0">
+            <Show when={branchInfo()?.current}>
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5" cy="6" r="3" stroke-width="2" />
+                  <path d="M5 9v12" stroke-width="2" />
+                  <circle cx="19" cy="18" r="3" stroke-width="2" />
+                  <path d="m15 9l-3-3l3-3" stroke-width="2" />
+                  <path d="M12 6h5a2 2 0 0 1 2 2v7" stroke-width="2" />
+                </svg>
+                <span class="truncate max-w-[120px]">{branchInfo()!.current}</span>
+              </span>
+            </Show>
+            <Show when={worktreeName()}>
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                  />
+                </svg>
+                <span class="truncate max-w-[120px]">{worktreeName()}</span>
+              </span>
+            </Show>
+          </div>
+        </Show>
+
         {/* Summary Header */}
         <div class="px-3 py-2 border-b border-zed-border-subtle bg-zed-bg-panel flex-shrink-0">
           <div class="flex items-center justify-between mb-1">

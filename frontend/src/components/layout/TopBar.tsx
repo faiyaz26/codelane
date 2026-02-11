@@ -184,19 +184,19 @@ export function TopBar(props: TopBarProps) {
                 <span class="px-4 py-1.5 text-xs text-zed-text-tertiary">No changes yet</span>
               }
             >
-              {/* Show "Review Changes" button when NOT in Code Review tab */}
-              <Show when={props.activeView !== ActivityView.CodeReview}>
+              {/* Show "Review Changes" button when NOT in Git Manager tab */}
+              <Show when={props.activeView !== ActivityView.GitManager}>
                 <button
                   class="px-4 py-1.5 text-xs bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-active rounded-md transition-colors"
                   onClick={() => props.onNavigateToCodeReview?.()}
-                  title="Open Code Review tab"
+                  title="Open Git Manager tab"
                 >
                   Review Changes
                 </button>
               </Show>
 
-              {/* Show "AI Summary" and "Commit" buttons when IN Code Review tab */}
-              <Show when={props.activeView === ActivityView.CodeReview}>
+              {/* Show "AI Summary" and "Commit" buttons when IN Git Manager tab */}
+              <Show when={props.activeView === ActivityView.GitManager}>
                 <button
                   onClick={handleGenerateAIReview}
                   disabled={isGeneratingReview()}

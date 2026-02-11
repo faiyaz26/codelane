@@ -1,7 +1,13 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
+import { createSignal, createMemo, For, Show, onMount } from 'solid-js';
+import { invoke } from '@tauri-apps/api/core';
 import { Dialog, Button, TextField } from '../ui';
 import { updateLane, deleteLane } from '../../lib/lane-api';
 import type { Lane } from '../../types/lane';
+
+interface GitBranchInfo {
+  current: string | null;
+  branches: string[];
+}
 
 interface ProjectPanelProps {
   lanes: Lane[];
@@ -23,6 +29,9 @@ export function ProjectPanel(props: ProjectPanelProps) {
   // Track which projects are expanded (default all expanded)
   const [expandedProjects, setExpandedProjects] = createSignal<Set<string>>(new Set());
   const [initialized, setInitialized] = createSignal(false);
+
+  // Store branch info for each lane (laneId -> branch name)
+  const [laneBranches, setLaneBranches] = createSignal<Map<string, string>>(new Map());
 
   // Menu state
   const [menuLaneId, setMenuLaneId] = createSignal<string | null>(null);
@@ -82,6 +91,32 @@ export function ProjectPanel(props: ProjectPanelProps) {
   };
 
   const isExpanded = (workingDir: string) => expandedProjects().has(workingDir);
+
+  // Fetch branch info for all lanes
+  onMount(async () => {
+    const branchMap = new Map<string, string>();
+
+    // Fetch branch info for each lane in parallel
+    await Promise.all(
+      props.lanes.map(async (lane) => {
+        try {
+          const branchInfo = await invoke<GitBranchInfo>('git_branch', {
+            path: lane.worktreePath || lane.workingDir,
+          });
+          if (branchInfo.current) {
+            branchMap.set(lane.id, branchInfo.current);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch branch for lane ${lane.id}:`, error);
+        }
+      })
+    );
+
+    setLaneBranches(branchMap);
+  });
+
+  // Get branch name for a lane
+  const getLaneBranch = (laneId: string) => laneBranches().get(laneId);
 
   // Menu handlers
   const openMenu = (e: MouseEvent, laneId: string) => {
@@ -214,7 +249,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
                             onClick={() => props.onLaneSelect(lane.id)}
                           >
                             {/* Lane icon - branch if has branch, terminal otherwise */}
-                            <Show when={lane.branch} fallback={
+                            <Show when={getLaneBranch(lane.id)} fallback={
                               <svg class={`w-3.5 h-3.5 flex-shrink-0 ${isActive() ? 'text-zed-accent-blue' : 'text-zed-text-tertiary'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
@@ -223,12 +258,40 @@ export function ProjectPanel(props: ProjectPanelProps) {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c-1.657 0-3-1.343-3-3V4m6 4c0 1.657-1.343 3-3 3m0 0v10m0-10c1.657 0 3-1.343 3-3V4m-6 4c0-1.657 1.343-3 3-3m0 0V1m0 20h-3m3 0h3" />
                               </svg>
                             </Show>
-                            <span class="text-sm truncate flex-1">{lane.name}</span>
-                            <Show when={lane.branch}>
-                              <span class="text-xs text-zed-text-tertiary truncate max-w-[50px]" title={lane.branch}>
-                                {lane.branch}
-                              </span>
-                            </Show>
+                            <div class="flex-1 min-w-0 flex flex-col gap-1">
+                              <span class="text-sm truncate">{lane.name}</span>
+                              <Show when={getLaneBranch(lane.id) || lane.worktreePath}>
+                                <div class="flex items-center gap-1">
+                                  <Show when={getLaneBranch(lane.id)}>
+                                    <span
+                                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                      title={`Branch: ${getLaneBranch(lane.id)}`}
+                                    >
+                                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 9v6m0-6a3 3 0 1 0 0-6m0 6a3 3 0 1 1 0-6m14 6a3 3 0 1 1 0 6m0-6a3 3 0 1 0 0 6" />
+                                      </svg>
+                                      <span class="truncate max-w-[60px]">{getLaneBranch(lane.id)}</span>
+                                    </span>
+                                  </Show>
+                                  <Show when={lane.worktreePath}>
+                                    <span
+                                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                      title={`Worktree: ${lane.worktreePath?.split('/').pop()}`}
+                                    >
+                                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2.5"
+                                          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                                        />
+                                      </svg>
+                                      <span class="truncate max-w-[50px]">{lane.worktreePath?.split('/').pop()}</span>
+                                    </span>
+                                  </Show>
+                                </div>
+                              </Show>
+                            </div>
 
                             {/* 3-dot menu button */}
                             <div

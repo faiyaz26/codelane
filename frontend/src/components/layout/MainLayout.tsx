@@ -4,7 +4,6 @@ import { ActivityBar, ActivityView } from './ActivityBar';
 import { StatusBar } from './StatusBar';
 import { WelcomeScreen } from './WelcomeScreen';
 import { AgentTerminalPanel } from './AgentTerminalPanel';
-import { CodeReviewChat } from './CodeReviewChat';
 import { Sidebar } from './Sidebar';
 import { BottomPanel } from './BottomPanel';
 import { ResizeHandle } from './ResizeHandle';
@@ -143,7 +142,7 @@ export function MainLayout(props: MainLayoutProps) {
         activeLaneName={activeLane()?.name}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
         activeView={activeView()}
-        onNavigateToCodeReview={() => setActiveView(ActivityView.CodeReview)}
+        onNavigateToCodeReview={() => setActiveView(ActivityView.GitManager)}
       />
 
       <div class="flex-1 flex overflow-hidden">
@@ -163,7 +162,7 @@ export function MainLayout(props: MainLayoutProps) {
               {/* Main content row */}
               <div class="flex-1 flex overflow-hidden">
                 {/* Agent Terminal - Always rendered, hidden in Code Review view */}
-                <div style={{ display: activeView() === ActivityView.CodeReview ? 'none' : 'contents' }}>
+                <div style={{ display: activeView() === ActivityView.GitManager ? 'none' : 'contents' }}>
                   <AgentTerminalPanel
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
@@ -177,19 +176,6 @@ export function MainLayout(props: MainLayoutProps) {
                   />
                 </div>
 
-                {/* Code Review Chat - Only shown in Code Review view */}
-                <Show when={activeView() === ActivityView.CodeReview}>
-                  <div
-                    class="flex-shrink-0 overflow-hidden"
-                    style={{
-                      width: showEditor() && props.activeLaneId ? '25%' : 'auto',
-                      'flex-grow': showEditor() && props.activeLaneId ? '0' : '1',
-                    }}
-                  >
-                    <CodeReviewChat laneId={props.activeLaneId!} />
-                  </div>
-                </Show>
-
                 {/* Editor - Center (shared by all views) */}
                 <Show when={showEditor() && props.activeLaneId}>
                   <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
@@ -200,6 +186,24 @@ export function MainLayout(props: MainLayoutProps) {
                       selectedFilePath={selectedFile()}
                       onAllFilesClosed={() => setSelectedFile(undefined)}
                     />
+                  </div>
+                </Show>
+
+                {/* Empty state for Git Manager when no file is selected */}
+                <Show when={activeView() === ActivityView.GitManager && !(showEditor() && props.activeLaneId)}>
+                  <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
+                    <svg class="w-16 h-16 mb-4 text-zed-text-tertiary opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    <h3 class="text-lg font-medium text-zed-text-primary mb-2">No File Selected</h3>
+                    <p class="text-sm text-zed-text-secondary max-w-md">
+                      Select a file from the changes list or commit history to view its diff
+                    </p>
                   </div>
                 </Show>
 

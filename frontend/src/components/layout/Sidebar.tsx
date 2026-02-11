@@ -24,8 +24,8 @@ export function Sidebar(props: SidebarProps) {
         return 'Explorer';
       case ActivityView.Search:
         return 'Search';
-      case ActivityView.CodeReview:
-        return 'Code Review';
+      case ActivityView.GitManager:
+        return 'Git Manager';
       case ActivityView.Extensions:
         return 'Extensions';
       default:
@@ -64,7 +64,7 @@ export function Sidebar(props: SidebarProps) {
                 }}
               />
             </Match>
-          <Match when={props.activeView === ActivityView.CodeReview}>
+          <Match when={props.activeView === ActivityView.GitManager}>
             <CodeReviewChanges
               laneId={props.lane.id}
               workingDir={props.effectiveWorkingDir}
