@@ -144,7 +144,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             app.on_menu_event(move |_app, event| {
                 if event.id() == "about" {
-                    let _ = app_handle.emit("menu:about", ());
+                    let _ = app_handle.emit_to("main", "menu:about", ());
                 }
             });
 
