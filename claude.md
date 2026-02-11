@@ -4,9 +4,10 @@ This document captures project-specific conventions, patterns, and decisions for
 
 ## Project Goals
 
-Build a fast, efficient AI orchestrator for local development that:
-- Manages multiple project "lanes" with isolated state
-- Provides integrated terminal, editor, and git interface
+Build a fast, efficient Agentic Development Environment that:
+- Enables parallel feature development across multiple project "lanes"
+- Provides AI agents with human-in-the-loop code review
+- Integrates terminal, editor, and git interface
 - Feels native and responsive
 - Follows security best practices
 
@@ -28,7 +29,6 @@ Build a fast, efficient AI orchestrator for local development that:
 - `README.md` - User-facing features and setup
 - `CLAUDE.md` (this file) - Conventions and patterns
 - `features.md` - Feature descriptions
-- `tech-architecture.md` - Architecture decisions
 - Inline code comments for complex logic
 - Commit messages for change history
 
@@ -189,7 +189,6 @@ pub async fn my_command(param: String) -> Result<ReturnType, String> {
 - [ ] Add comprehensive test suite
 - [ ] Implement plugin system (WASM)
 - [ ] Add LSP integration
-- [ ] Implement code review features
 - [ ] Add multi-pane terminal layouts
 - [ ] Integrate Monaco editor properly
 
@@ -198,4 +197,3 @@ pub async fn my_command(param: String) -> Result<ReturnType, String> {
 - [Tauri Documentation](https://tauri.app/v2/)
 - [SolidJS Documentation](https://www.solidjs.com/)
 - [Vite Documentation](https://vitejs.dev/)
-- See `TAURI_BEST_PRACTICES.md` for security/performance details
