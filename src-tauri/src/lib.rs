@@ -17,7 +17,7 @@ mod import_analyzer;
 mod dependency_graph;
 mod ai;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
