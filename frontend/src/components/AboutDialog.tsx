@@ -30,7 +30,7 @@ export function AboutDialog(props: AboutDialogProps) {
 
               {/* Description */}
               <p class="text-sm text-zed-text-secondary mb-6 leading-relaxed">
-                AI orchestrator for local development. Manage multiple project lanes with integrated terminal, editor, and git interface.
+                Professional development environment featuring multi-lane project management, AI-powered code review, integrated terminals, and intelligent git workflows.
               </p>
 
               {/* Links */}

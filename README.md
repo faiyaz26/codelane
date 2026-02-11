@@ -1,6 +1,8 @@
 # Codelane
 
-An AI orchestrator for local development. Manage multiple projects ("lanes") with integrated terminals, code editor, and git interface.
+**Professional Development Environment** - A powerful desktop application designed for managing multiple project workspaces with integrated AI capabilities, terminal access, git workflows, and intelligent code navigation.
+
+Built on Tauri and SolidJS for native performance, Codelane streamlines your development workflow with isolated project lanes, AI-powered code review, dependency-aware file sorting, and comprehensive git management.
 
 ## Tech Stack
 
@@ -214,11 +216,36 @@ Tests use `tempfile` for isolated filesystem tests and cover:
 
 ## Key Features
 
-- **Lanes**: Isolated workspaces per project with their own terminals and state
-- **Terminal**: Full ANSI support (256 colors, cursor control, scroll regions) via xterm.js
-- **Editor**: Monaco Editor with syntax highlighting for 50+ languages
-- **Git**: Visual git interface with staging, commits, diffs
-- **Cross-platform**: macOS, Windows, Linux via Tauri
+### 🚀 Multi-Lane Project Management
+- **Isolated Workspaces**: Each lane maintains its own terminal, state, and configuration
+- **Branch & Worktree Support**: Work on multiple branches simultaneously
+- **Quick Switching**: Seamlessly switch between projects without losing context
+
+### 🤖 AI-Powered Development
+- **Code Review Automation**: Integrated with Claude Code, Aider, OpenCode, and Gemini CLI
+- **Smart File Sorting**: AI-driven file organization with dependency analysis
+- **Intelligent Navigation**: Tree-sitter powered code structure understanding
+
+### 📟 Integrated Terminal
+- **Full ANSI Support**: 256 colors, cursor control, scroll regions via xterm.js
+- **Agent Integration**: Run AI coding assistants directly in your terminal
+- **Process Monitoring**: Track resource usage and terminal processes
+
+### 🎨 Git & Code Review
+- **Visual Diff Viewer**: Side-by-side and unified diff modes with syntax highlighting
+- **Commit History**: Browse commits with file-level diffs
+- **Smart File Sorting**: Review files by category, dependency order, or change size
+- **Git Manager**: Stage, commit, and manage changes with a visual interface
+
+### 🎨 Beautiful Themes
+- **Codelane Dark**: Custom theme with deep grays (default)
+- **Dark & Light**: Alternative themes for different preferences
+- **Syntax Highlighting**: 50+ languages supported via Shiki
+
+### ⚡ Native Performance
+- **Rust Backend**: Fast, memory-safe operations via Tauri
+- **SolidJS Frontend**: Fine-grained reactivity for instant UI updates
+- **Cross-platform**: macOS, Windows, Linux with native feel
 
 ## Troubleshooting
 

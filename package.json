@@ -2,7 +2,7 @@
   "name": "codelane",
   "version": "0.1.0",
   "private": true,
-  "description": "AI orchestrator for local development - Tauri + SolidJS desktop app",
+  "description": "Professional development environment featuring multi-lane project management, AI-powered code review, integrated terminals, and intelligent git workflows",
   "scripts": {
     "dev": "pnpm tauri dev",
     "build": "pnpm tauri build",
