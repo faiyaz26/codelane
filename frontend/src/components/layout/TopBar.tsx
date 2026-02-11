@@ -1,4 +1,4 @@
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, createEffect } from 'solid-js';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { isMacOS } from '../../lib/platform';
@@ -8,6 +8,18 @@ import { CommitDialog } from '../git';
 import { ActivityView } from './ActivityBar';
 import { editorStateManager } from '../../services/EditorStateManager';
 import { aiReviewService, type AITool } from '../../services/AIReviewService';
+
+interface GitBranchInfo {
+  current: string | null;
+  branches: string[];
+}
+
+interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch: string | null;
+  is_main: boolean;
+}
 
 interface TopBarProps {
   activeLaneId?: string;
@@ -22,11 +34,64 @@ export function TopBar(props: TopBarProps) {
   const [isInitializing, setIsInitializing] = createSignal(false);
   const [commitDialogOpen, setCommitDialogOpen] = createSignal(false);
   const [isGeneratingReview, setIsGeneratingReview] = createSignal(false);
+  const [branchName, setBranchName] = createSignal<string | null>(null);
+  const [worktreeName, setWorktreeName] = createSignal<string | null>(null);
+  const [projectName, setProjectName] = createSignal<string | null>(null);
 
   // Use centralized git watcher service (shared with ChangesView)
   const gitWatcher = useGitService({
     laneId: () => props.activeLaneId,
     workingDir: () => props.effectiveWorkingDir,
+  });
+
+  // Fetch branch, worktree, and project info when working directory changes
+  createEffect(async () => {
+    const workingDir = props.effectiveWorkingDir;
+    if (!workingDir) {
+      setBranchName(null);
+      setWorktreeName(null);
+      setProjectName(null);
+      return;
+    }
+
+    // Extract project name from path (last segment of main working directory)
+    const pathParts = workingDir.split('/');
+    const rawProjectName = pathParts[pathParts.length - 1];
+    // Capitalize first character
+    const capitalizedName = rawProjectName.charAt(0).toUpperCase() + rawProjectName.slice(1);
+    setProjectName(capitalizedName);
+
+    // Fetch branch info
+    try {
+      const branch = await invoke<GitBranchInfo>('git_branch', {
+        path: workingDir,
+      });
+      setBranchName(branch.current);
+    } catch (error) {
+      console.error('Failed to load branch info:', error);
+      setBranchName(null);
+    }
+
+    // Fetch worktree info
+    try {
+      const worktrees = await invoke<WorktreeInfo[]>('git_worktree_list', {
+        path: workingDir,
+      });
+      // Find the worktree that matches the current working directory
+      const currentWorktree = worktrees.find(wt =>
+        workingDir.startsWith(wt.path) || wt.path.startsWith(workingDir)
+      );
+      if (currentWorktree && !currentWorktree.is_main) {
+        // Extract worktree name from path (last segment)
+        const wtPathParts = currentWorktree.path.split('/');
+        setWorktreeName(wtPathParts[wtPathParts.length - 1]);
+      } else {
+        setWorktreeName(null);
+      }
+    } catch (error) {
+      console.error('Failed to load worktree info:', error);
+      setWorktreeName(null);
+    }
   });
 
   const handleInitGit = async () => {
@@ -148,16 +213,33 @@ export function TopBar(props: TopBarProps) {
         <div class="w-[78px] flex-shrink-0" data-tauri-drag-region />
       </Show>
 
-      {/* Active lane name - centered - this area is draggable */}
+      {/* Active lane name with branch/worktree/project info - centered - this area is draggable */}
       <div
-        class="flex-1 flex items-center justify-center"
+        class="flex-1 flex items-center justify-center gap-2"
         data-tauri-drag-region
         onMouseDown={handleTitleBarMouseDown}
       >
         <Show when={props.activeLaneName}>
-          <span class="text-sm font-medium text-zed-text-secondary" data-tauri-drag-region>
-            {props.activeLaneName}
-          </span>
+          <div class="flex items-center gap-2 text-sm" data-tauri-drag-region>
+            <span class="font-medium text-zed-text-primary">{props.activeLaneName}</span>
+            <Show when={branchName()}>
+              <span class="text-zed-text-tertiary">|</span>
+              <span class="text-zed-text-secondary">{branchName()}</span>
+            </Show>
+            <Show when={worktreeName()}>
+              <span class="text-zed-text-tertiary">|</span>
+              <span class="text-zed-text-secondary">{worktreeName()}</span>
+            </Show>
+            <Show when={projectName()}>
+              <span class="text-zed-text-tertiary">|</span>
+              <span
+                class="text-zed-text-tertiary cursor-default"
+                title={props.effectiveWorkingDir}
+              >
+                {projectName()}
+              </span>
+            </Show>
+          </div>
         </Show>
       </div>
 

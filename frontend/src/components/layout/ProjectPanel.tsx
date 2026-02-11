@@ -55,11 +55,16 @@ export function ProjectPanel(props: ProjectPanelProps) {
       const existing = groups.get(key) || [];
       groups.set(key, [...existing, lane]);
     }
-    return Array.from(groups.entries()).map(([workingDir, lanes]) => ({
-      workingDir,
-      projectName: workingDir.split('/').pop() || 'Unknown',
-      lanes: lanes.sort((a, b) => a.name.localeCompare(b.name)),
-    }));
+    return Array.from(groups.entries()).map(([workingDir, lanes]) => {
+      const rawProjectName = workingDir.split('/').pop() || 'Unknown';
+      // Capitalize first character
+      const projectName = rawProjectName.charAt(0).toUpperCase() + rawProjectName.slice(1);
+      return {
+        workingDir,
+        projectName,
+        lanes: lanes.sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    });
   });
 
   // Auto-expand project containing active lane
@@ -228,7 +233,12 @@ export function ProjectPanel(props: ProjectPanelProps) {
                   <svg class="w-4 h-4 text-zed-accent-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
-                  <span class="text-sm text-zed-text-primary truncate">{project.projectName}</span>
+                  <span
+                    class="text-sm text-zed-text-primary truncate"
+                    title={project.workingDir}
+                  >
+                    {project.projectName}
+                  </span>
                   <span class="text-xs text-zed-text-tertiary ml-auto">{project.lanes.length}</span>
                 </button>
 
@@ -259,7 +269,12 @@ export function ProjectPanel(props: ProjectPanelProps) {
                               </svg>
                             </Show>
                             <div class="flex-1 min-w-0 flex flex-col gap-1">
-                              <span class="text-sm truncate">{lane.name}</span>
+                              <span
+                                class="text-sm truncate"
+                                title={lane.worktreePath || lane.workingDir}
+                              >
+                                {lane.name.charAt(0).toUpperCase() + lane.name.slice(1)}
+                              </span>
                               <Show when={getLaneBranch(lane.id) || lane.worktreePath}>
                                 <div class="flex items-center gap-1">
                                   <Show when={getLaneBranch(lane.id)}>
