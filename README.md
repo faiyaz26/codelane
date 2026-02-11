@@ -1,8 +1,8 @@
 # Codelane
 
-**Professional Development Environment** - A powerful desktop application designed for managing multiple project workspaces with integrated AI capabilities, terminal access, git workflows, and intelligent code navigation.
+**Agentic Development Environment** - A modern desktop application that revolutionizes your development workflow with intelligent multi-lane project management, AI-powered code review, and seamless git integration.
 
-Built on Tauri and SolidJS for native performance, Codelane streamlines your development workflow with isolated project lanes, AI-powered code review, dependency-aware file sorting, and comprehensive git management.
+Built on Tauri and SolidJS for exceptional performance, Codelane empowers developers with isolated workspaces, autonomous code analysis, dependency-aware navigation, and comprehensive version control management.
 
 ## Tech Stack
 

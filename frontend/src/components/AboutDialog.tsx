@@ -30,7 +30,7 @@ export function AboutDialog(props: AboutDialogProps) {
 
               {/* Description */}
               <p class="text-sm text-zed-text-secondary mb-6 leading-relaxed">
-                Professional development environment featuring multi-lane project management, AI-powered code review, integrated terminals, and intelligent git workflows.
+                Agentic Development Environment - Streamline your workflow with intelligent multi-lane project management, AI-powered code review, and seamless git integration.
               </p>
 
               {/* Links */}

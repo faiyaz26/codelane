@@ -3,7 +3,7 @@ name = "codelane-tauri"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Codelane - Professional Development Environment (Tauri shell)"
+description = "Codelane - Agentic Development Environment (Tauri shell)"
 build = "build.rs"
 
 [build-dependencies]
