@@ -406,4 +406,105 @@ mod tests {
         assert_eq!(categorize_file("CHANGELOG.md").tier, FileTier::Documentation);
         assert_eq!(categorize_file("docs/guide.md").tier, FileTier::Documentation);
     }
+
+    fn make_file(path: &str, additions: u32, deletions: u32) -> FileChangeStats {
+        FileChangeStats {
+            path: path.to_string(),
+            status: "modified".to_string(),
+            additions,
+            deletions,
+        }
+    }
+
+    #[test]
+    fn test_sort_files_alphabetical() {
+        let files = vec![
+            make_file("zebra.ts", 10, 5),
+            make_file("apple.ts", 20, 10),
+            make_file("banana.ts", 15, 8),
+        ];
+
+        let sorted = sort_files_alphabetical(files);
+        assert_eq!(sorted[0].path, "apple.ts");
+        assert_eq!(sorted[1].path, "banana.ts");
+        assert_eq!(sorted[2].path, "zebra.ts");
+    }
+
+    #[test]
+    fn test_sort_files_alphabetical_empty() {
+        let files = vec![];
+        let sorted = sort_files_alphabetical(files);
+        assert_eq!(sorted.len(), 0);
+    }
+
+    #[test]
+    fn test_sort_files_by_size() {
+        let files = vec![
+            make_file("small.ts", 5, 2),     // 7 changes
+            make_file("large.ts", 50, 30),   // 80 changes
+            make_file("medium.ts", 20, 10),  // 30 changes
+        ];
+
+        let sorted = sort_files_by_size(files);
+        assert_eq!(sorted[0].path, "large.ts");
+        assert_eq!(sorted[1].path, "medium.ts");
+        assert_eq!(sorted[2].path, "small.ts");
+    }
+
+    #[test]
+    fn test_sort_files_by_size_empty() {
+        let files = vec![];
+        let sorted = sort_files_by_size(files);
+        assert_eq!(sorted.len(), 0);
+    }
+
+    #[test]
+    fn test_sort_files_smart() {
+        let files = vec![
+            make_file("README.md", 10, 5),           // Documentation
+            make_file("package.json", 5, 2),         // ProjectConfig
+            make_file("src/main.ts", 30, 15),        // Implementation
+            make_file("src/types.d.ts", 20, 10),     // TypeDefinitions
+            make_file("src/main.test.ts", 25, 12),   // Tests
+        ];
+
+        let sorted = sort_files_smart(files);
+
+        // Should be sorted by tier: ProjectConfig -> TypeDefinitions -> Implementation -> Tests -> Documentation
+        assert_eq!(sorted[0].path, "package.json");
+        assert_eq!(sorted[1].path, "src/types.d.ts");
+        assert_eq!(sorted[2].path, "src/main.ts");
+        assert_eq!(sorted[3].path, "src/main.test.ts");
+        assert_eq!(sorted[4].path, "README.md");
+    }
+
+    #[test]
+    fn test_sort_files_smart_same_tier() {
+        let files = vec![
+            make_file("src/zebra.ts", 10, 5),
+            make_file("src/apple.ts", 20, 10),
+            make_file("src/banana.ts", 15, 8),
+        ];
+
+        let sorted = sort_files_smart(files);
+
+        // All are Implementation tier, should be alphabetical
+        assert_eq!(sorted[0].path, "src/apple.ts");
+        assert_eq!(sorted[1].path, "src/banana.ts");
+        assert_eq!(sorted[2].path, "src/zebra.ts");
+    }
+
+    #[test]
+    fn test_sort_files_smart_empty() {
+        let files = vec![];
+        let sorted = sort_files_smart(files);
+        assert_eq!(sorted.len(), 0);
+    }
+
+    #[test]
+    fn test_file_category_serialization() {
+        let category = categorize_file("package.json");
+        let json = serde_json::to_string(&category).unwrap();
+        assert!(json.contains("projectconfig"));
+    }
 }

@@ -88,16 +88,12 @@ pub fn topological_sort(
         .map(|f| (f.path.clone(), f.clone()))
         .collect();
 
-    // Calculate in-degree for each node
+    // Calculate in-degree for each node (number of dependencies)
+    // In-degree = how many files this file depends on
     let mut in_degree: HashMap<String, usize> = HashMap::new();
     for file in &files {
-        in_degree.insert(file.path.clone(), 0);
-    }
-
-    for deps in graph.values() {
-        for dep in deps {
-            *in_degree.entry(dep.clone()).or_insert(0) += 1;
-        }
+        let deps_count = graph.get(&file.path).map(|v| v.len()).unwrap_or(0);
+        in_degree.insert(file.path.clone(), deps_count);
     }
 
     // Queue for nodes with in-degree 0
@@ -112,13 +108,14 @@ pub fn topological_sort(
     while let Some(node) = queue.pop_front() {
         sorted.push(node.clone());
 
-        // Reduce in-degree for dependent nodes
-        if let Some(dependencies) = graph.get(&node) {
-            for dep in dependencies {
-                if let Some(degree) = in_degree.get_mut(dep) {
+        // Reduce in-degree for nodes that depend on this node
+        // Find all files that list 'node' in their dependencies
+        for (file, deps) in graph.iter() {
+            if deps.contains(&node) {
+                if let Some(degree) = in_degree.get_mut(file) {
                     *degree -= 1;
                     if *degree == 0 {
-                        queue.push_back(dep.clone());
+                        queue.push_back(file.clone());
                     }
                 }
             }
@@ -231,5 +228,92 @@ mod tests {
         assert_eq!(normalize_path("./src/main.ts"), "src/main.ts");
         assert_eq!(normalize_path("../utils/helper.ts"), "utils/helper.ts");
         assert_eq!(normalize_path("src/app.ts"), "src/app.ts");
+    }
+
+    #[test]
+    fn test_topological_sort_empty() {
+        let files = vec![];
+        let graph = HashMap::new();
+        let result = topological_sort(files, &graph).unwrap();
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_topological_sort_no_dependencies() {
+        let files = vec![
+            make_file("src/a.ts"),
+            make_file("src/b.ts"),
+            make_file("src/c.ts"),
+        ];
+
+        // No dependencies between files
+        let mut graph = HashMap::new();
+        graph.insert("src/a.ts".to_string(), vec![]);
+        graph.insert("src/b.ts".to_string(), vec![]);
+        graph.insert("src/c.ts".to_string(), vec![]);
+
+        let result = topological_sort(files, &graph).unwrap();
+        assert_eq!(result.len(), 3);
+        // Order doesn't matter when there are no dependencies
+    }
+
+    #[test]
+    fn test_topological_sort_diamond() {
+        // Diamond dependency: d depends on b and c, both b and c depend on a
+        let files = vec![
+            make_file("src/a.ts"),
+            make_file("src/b.ts"),
+            make_file("src/c.ts"),
+            make_file("src/d.ts"),
+        ];
+
+        let mut graph = HashMap::new();
+        graph.insert("src/a.ts".to_string(), vec![]);
+        graph.insert("src/b.ts".to_string(), vec!["src/a.ts".to_string()]);
+        graph.insert("src/c.ts".to_string(), vec!["src/a.ts".to_string()]);
+        graph.insert("src/d.ts".to_string(), vec!["src/b.ts".to_string(), "src/c.ts".to_string()]);
+
+        let sorted = topological_sort(files, &graph).unwrap();
+        let paths: Vec<_> = sorted.iter().map(|f| f.path.as_str()).collect();
+
+        let a_idx = paths.iter().position(|&p| p == "src/a.ts").unwrap();
+        let b_idx = paths.iter().position(|&p| p == "src/b.ts").unwrap();
+        let c_idx = paths.iter().position(|&p| p == "src/c.ts").unwrap();
+        let d_idx = paths.iter().position(|&p| p == "src/d.ts").unwrap();
+
+        // a should come before b and c
+        assert!(a_idx < b_idx);
+        assert!(a_idx < c_idx);
+        // b and c should come before d
+        assert!(b_idx < d_idx);
+        assert!(c_idx < d_idx);
+    }
+
+    #[test]
+    fn test_topological_sort_single_file() {
+        let files = vec![make_file("src/main.ts")];
+        let mut graph = HashMap::new();
+        graph.insert("src/main.ts".to_string(), vec![]);
+
+        let result = topological_sort(files, &graph).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, "src/main.ts");
+    }
+
+    #[test]
+    fn test_sort_by_dependencies_empty() {
+        let files = vec![];
+        let file_contents = HashMap::new();
+        let result = sort_by_dependencies(files, &file_contents);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_sort_by_dependencies_single() {
+        let files = vec![make_file("src/main.ts")];
+        let file_contents = HashMap::new();
+        let result = sort_by_dependencies(files.clone(), &file_contents);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, files[0].path);
     }
 }
