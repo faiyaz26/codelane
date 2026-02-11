@@ -124,14 +124,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let app_menu = {
                 let submenu = Submenu::new(app, "Codelane", true)?;
-                let about_item = MenuItem::new(app, "About Codelane", true, None::<&str>)?;
-
-                // Handle About menu click
-                let app_handle = app.handle().clone();
-                about_item.on_menu_event(move |_app, _event| {
-                    let _ = app_handle.emit("menu:about", ());
-                });
-
+                let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
                 submenu.append(&about_item)?;
                 submenu
             };
@@ -139,20 +132,21 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let app_menu = {
                 let submenu = Submenu::new(app, "Help", true)?;
-                let about_item = MenuItem::new(app, "About Codelane", true, None::<&str>)?;
-
-                // Handle About menu click
-                let app_handle = app.handle().clone();
-                about_item.on_menu_event(move |_app, _event| {
-                    let _ = app_handle.emit("menu:about", ());
-                });
-
+                let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
                 submenu.append(&about_item)?;
                 submenu
             };
 
             menu.append(&app_menu)?;
             app.set_menu(menu)?;
+
+            // Handle menu events
+            let app_handle = app.handle().clone();
+            app.on_menu_event(move |_app, event| {
+                if event.id() == "about" {
+                    let _ = app_handle.emit("menu:about", ());
+                }
+            });
 
             #[cfg(feature = "devtools")]
             {
