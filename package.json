@@ -2,7 +2,7 @@
   "name": "codelane",
   "version": "0.1.0",
   "private": true,
-  "description": "Agentic Development Environment - Streamline your workflow with multi-lane project management, AI-powered code review, and intelligent git operations",
+  "description": "Agentic Development Environment - Build multiple features in parallel with AI agents, human-in-the-loop code review, and intelligent multi-lane project management",
   "scripts": {
     "dev": "pnpm tauri dev",
     "build": "pnpm tauri build",

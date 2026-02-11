@@ -1,8 +1,8 @@
 # Codelane
 
-**Agentic Development Environment** - A modern desktop application that revolutionizes your development workflow with intelligent multi-lane project management, AI-powered code review, and seamless git integration.
+**Agentic Development Environment** - A modern desktop application that enables parallel feature development across multiple project lanes with AI agents and human-in-the-loop code review.
 
-Built on Tauri and SolidJS for exceptional performance, Codelane empowers developers with isolated workspaces, autonomous code analysis, dependency-aware navigation, and comprehensive version control management.
+Built on Tauri and SolidJS for exceptional performance, Codelane empowers developers to work on multiple tasks simultaneously while maintaining control through intelligent code review, dependency-aware navigation, and comprehensive git management.
 
 ## Tech Stack
 
