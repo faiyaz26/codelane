@@ -2,7 +2,7 @@
 
 import { createSignal, createRoot, type Accessor } from 'solid-js';
 
-export type ThemeId = 'dark' | 'zed-dark' | 'light';
+export type ThemeId = 'dark' | 'codelane-dark' | 'light';
 
 export interface Theme {
   id: ThemeId;
@@ -16,17 +16,17 @@ export interface Theme {
 
 export const THEMES: Theme[] = [
   {
+    id: 'codelane-dark',
+    name: 'Codelane Dark',
+    description: 'Codelane\'s signature dark theme with deep grays',
+    shikiTheme: 'one-dark-pro',
+    isDark: true,
+  },
+  {
     id: 'dark',
     name: 'Dark',
     description: 'Default dark theme with deep blacks',
     shikiTheme: 'github-dark-default',
-    isDark: true,
-  },
-  {
-    id: 'zed-dark',
-    name: 'Zed One Dark',
-    description: 'Inspired by Zed Editor\'s One Dark theme',
-    shikiTheme: 'one-dark-pro',
     isDark: true,
   },
   {
@@ -59,7 +59,7 @@ const THEME_STORAGE_KEY = 'codelane-theme';
 
 // Create reactive state within a root to ensure proper SolidJS reactivity
 const { currentTheme, setCurrentTheme } = createRoot(() => {
-  const [currentTheme, setCurrentTheme] = createSignal<ThemeId>('dark');
+  const [currentTheme, setCurrentTheme] = createSignal<ThemeId>('codelane-dark');
   return { currentTheme, setCurrentTheme };
 });
 
@@ -75,7 +75,7 @@ function applyTheme(themeId: ThemeId) {
   const root = document.documentElement;
 
   // Remove all theme classes
-  root.classList.remove('dark', 'zed-dark', 'light');
+  root.classList.remove('dark', 'codelane-dark', 'light');
 
   // Add new theme class
   root.classList.add(themeId);
@@ -94,12 +94,12 @@ function loadTheme() {
     if (saved && isValidTheme(saved)) {
       applyTheme(saved as ThemeId);
     } else {
-      // Default to dark theme
-      applyTheme('dark');
+      // Default to codelane-dark theme
+      applyTheme('codelane-dark');
     }
   } catch (e) {
     console.warn('Failed to load theme from storage:', e);
-    applyTheme('dark');
+    applyTheme('codelane-dark');
   }
 }
 

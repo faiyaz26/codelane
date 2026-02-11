@@ -50,45 +50,45 @@
   --zed-info: 11 147 246;
 }
 
-/* Zed One Dark Theme - Inspired by Zed Editor */
-:root.zed-dark {
+/* Codelane Dark Theme - Codelane's signature dark theme */
+:root.codelane-dark {
   /* Backgrounds */
-  --zed-bg-app: 40 44 51;
-  --zed-bg-panel: 47 52 62;
-  --zed-bg-surface: 59 65 77;
-  --zed-bg-hover: 70 75 87;
-  --zed-bg-active: 77 85 102;
-  --zed-bg-overlay: 54 60 70;
+  --zed-bg-app: 32 35 41;
+  --zed-bg-panel: 38 42 50;
+  --zed-bg-surface: 47 52 62;
+  --zed-bg-hover: 56 60 70;
+  --zed-bg-active: 62 68 82;
+  --zed-bg-overlay: 43 48 56;
 
   /* Borders */
-  --zed-border-subtle: 54 60 70;
-  --zed-border-default: 70 75 87;
-  --zed-border-focus: 92 99 112;
-  --zed-border-active: 116 173 232;
+  --zed-border-subtle: 43 48 56;
+  --zed-border-default: 56 60 70;
+  --zed-border-focus: 74 79 90;
+  --zed-border-active: 93 139 186;
 
   /* Text */
-  --zed-text-primary: 220 224 229;
-  --zed-text-secondary: 172 178 190;
-  --zed-text-tertiary: 135 138 152;
-  --zed-text-disabled: 92 99 112;
-  --zed-text-inverse: 40 44 51;
+  --zed-text-primary: 187 191 195;
+  --zed-text-secondary: 146 151 161;
+  --zed-text-tertiary: 108 110 122;
+  --zed-text-disabled: 74 79 90;
+  --zed-text-inverse: 32 35 41;
 
   /* Accents */
-  --zed-accent-blue: 116 173 232;
-  --zed-accent-blue-hover: 92 159 220;
-  --zed-accent-green: 161 193 129;
-  --zed-accent-green-hover: 143 179 109;
-  --zed-accent-yellow: 223 193 132;
-  --zed-accent-red: 208 114 119;
-  --zed-accent-red-hover: 196 95 100;
-  --zed-accent-purple: 180 119 207;
-  --zed-accent-orange: 191 149 106;
+  --zed-accent-blue: 93 139 186;
+  --zed-accent-blue-hover: 74 127 176;
+  --zed-accent-green: 129 154 103;
+  --zed-accent-green-hover: 114 143 87;
+  --zed-accent-yellow: 179 154 106;
+  --zed-accent-red: 166 91 95;
+  --zed-accent-red-hover: 157 76 80;
+  --zed-accent-purple: 144 95 166;
+  --zed-accent-orange: 153 119 85;
 
   /* Semantic */
-  --zed-success: 161 193 129;
-  --zed-warning: 223 193 132;
-  --zed-error: 208 114 119;
-  --zed-info: 116 173 232;
+  --zed-success: 129 154 103;
+  --zed-warning: 179 154 106;
+  --zed-error: 166 91 95;
+  --zed-info: 93 139 186;
 }
 
 /* Light Theme - Clean and bright */

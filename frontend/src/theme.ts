@@ -1,5 +1,5 @@
 /**
- * Zed-inspired theme constants and utilities
+ * Codelane Dark theme constants and utilities
  */
 
 import type { ITheme } from '@xterm/xterm';
@@ -32,30 +32,30 @@ const TERMINAL_THEMES: Record<ThemeId, ITheme> = {
     brightCyan: '#3dffff',
     brightWhite: '#ffffff',
   },
-  'zed-dark': {
-    background: '#2f343e',
-    foreground: '#dce0e5',
-    cursor: '#74ade8',
-    cursorAccent: '#2f343e',
-    selectionBackground: '#4d5566',
-    selectionForeground: '#dce0e5',
-    // ANSI colors - warmer tones matching Zed
-    black: '#282c33',
-    red: '#d07277',
-    green: '#a1c181',
-    yellow: '#dfc184',
-    blue: '#74ade8',
-    magenta: '#b477cf',
-    cyan: '#56b6c2',
-    white: '#dce0e5',
-    brightBlack: '#5c6370',
-    brightRed: '#e06c75',
-    brightGreen: '#98c379',
-    brightYellow: '#e5c07b',
-    brightBlue: '#61afef',
-    brightMagenta: '#c678dd',
-    brightCyan: '#56b6c2',
-    brightWhite: '#ffffff',
+  'codelane-dark': {
+    background: '#262a32',
+    foreground: '#bbbfc3',
+    cursor: '#5d8bba',
+    cursorAccent: '#262a32',
+    selectionBackground: '#3e4352',
+    selectionForeground: '#bbbfc3',
+    // ANSI colors - warmer tones matching Codelane Dark
+    black: '#202329',
+    red: '#a65b5f',
+    green: '#819a67',
+    yellow: '#b39a6a',
+    blue: '#5d8bba',
+    magenta: '#905fa6',
+    cyan: '#4492a0',
+    white: '#bbbfc3',
+    brightBlack: '#4a4f58',
+    brightRed: '#b4565e',
+    brightGreen: '#7a9c61',
+    brightYellow: '#b89a63',
+    brightBlue: '#4e8cbf',
+    brightMagenta: '#9f60b1',
+    brightCyan: '#4492a0',
+    brightWhite: '#e6e6e6',
   },
   light: {
     background: '#f8f9fa',

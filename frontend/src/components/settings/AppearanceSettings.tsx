@@ -115,17 +115,17 @@ function getThemeColors(themeId: ThemeId) {
         yellow: '#f5c249',
         green: '#26d97f',
       };
-    case 'zed-dark':
+    case 'codelane-dark':
       return {
-        bg: '#282c33',
-        panel: '#2f343e',
-        border: '#464b57',
-        text: '#dce0e5',
-        textMuted: '#878a98',
-        accent: '#74ade8',
-        red: '#d07277',
-        yellow: '#dfc184',
-        green: '#a1c181',
+        bg: '#202329',
+        panel: '#262a32',
+        border: '#383c46',
+        text: '#bbbfc3',
+        textMuted: '#92979a',
+        accent: '#5d8bba',
+        red: '#a65b5f',
+        yellow: '#b39a6a',
+        green: '#819a67',
       };
     case 'light':
       return {
