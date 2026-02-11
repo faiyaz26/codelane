@@ -39,6 +39,17 @@ function App() {
     }
   });
 
+  // Listen for menu events from Tauri
+  onMount(async () => {
+    const { listen } = await import('@tauri-apps/api/event');
+    const unlisten = await listen('menu:about', () => {
+      setAboutOpen(true);
+    });
+    onCleanup(() => {
+      unlisten();
+    });
+  });
+
   // Disable autocomplete, autocorrect, and spellcheck on all inputs globally
   onMount(() => {
     const disableInputFeatures = (element: Element) => {

@@ -17,7 +17,6 @@ mod import_analyzer;
 mod dependency_graph;
 mod ai;
 
-#[cfg(feature = "devtools")]
 use tauri::Manager;
 
 /// Run the Tauri application
@@ -115,14 +114,53 @@ pub fn run() {
             search::search_cancel,
         ])
         // Window setup
-        .setup(|_app| {
+        .setup(|app| {
+            // Create application menu
+            use tauri::menu::{Menu, MenuItem, Submenu};
+
+            let menu = Menu::new(app)?;
+
+            // Create "Codelane" menu (macOS) or "Help" menu (Windows/Linux)
+            #[cfg(target_os = "macos")]
+            let app_menu = {
+                let submenu = Submenu::new(app, "Codelane", true)?;
+                let about_item = MenuItem::new(app, "About Codelane", true, None::<&str>)?;
+
+                // Handle About menu click
+                let app_handle = app.handle().clone();
+                about_item.on_menu_event(move |_app, _event| {
+                    let _ = app_handle.emit("menu:about", ());
+                });
+
+                submenu.append(&about_item)?;
+                submenu
+            };
+
+            #[cfg(not(target_os = "macos"))]
+            let app_menu = {
+                let submenu = Submenu::new(app, "Help", true)?;
+                let about_item = MenuItem::new(app, "About Codelane", true, None::<&str>)?;
+
+                // Handle About menu click
+                let app_handle = app.handle().clone();
+                about_item.on_menu_event(move |_app, _event| {
+                    let _ = app_handle.emit("menu:about", ());
+                });
+
+                submenu.append(&about_item)?;
+                submenu
+            };
+
+            menu.append(&app_menu)?;
+            app.set_menu(menu)?;
+
             #[cfg(feature = "devtools")]
             {
-                let window = _app.get_webview_window("main").expect("main window not found");
+                let window = app.get_webview_window("main").expect("main window not found");
                 window.open_devtools();
             }
 
-            tracing::info!("Codelane window initialized");
+            tracing::info!("Codelane window initialized with menu");
             Ok(())
         })
         .run(tauri::generate_context!())
