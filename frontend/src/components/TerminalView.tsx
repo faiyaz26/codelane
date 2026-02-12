@@ -170,7 +170,7 @@ export function TerminalView(props: TerminalViewProps) {
         agentStatusManager.markExited(props.laneId);
       });
 
-      // Periodic buffer sampling for prompt detection (250ms interval)
+      // Periodic buffer sampling for prompt detection (4s interval)
       // This catches prompts that might be missed by chunk-based detection
       const bufferCheckInterval = setInterval(() => {
         if (!terminal) return;
@@ -190,7 +190,7 @@ export function TerminalView(props: TerminalViewProps) {
 
         const snapshot = lines.join('\n');
         agentStatusManager.feedBufferSnapshot(props.laneId, snapshot);
-      }, 250);
+      }, 4000);
 
       onCleanup(() => clearInterval(bufferCheckInterval));
 
