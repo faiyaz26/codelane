@@ -34,15 +34,19 @@ export function EditorPanel(props: EditorPanelProps) {
     hasLocalChanges: boolean;
   } | null>(null);
 
-  // Derive tabs from open files
+  // Derive tabs from open files in order
   const tabs = createMemo((): EditorTab[] => {
     const files = editorStateManager.getOpenFiles(props.laneId);
-    return Object.values(files).map((file) => ({
-      id: file.id,
-      path: file.path,
-      name: file.name,
-      isModified: file.isModified,
-    }));
+    const order = editorStateManager.getTabOrder(props.laneId);
+    return order.map((id) => {
+      const file = files[id];
+      return {
+        id: file.id,
+        path: file.path,
+        name: file.name,
+        isModified: file.isModified,
+      };
+    }).filter(Boolean); // Filter out any undefined entries
   });
 
   // Get active file ID
@@ -127,6 +131,11 @@ export function EditorPanel(props: EditorPanelProps) {
     editorStateManager.setActiveFile(props.laneId, tabId);
   };
 
+  // Reorder tabs
+  const reorderTabs = (fromIndex: number, toIndex: number) => {
+    editorStateManager.reorderTabs(props.laneId, fromIndex, toIndex);
+  };
+
   // Check for external changes when active file changes
   createEffect(
     on(activeFileId, (fileId) => {
@@ -193,6 +202,7 @@ export function EditorPanel(props: EditorPanelProps) {
         activeTabId={activeFileId()}
         onTabSelect={selectTab}
         onTabClose={closeFile}
+        onTabReorder={reorderTabs}
         basePath={props.basePath}
       />
 

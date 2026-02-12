@@ -21,6 +21,8 @@ interface LaneState {
   saveCallbacks: Record<string, () => Promise<void>>;
   // File watch unsubscribe functions by file path
   fileWatchers: Record<string, () => void>;
+  // Tab order (array of file IDs)
+  tabOrder: string[];
 }
 
 // Store structure
@@ -99,6 +101,7 @@ class EditorStateManager {
             renderedFiles: new Set(),
             saveCallbacks: {},
             fileWatchers: {},
+            tabOrder: [],
           };
         })
       );
@@ -118,6 +121,11 @@ class EditorStateManager {
   // Get rendered files for a lane (reactive)
   getRenderedFiles(laneId: string): Set<string> {
     return this.store.lanes[laneId]?.renderedFiles ?? new Set();
+  }
+
+  // Get tab order for a lane (reactive)
+  getTabOrder(laneId: string): string[] {
+    return this.store.lanes[laneId]?.tabOrder ?? [];
   }
 
   // Check if lane has open files (reactive)
@@ -171,6 +179,8 @@ class EditorStateManager {
           store.lanes[laneId].activeFileId = id;
           // Mark as rendered
           store.lanes[laneId].renderedFiles.add(id);
+          // Add to tab order
+          store.lanes[laneId].tabOrder.push(id);
         })
       );
     });
@@ -235,6 +245,7 @@ class EditorStateManager {
           store.pathIndex[path] = { laneId, fileId: id };
           store.lanes[laneId].activeFileId = id;
           store.lanes[laneId].renderedFiles.add(id);
+          store.lanes[laneId].tabOrder.push(id);
         })
       );
     });
@@ -299,6 +310,7 @@ class EditorStateManager {
           store.pathIndex[fullPath] = { laneId, fileId: id };
           store.lanes[laneId].activeFileId = id;
           store.lanes[laneId].renderedFiles.add(id);
+          store.lanes[laneId].tabOrder.push(id);
         })
       );
     });
@@ -351,6 +363,7 @@ class EditorStateManager {
           store.pathIndex[virtualPath] = { laneId, fileId: id };
           store.lanes[laneId].activeFileId = id;
           store.lanes[laneId].renderedFiles.add(id);
+          store.lanes[laneId].tabOrder.push(id);
         })
       );
     });
@@ -679,6 +692,21 @@ class EditorStateManager {
     );
   }
 
+  // Reorder tabs
+  reorderTabs(laneId: string, fromIndex: number, toIndex: number): void {
+    const lane = this.store.lanes[laneId];
+    if (!lane) return;
+
+    this.batchUpdate(() => {
+      this.updateLane(laneId, (lane) => {
+        const newOrder = [...lane.tabOrder];
+        const [removed] = newOrder.splice(fromIndex, 1);
+        newOrder.splice(toIndex, 0, removed);
+        lane.tabOrder = newOrder;
+      });
+    });
+  }
+
   // Set active file
   setActiveFile(laneId: string, fileId: string): void {
     this.ensureLane(laneId);
@@ -722,10 +750,16 @@ class EditorStateManager {
           delete lane.saveCallbacks[fileId];
           lane.renderedFiles.delete(fileId);
 
+          // Remove from tab order
+          const orderIndex = lane.tabOrder.indexOf(fileId);
+          if (orderIndex !== -1) {
+            lane.tabOrder.splice(orderIndex, 1);
+          }
+
           // If closing active file, switch to another
           if (lane.activeFileId === fileId) {
-            const remaining = Object.keys(lane.openFiles);
-            lane.activeFileId = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+            // Use tab order to determine next active tab
+            lane.activeFileId = lane.tabOrder.length > 0 ? lane.tabOrder[lane.tabOrder.length - 1] : null;
           }
         })
       );
