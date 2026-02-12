@@ -8,6 +8,8 @@ import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
 import { createTerminal, createFitAddon, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
 import { agentStatusManager } from '../services/AgentStatusManager';
 import type { DetectableAgentType } from '../types/agentStatus';
+import { HookOnboardingModal, shouldShowHookPrompt } from './hooks/HookOnboardingModal';
+import type { AgentType } from '../types/agent';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
@@ -26,6 +28,8 @@ export function TerminalView(props: TerminalViewProps) {
   let pty: PtyHandle | undefined;
 
   const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
+  const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
+  const [onboardingAgentType, setOnboardingAgentType] = createSignal<AgentType>('claude');
   let isAgentLane = false;
 
   // Watch for theme changes and update terminal
@@ -137,6 +141,19 @@ export function TerminalView(props: TerminalViewProps) {
           }
         });
         onCleanup(unsub);
+      }
+
+      // Show hook onboarding modal for hook-supported agents on first run
+      const hookSupportedAgents: AgentType[] = ['claude', 'codex', 'gemini'];
+      if (
+        isAgentLane &&
+        hookSupportedAgents.includes(resolvedAgentType as AgentType) &&
+        shouldShowHookPrompt(resolvedAgentType as AgentType)
+      ) {
+        setTimeout(() => {
+          setOnboardingAgentType(resolvedAgentType as AgentType);
+          setShowHookOnboarding(true);
+        }, 2000); // Delay to avoid startup disruption
       }
 
       // Attach custom key handlers (Shift+Enter, etc.)
@@ -297,6 +314,12 @@ export function TerminalView(props: TerminalViewProps) {
           </div>
         </div>
       </Show>
+
+      <HookOnboardingModal
+        agentType={onboardingAgentType()}
+        open={showHookOnboarding()}
+        onClose={() => setShowHookOnboarding(false)}
+      />
     </div>
   );
 }

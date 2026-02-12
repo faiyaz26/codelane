@@ -1,9 +1,11 @@
 // Agents Settings Tab
 
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onMount, For, Show } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
-import type { AgentSettings } from '../../types/agent';
+import type { AgentSettings, AgentType } from '../../types/agent';
 import { aiReviewService, type AITool, AI_MODELS } from '../../services/AIReviewService';
+import { hookService } from '../../services/HookService';
+import type { HookStatus } from '../../types/hooks';
 
 interface AgentsSettingsProps {
   settings: AgentSettings;
@@ -16,6 +18,8 @@ export function AgentsSettings(props: AgentsSettingsProps) {
   const [aiModel, setAiModel] = createSignal<string>('haiku');
   const [availableTools, setAvailableTools] = createSignal<AITool[]>([]);
   const [testingTool, setTestingTool] = createSignal(false);
+  const [hookStatuses, setHookStatuses] = createSignal<Record<string, HookStatus>>({});
+  const [loadingHook, setLoadingHook] = createSignal<string | null>(null);
 
   // Load AI tool settings
   onMount(async () => {
@@ -36,6 +40,10 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     // Load available AI tools
     const tools = await aiReviewService.getAvailableTools();
     setAvailableTools(tools);
+
+    // Load hook statuses
+    const statuses = await hookService.getAllStatus();
+    setHookStatuses(statuses);
   });
 
   const handleAIToolChange = (tool: AITool) => {
@@ -70,6 +78,45 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     } finally {
       setTestingTool(false);
     }
+  };
+
+  const handleInstallHook = async (agentType: AgentType) => {
+    setLoadingHook(agentType);
+    try {
+      await hookService.installHooks(agentType);
+      const status = await hookService.checkStatus(agentType);
+      setHookStatuses({ ...hookStatuses(), [agentType]: status });
+    } catch (error) {
+      alert(`Failed to install hooks: ${error}`);
+    } finally {
+      setLoadingHook(null);
+    }
+  };
+
+  const handleUninstallHook = async (agentType: AgentType) => {
+    setLoadingHook(agentType);
+    try {
+      await hookService.uninstallHooks(agentType);
+      const status = await hookService.checkStatus(agentType);
+      setHookStatuses({ ...hookStatuses(), [agentType]: status });
+    } catch (error) {
+      alert(`Failed to uninstall hooks: ${error}`);
+    } finally {
+      setLoadingHook(null);
+    }
+  };
+
+  const getAgentDisplayName = (agentType: AgentType): string => {
+    const names: Record<AgentType, string> = {
+      claude: 'Claude Code',
+      codex: 'Codex',
+      gemini: 'Gemini',
+      aider: 'Aider',
+      cursor: 'Cursor',
+      opencode: 'OpenCode',
+      shell: 'Shell',
+    };
+    return names[agentType] || agentType;
   };
 
   return (
@@ -225,6 +272,63 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Hook Integration Section */}
+        <div>
+          <h3 class="text-sm font-medium text-zed-text-primary mb-2">Hook Integration</h3>
+          <p class="text-xs text-zed-text-tertiary mb-4">
+            Enable hooks for instant notifications when agents need your input
+          </p>
+
+          <div class="space-y-3">
+            <For each={['claude', 'codex', 'gemini'] as AgentType[]}>
+              {(agentType) => {
+                const status = () => hookStatuses()[agentType];
+                return (
+                  <div class="p-4 rounded-lg bg-zed-bg-surface border border-zed-border-default">
+                    <div class="flex items-center justify-between">
+                      <div class="flex-1">
+                        <p class="text-sm font-medium text-zed-text-primary">
+                          {getAgentDisplayName(agentType)}
+                        </p>
+                        <p class="text-xs text-zed-text-tertiary mt-1">
+                          {status()?.supported
+                            ? status()?.installed
+                              ? 'Hooks enabled - agent can notify Codelane'
+                              : 'Hooks not installed'
+                            : 'Hooks not supported for this agent'}
+                        </p>
+                      </div>
+
+                      <Show when={status()?.supported}>
+                        <Show
+                          when={status()?.installed}
+                          fallback={
+                            <button
+                              onClick={() => handleInstallHook(agentType)}
+                              disabled={loadingHook() === agentType}
+                              class="px-3 py-1.5 text-sm bg-zed-accent-blue text-white hover:bg-zed-accent-blue/90 rounded transition-colors disabled:opacity-50"
+                            >
+                              {loadingHook() === agentType ? 'Installing...' : 'Install'}
+                            </button>
+                          }
+                        >
+                          <button
+                            onClick={() => handleUninstallHook(agentType)}
+                            disabled={loadingHook() === agentType}
+                            class="px-3 py-1.5 text-sm text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors disabled:opacity-50"
+                          >
+                            {loadingHook() === agentType ? 'Removing...' : 'Uninstall'}
+                          </button>
+                        </Show>
+                      </Show>
+                    </div>
+                  </div>
+                );
+              }}
+            </For>
           </div>
         </div>
       </div>

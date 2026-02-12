@@ -15,6 +15,8 @@ import type {
 import { DEFAULT_NOTIFICATION_SETTINGS } from '../types/agentStatus';
 import { createDetector } from './agentDetectors';
 import type { AgentDetector } from './agentDetectors/types';
+import { hookService } from './HookService';
+import type { HookEvent } from '../types/hooks';
 
 const NOTIFICATION_SETTINGS_KEY = 'codelane:agent-notification-settings';
 const NOTIFICATION_PROMPT_DISMISSED_KEY = 'codelane:notification-prompt-dismissed';
@@ -41,6 +43,12 @@ class AgentStatusManager {
     const [store, setStore] = createStore<Record<string, AgentStatus>>({});
     this.store = store;
     this.setStore = setStore;
+
+    // Listen for hook events from agents (Claude, Codex, Gemini)
+    // These override heuristic detection for more reliable status updates
+    hookService.onHookEvent((event) => {
+      this.handleHookEvent(event);
+    });
   }
 
   /**
@@ -175,6 +183,48 @@ class AgentStatusManager {
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };
+  }
+
+  /**
+   * Handle hook events from agents (Claude, Codex, Gemini).
+   * Hook events override heuristic detection for reliable status updates.
+   */
+  private handleHookEvent(event: HookEvent): void {
+    const entry = this.lanes.get(event.laneId);
+    if (!entry) return;
+
+    // Hook events for permission/input always transition to waiting_for_input
+    if (
+      event.eventType === 'permission_prompt' ||
+      event.eventType === 'idle_prompt' ||
+      event.eventType === 'waiting_for_input'
+    ) {
+      const previousStatus = entry.status;
+      entry.status = 'waiting_for_input';
+      entry.lastChange = Date.now();
+
+      // Update reactive store
+      this.setStore(event.laneId, 'waiting_for_input');
+
+      // Notify listeners
+      const change: AgentStatusChange = {
+        laneId: event.laneId,
+        previousStatus,
+        newStatus: 'waiting_for_input',
+        agentType: event.agentType as DetectableAgentType,
+        timestamp: entry.lastChange,
+      };
+
+      for (const listener of this.listeners) {
+        listener(change);
+      }
+
+      if (import.meta.env.DEV) {
+        console.log(
+          `[AgentStatus] Hook event: ${event.agentType} lane ${event.laneId} → waiting_for_input (${event.eventType})`
+        );
+      }
+    }
   }
 
   /**
