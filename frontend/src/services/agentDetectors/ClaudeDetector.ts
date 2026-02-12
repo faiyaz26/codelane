@@ -24,6 +24,8 @@ export class ClaudeDetector extends BaseDetector {
       /Would you like/i,
     ],
     errorPatterns: [/error:/i, /RATE_LIMIT/i, /APIError/i],
+    // Claude Code spinner chars (shimmer animation when thinking)
+    workingPatterns: [/[·✢✳∗✻✽⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/],
     idleTimeoutMs: 4000,
   };
 }

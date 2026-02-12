@@ -169,12 +169,104 @@ describe('ClaudeDetector', () => {
     expect(detector.getStatus()).toBe('waiting_for_input');
   });
 
-  it('transitions from waiting_for_input to working when user provides input', () => {
+  it('transitions from waiting_for_input to working when user input + non-prompt output', () => {
     detector.feedChunk('Do you want to proceed? (y/n)');
     expect(detector.getStatus()).toBe('waiting_for_input');
 
-    // User types into the terminal
+    // User types — sets flag but does NOT transition yet
     detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Agent starts processing (no prompt in output) → transitions to working
+    detector.feedChunk('Applying changes to your project...');
+    expect(detector.getStatus()).toBe('working');
+  });
+
+  it('stays waiting_for_input when TUI re-renders old prompt after user input', () => {
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // User types — sets flag
+    detector.feedUserInput('y');
+
+    // But the very next batched frame still contains the old prompt (Ink re-render)
+    detector.feedChunk('\x1b[2J\x1b[H\x1b[1mDo you want to proceed?\x1b[22m\r\n \x1b[36m❯\x1b[39m 1. Yes');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('cycles back to waiting_for_input when a new prompt arrives after user input', () => {
+    // First prompt
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // User responds
+    detector.feedUserInput('y');
+    // Agent processes (no prompt) → working
+    detector.feedChunk('Applying changes...');
+    expect(detector.getStatus()).toBe('working');
+
+    // Agent shows another prompt
+    detector.feedChunk('Would you like me to run the tests?');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // User responds again
+    detector.feedUserInput('n');
+    detector.feedChunk('Skipping tests.');
+    expect(detector.getStatus()).toBe('working');
+  });
+
+  // Spinner animation detection prevents false 'done' transitions
+  it('detects spinner animation and stays working', () => {
+    // First frame with spinner char
+    detector.feedChunk('Thinking... ·');
+    expect(detector.getStatus()).toBe('working');
+
+    // Advance 1 second (less than 4s idle timeout)
+    vi.advanceTimersByTime(1000);
+
+    // Second frame with different spinner char — animation detected
+    detector.feedChunk('Thinking... ✢');
+    expect(detector.getStatus()).toBe('working');
+
+    // Advance another 1 second
+    vi.advanceTimersByTime(1000);
+
+    // Third frame with yet another char
+    detector.feedChunk('Thinking... ✳');
+    expect(detector.getStatus()).toBe('working');
+
+    // Animation keeps resetting idle timer, should NOT transition to done yet
+    vi.advanceTimersByTime(1000);
+    expect(detector.getStatus()).toBe('working');
+  });
+
+  it('transitions to done when spinner stops animating (frozen char)', () => {
+    // Animation frames
+    detector.feedChunk('·');
+    vi.advanceTimersByTime(100);
+    detector.feedChunk('✢');
+    vi.advanceTimersByTime(100);
+    detector.feedChunk('✳');
+    expect(detector.getStatus()).toBe('working');
+
+    // Last frame — spinner freezes on '∗'
+    detector.feedChunk('∗');
+
+    // No more spinner changes, idle timeout kicks in
+    vi.advanceTimersByTime(4100);
+    expect(detector.getStatus()).toBe('done');
+  });
+
+  it('braille spinner chars also prevent false done', () => {
+    detector.feedChunk('⠋');
+    vi.advanceTimersByTime(100);
+    detector.feedChunk('⠙');
+    vi.advanceTimersByTime(100);
+    detector.feedChunk('⠹');
+    expect(detector.getStatus()).toBe('working');
+
+    // Keep animating
+    vi.advanceTimersByTime(3000);
     expect(detector.getStatus()).toBe('working');
   });
 });

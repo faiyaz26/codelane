@@ -10,6 +10,8 @@ export class CursorDetector extends BaseDetector {
   protected readonly patterns: DetectorPatterns = {
     waitingPatterns: [],
     errorPatterns: [/error:/i, /failed/i],
+    // Cursor likely uses similar spinner patterns (need to verify with actual usage)
+    workingPatterns: [/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/],
     idleTimeoutMs: 3000,
   };
 }

@@ -38,6 +38,9 @@ export abstract class BaseDetector implements AgentDetector {
   private doneTimer: ReturnType<typeof setTimeout> | null = null;
   private doneToWorkingTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingOutputBytes = 0;
+  private userInputPending = false;
+  private lastSpinnerChar: string | null = null;
+  private lastSpinnerTime = 0;
   private onStatusChangeCb: ((status: AgentStatus) => void) | null = null;
 
   setOnStatusChange(cb: (status: AgentStatus) => void): void {
@@ -45,16 +48,31 @@ export abstract class BaseDetector implements AgentDetector {
   }
 
   feedChunk(text: string): void {
-    // Reset idle timer on any output
-    this.clearIdleTimer();
-
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);
+
+    // Check for spinner animation (agent actively thinking/working)
+    const spinnerChar = this.checkWorkingAnimation(plain);
+    if (spinnerChar) {
+      // Spinner is animating — agent is actively working, reset idle timer
+      this.clearIdleTimer();
+      if (this.status !== 'working') {
+        this.transitionTo('working', `spinner animation detected (char: ${spinnerChar})`);
+      }
+      this.startIdleTimer();
+      return;
+    }
+
+    // Reset idle timer on any output (non-spinner)
+    this.clearIdleTimer();
 
     // Check for waiting patterns (agent specifically needs user attention)
     const matchedWaiting = this.findMatchingWaitingPattern(plain);
     if (matchedWaiting) {
       this.clearDoneToWorkingTimer();
+      // If user provided input but output still contains a prompt (TUI re-render / new prompt),
+      // clear the flag — the agent is still waiting.
+      this.userInputPending = false;
       this.transitionTo('waiting_for_input', `waiting pattern matched: ${matchedWaiting}`);
       return;
     }
@@ -63,13 +81,21 @@ export abstract class BaseDetector implements AgentDetector {
     const matchedError = this.findMatchingErrorPattern(plain);
     if (matchedError) {
       this.clearDoneToWorkingTimer();
+      this.userInputPending = false;
       this.transitionTo('error', `error pattern matched: ${matchedError}`);
       return;
     }
 
-    // waiting_for_input is fully sticky — ignore all PTY output.
-    // Only feedUserInput() can transition out of this state.
+    // waiting_for_input handling:
+    // - If user provided input (flag set) and output has NO waiting pattern,
+    //   the agent has started processing → transition to working.
+    // - Otherwise, stay sticky in waiting_for_input.
     if (this.status === 'waiting_for_input') {
+      if (this.userInputPending) {
+        this.userInputPending = false;
+        this.transitionTo('working', 'user provided input and agent started processing');
+        this.startIdleTimer();
+      }
       return;
     }
 
@@ -116,9 +142,11 @@ export abstract class BaseDetector implements AgentDetector {
   }
 
   feedUserInput(_text: string): void {
-    // User typed into the terminal — if we're waiting for input, transition to working
+    // Set flag so the next feedChunk without a waiting pattern triggers working.
+    // We don't transition immediately because TUI agents (Ink) re-render the screen
+    // on each frame, and the old prompt text may still appear in the next PTY output.
     if (this.status === 'waiting_for_input') {
-      this.transitionTo('working', 'user provided input');
+      this.userInputPending = true;
     }
   }
 
@@ -132,6 +160,9 @@ export abstract class BaseDetector implements AgentDetector {
     this.clearDoneTimer();
     this.clearDoneToWorkingTimer();
     this.pendingOutputBytes = 0;
+    this.userInputPending = false;
+    this.lastSpinnerChar = null;
+    this.lastSpinnerTime = 0;
   }
 
   dispose(): void {
@@ -139,6 +170,9 @@ export abstract class BaseDetector implements AgentDetector {
     this.clearDoneTimer();
     this.clearDoneToWorkingTimer();
     this.pendingOutputBytes = 0;
+    this.userInputPending = false;
+    this.lastSpinnerChar = null;
+    this.lastSpinnerTime = 0;
     this.onStatusChangeCb = null;
   }
 
@@ -166,6 +200,44 @@ export abstract class BaseDetector implements AgentDetector {
     for (const p of this.patterns.errorPatterns) {
       if (p.test(text)) return p.source;
     }
+    return null;
+  }
+
+  /**
+   * Check if output contains working indicators (spinner chars, "Working" text, etc.).
+   * Returns the matched spinner character if animation detected, null otherwise.
+   */
+  protected checkWorkingAnimation(text: string): string | null {
+    if (!this.patterns.workingPatterns || this.patterns.workingPatterns.length === 0) {
+      return null;
+    }
+
+    // Check if any working pattern matches
+    for (const p of this.patterns.workingPatterns) {
+      const match = text.match(p);
+      if (match) {
+        // Extract the matched character (spinner char)
+        const matchedChar = match[0];
+        const now = Date.now();
+
+        // If we saw a different spinner char recently (within 2s), animation is active
+        if (
+          this.lastSpinnerChar &&
+          this.lastSpinnerChar !== matchedChar &&
+          now - this.lastSpinnerTime < 2000
+        ) {
+          this.lastSpinnerChar = matchedChar;
+          this.lastSpinnerTime = now;
+          return matchedChar; // Animation detected
+        }
+
+        // Update tracking
+        this.lastSpinnerChar = matchedChar;
+        this.lastSpinnerTime = now;
+        return null; // Same char or first occurrence — wait for next frame
+      }
+    }
+
     return null;
   }
 

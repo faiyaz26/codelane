@@ -36,6 +36,8 @@ export interface DetectorPatterns {
   waitingPatterns: RegExp[];
   /** Patterns that indicate the agent encountered an error */
   errorPatterns: RegExp[];
+  /** Patterns that indicate the agent is actively working (spinner chars, status text like "Working", "Thinking") */
+  workingPatterns?: RegExp[];
   /** Idle timeout in ms — when output stops for this long after 'working', transitions to 'done' */
   idleTimeoutMs: number;
   /** Byte threshold to transition from 'done' → 'working'. Must exceed this to avoid keystroke echo flicker. Default: 200 */

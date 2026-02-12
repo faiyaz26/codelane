@@ -11,6 +11,8 @@ export class GeminiDetector extends BaseDetector {
   protected readonly patterns: DetectorPatterns = {
     waitingPatterns: [/\[NORMAL\]/],
     errorPatterns: [/error:/i, /failed/i],
+    // Gemini uses ink-spinner (Braille patterns) and shows tool execution status symbols
+    workingPatterns: [/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⊷]/],
     idleTimeoutMs: 3000,
   };
 

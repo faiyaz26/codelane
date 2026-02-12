@@ -139,12 +139,17 @@ describe('AgentStatusManager', () => {
     expect(agentStatusManager.getStatus('lane-1')).toBe('done');
   });
 
-  it('feedUserInput transitions from waiting_for_input to working', () => {
+  it('feedUserInput + non-prompt output transitions from waiting_for_input to working', () => {
     agentStatusManager.registerLane('lane-1', 'claude');
     agentStatusManager.feedOutput('lane-1', new TextEncoder().encode('Do you want to proceed?'));
     expect(agentStatusManager.getStatus('lane-1')).toBe('waiting_for_input');
 
     agentStatusManager.feedUserInput('lane-1', 'y');
+    // Still waiting — flag set but no non-prompt output yet
+    expect(agentStatusManager.getStatus('lane-1')).toBe('waiting_for_input');
+
+    // Agent starts processing
+    agentStatusManager.feedOutput('lane-1', new TextEncoder().encode('Processing...'));
     expect(agentStatusManager.getStatus('lane-1')).toBe('working');
   });
 

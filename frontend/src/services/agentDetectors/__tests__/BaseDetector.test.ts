@@ -178,8 +178,8 @@ describe('BaseDetector', () => {
     expect(detector.getStatus()).toBe('working');
   });
 
-  // waiting_for_input is fully sticky — only feedUserInput transitions out
-  it('waiting_for_input ignores all PTY output', () => {
+  // waiting_for_input is fully sticky — ignores PTY output without user input
+  it('waiting_for_input ignores all PTY output without user input', () => {
     detector.feedChunk('Do you want to proceed?');
     expect(detector.getStatus()).toBe('waiting_for_input');
 
@@ -192,13 +192,32 @@ describe('BaseDetector', () => {
     expect(detector.getStatus()).toBe('waiting_for_input');
   });
 
-  it('feedUserInput transitions from waiting_for_input to working', () => {
+  // feedUserInput sets a flag; transition happens on next feedChunk without a prompt
+  it('feedUserInput + non-prompt output transitions to working', () => {
     detector.feedChunk('Do you want to proceed?');
     expect(detector.getStatus()).toBe('waiting_for_input');
 
+    // User types — sets flag but does NOT transition yet
     detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Agent starts processing (output without prompt) → now transitions to working
+    detector.feedChunk('Processing your request...');
     expect(detector.getStatus()).toBe('working');
     expect(statusChanges).toEqual(['waiting_for_input', 'working']);
+  });
+
+  it('feedUserInput + prompt output stays in waiting_for_input (TUI re-render)', () => {
+    detector.feedChunk('Do you want to proceed?');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // User types — sets flag
+    detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // But next output still contains the prompt (TUI re-render / batched frame)
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
   });
 
   it('feedUserInput is no-op when not in waiting_for_input state', () => {

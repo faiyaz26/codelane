@@ -258,7 +258,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
                                 : 'hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary'
                             } ${
                               agentStatusManager.getStatus(lane.id) === 'waiting_for_input'
-                                ? 'border-l-2 border-orange-400 pl-[26px]'
+                                ? 'border-x-2 border-orange-400'
                                 : ''
                             }`}
                             onClick={() => props.onLaneSelect(lane.id)}

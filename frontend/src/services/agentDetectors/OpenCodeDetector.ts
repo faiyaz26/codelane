@@ -10,6 +10,8 @@ export class OpenCodeDetector extends BaseDetector {
   protected readonly patterns: DetectorPatterns = {
     waitingPatterns: [],
     errorPatterns: [/error:/i, /failed/i],
+    // OpenCode uses charmbracelet/bubbles spinners (Braille Dot or MiniDot)
+    workingPatterns: [/[⣾⣽⣻⢿⡿⣟⣯⣷⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/],
     idleTimeoutMs: 3000,
   };
 }

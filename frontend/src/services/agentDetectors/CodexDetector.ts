@@ -10,6 +10,8 @@ export class CodexDetector extends BaseDetector {
   protected readonly patterns: DetectorPatterns = {
     waitingPatterns: [],
     errorPatterns: [/error:/i, /failed/i],
+    // Codex shows "• Working" text and uses multiple spinner styles (dots, ASCII art, blocks)
+    workingPatterns: [/Working/i, /[●○◉·⣾⣽⣻⢿⡿⣟⣯⣷]/],
     idleTimeoutMs: 3000,
   };
 }
