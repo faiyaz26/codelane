@@ -10,6 +10,8 @@ pub mod db;
 pub mod process;
 pub mod terminal;
 pub mod search;
+pub mod hooks;
+pub mod hook_monitor;
 mod git;
 mod fs;
 mod file_sorter;
@@ -48,6 +50,8 @@ pub fn run() {
         .manage(search::SearchState::new())
         // Manage file watch state
         .manage(fs::FileWatchState::new())
+        // Manage hook monitor state
+        .manage(hook_monitor::HookMonitorState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
             // Database commands
@@ -113,6 +117,10 @@ pub fn run() {
             // Search commands
             search::search_start,
             search::search_cancel,
+            // Hook commands
+            hooks::hooks_install,
+            hooks::hooks_uninstall,
+            hooks::hooks_check_status,
         ])
         // Window setup
         .setup(|app| {

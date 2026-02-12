@@ -3,6 +3,7 @@
 //! This crate provides the foundational types used across all Codelane components.
 
 pub mod config;
+pub mod hooks;
 pub mod lane;
 pub mod paths;
 pub mod project;
@@ -17,6 +18,7 @@ pub use id::*;
 pub mod prelude {
     pub use crate::config::*;
     pub use crate::error::{Error, Result};
+    pub use crate::hooks::*;
     pub use crate::id::*;
     pub use crate::lane::*;
     pub use crate::project::*;

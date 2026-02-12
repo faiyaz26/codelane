@@ -54,6 +54,35 @@ pub fn worktree_path(project_name: &str, branch: &str) -> crate::Result<PathBuf>
     Ok(data_dir()?.join("worktrees").join(project_name).join(safe_branch))
 }
 
+/// Returns the hook events directory for the current environment.
+///
+/// Hook scripts write JSON event files here when agents need input.
+/// Example: `~/.codelane/dev/hook-events/`
+pub fn hook_events_dir() -> crate::Result<PathBuf> {
+    let dir = data_dir()?.join("hook-events");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Returns the hook events directory for a specific lane.
+///
+/// Each lane has its own subdirectory for event isolation.
+/// Example: `~/.codelane/dev/hook-events/lane-123/`
+pub fn lane_hook_events_dir(lane_id: &str) -> crate::Result<PathBuf> {
+    let dir = hook_events_dir()?.join(lane_id);
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Returns the directory where hook scripts are stored.
+///
+/// Example: `~/.codelane/dev/hook-scripts/`
+pub fn hook_scripts_dir() -> crate::Result<PathBuf> {
+    let dir = data_dir()?.join("hook-scripts");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -23,7 +23,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::thread;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// State for managing active terminal instances
 ///
@@ -239,6 +239,8 @@ pub async fn create_terminal(
 
     // Extract lane_id from environment before consuming it
     let lane_id = env.as_ref().and_then(|e| e.get("CODELANE_LANE_ID").cloned());
+    // Clone for hook monitoring (original will be moved into instance)
+    let lane_id_for_hooks = lane_id.clone();
 
     // Add custom environment variables if provided
     if let Some(env_vars) = env {
@@ -302,6 +304,14 @@ pub async fn create_terminal(
         shell_cmd,
         working_dir.display()
     );
+
+    // Start hook monitoring if lane_id is available
+    if let Some(ref lid) = lane_id_for_hooks {
+        let hook_monitor = app.state::<crate::hook_monitor::HookMonitorState>();
+        if let Err(e) = hook_monitor.start_monitoring(lid.clone(), app.clone()) {
+            tracing::warn!("Failed to start hook monitoring for lane {}: {}", lid, e);
+        }
+    }
 
     Ok(terminal_id)
 }
@@ -518,7 +528,26 @@ pub async fn resize_terminal(
 /// # Returns
 /// Ok(()) on success, or an error message
 #[tauri::command]
-pub async fn close_terminal(state: State<'_, TerminalState>, id: String) -> Result<(), String> {
+pub async fn close_terminal(
+    app: AppHandle,
+    state: State<'_, TerminalState>,
+    id: String,
+) -> Result<(), String> {
+    // Get lane_id before removing terminal
+    let lane_id = {
+        let terminals = state
+            .terminals
+            .lock()
+            .map_err(|e| format!("Failed to lock terminal state: {}", e))?;
+        terminals.get(&id).and_then(|t| t.lane_id.clone())
+    };
+
+    // Stop hook monitoring if lane_id is available
+    if let Some(ref lid) = lane_id {
+        let hook_monitor = app.state::<crate::hook_monitor::HookMonitorState>();
+        hook_monitor.stop_monitoring(lid);
+    }
+
     let mut terminals = state
         .terminals
         .lock()
