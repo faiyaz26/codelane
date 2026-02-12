@@ -53,6 +53,9 @@ class AgentStatusManager {
       this.unregisterLane(laneId);
     }
 
+    if (import.meta.env.DEV) {
+      console.log(`[AgentStatus] Registered lane ${laneId} with agent type: ${agentType}`);
+    }
     const detector = createDetector(agentType);
 
     const entry: LaneEntry = {
@@ -107,6 +110,9 @@ class AgentStatusManager {
     const entry = this.lanes.get(laneId);
     if (!entry) return;
 
+    if (import.meta.env.DEV) {
+      console.log(`[AgentStatus] ${entry.agentType}: ${entry.status} → idle | process exited`);
+    }
     entry.detector.reset();
     entry.status = 'idle';
     entry.lastChange = Date.now();

@@ -157,7 +157,7 @@ describe('BaseDetector', () => {
     vi.advanceTimersByTime(4100);
     expect(detector.getStatus()).toBe('done');
 
-    // Short echo (< 20 bytes) should NOT transition to working
+    // Short echo (< 50 bytes for Claude) should NOT transition to working
     detector.feedChunk('a');
     expect(detector.getStatus()).toBe('done');
 
@@ -173,7 +173,7 @@ describe('BaseDetector', () => {
     vi.advanceTimersByTime(4100);
     expect(detector.getStatus()).toBe('done');
 
-    // Large chunk (>= 20 bytes) should transition immediately
+    // Large chunk (>= 50 bytes for Claude) should transition immediately
     detector.feedChunk('This is a long output from the agent that exceeds threshold');
     expect(detector.getStatus()).toBe('working');
   });

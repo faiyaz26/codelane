@@ -35,4 +35,6 @@ export interface DetectorPatterns {
   errorPatterns: RegExp[];
   /** Idle timeout in ms — when output stops for this long after 'working', transitions to 'done' */
   idleTimeoutMs: number;
+  /** Byte threshold to transition from 'done' → 'working'. Must exceed this to avoid keystroke echo flicker. Default: 200 */
+  doneToWorkingBytes?: number;
 }

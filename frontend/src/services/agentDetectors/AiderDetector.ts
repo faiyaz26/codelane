@@ -17,7 +17,7 @@ export class AiderDetector extends BaseDetector {
   override feedChunk(text: string): void {
     // BEL character is Aider's explicit "I need input" signal
     if (text.includes('\x07')) {
-      this.transitionTo('waiting_for_input');
+      this.transitionTo('waiting_for_input', 'BEL character detected (aider ready)');
       return;
     }
     super.feedChunk(text);

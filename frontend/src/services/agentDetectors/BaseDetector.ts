@@ -1,11 +1,19 @@
 import type { AgentDetector, DetectorPatterns } from './types';
 import type { AgentStatus } from '../../types/agentStatus';
 
+/** Strip ANSI escape sequences so pattern matching works on plain text */
+// Matches: CSI sequences (\x1b[...X), OSC sequences (\x1b]...ST), and simple escapes
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[()][0-2AB]|\x1b[>=<]/g;
+
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, '');
+}
+
 /** How long (ms) the status stays 'done' before reverting to 'idle' */
 const DONE_TO_IDLE_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Debounce for done → working: output must exceed this byte count to transition */
-const DONE_TO_WORKING_BYTES = 20;
+/** Default byte threshold for done → working transition */
+const DEFAULT_DONE_TO_WORKING_BYTES = 200;
 
 /** Debounce window (ms) for accumulating output before deciding done → working */
 const DONE_TO_WORKING_DEBOUNCE_MS = 300;
@@ -39,40 +47,47 @@ export abstract class BaseDetector implements AgentDetector {
     // Reset idle timer on any output
     this.clearIdleTimer();
 
+    // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
+    const plain = stripAnsi(text);
+
     // Check for waiting patterns (agent specifically needs user attention)
-    if (this.checkWaitingPatterns(text)) {
+    const matchedWaiting = this.findMatchingWaitingPattern(plain);
+    if (matchedWaiting) {
       this.clearDoneToWorkingTimer();
-      this.transitionTo('waiting_for_input');
+      this.transitionTo('waiting_for_input', `waiting pattern matched: ${matchedWaiting}`);
       return;
     }
 
     // Check for error patterns
-    if (this.checkErrorPatterns(text)) {
+    const matchedError = this.findMatchingErrorPattern(plain);
+    if (matchedError) {
       this.clearDoneToWorkingTimer();
-      this.transitionTo('error');
+      this.transitionTo('error', `error pattern matched: ${matchedError}`);
       return;
     }
 
     // When in 'done' state, debounce the transition to 'working'
     // to avoid flicker from echoed user keystrokes
     if (this.status === 'done') {
+      const threshold = this.patterns.doneToWorkingBytes ?? DEFAULT_DONE_TO_WORKING_BYTES;
       this.pendingOutputBytes += text.length;
 
       // If accumulated output exceeds threshold, transition immediately
-      if (this.pendingOutputBytes >= DONE_TO_WORKING_BYTES) {
+      if (this.pendingOutputBytes >= threshold) {
+        const bytes = this.pendingOutputBytes;
         this.clearDoneToWorkingTimer();
         this.clearDoneTimer();
-        this.pendingOutputBytes = 0;
-        this.transitionTo('working');
+        this.transitionTo('working', `sustained output after done (${bytes} bytes >= ${threshold} threshold)`);
       } else if (!this.doneToWorkingTimer) {
         // Start debounce timer
         this.doneToWorkingTimer = setTimeout(() => {
           this.doneToWorkingTimer = null;
           // After debounce, check if enough output accumulated
-          if (this.pendingOutputBytes >= DONE_TO_WORKING_BYTES) {
+          if (this.pendingOutputBytes >= threshold) {
+            const bytes = this.pendingOutputBytes;
             this.clearDoneTimer();
             this.pendingOutputBytes = 0;
-            this.transitionTo('working');
+            this.transitionTo('working', `sustained output after debounce (${bytes} bytes >= ${threshold} threshold)`);
           }
           this.pendingOutputBytes = 0;
         }, DONE_TO_WORKING_DEBOUNCE_MS);
@@ -85,7 +100,7 @@ export abstract class BaseDetector implements AgentDetector {
 
     // Agent is producing output → working
     if (this.status !== 'working') {
-      this.transitionTo('working');
+      this.transitionTo('working', `output received (${text.length} bytes)`);
     }
 
     // Start idle timer — when output stops, infer 'done'
@@ -112,26 +127,38 @@ export abstract class BaseDetector implements AgentDetector {
     this.onStatusChangeCb = null;
   }
 
-  protected transitionTo(newStatus: AgentStatus): void {
+  protected transitionTo(newStatus: AgentStatus, reason?: string): void {
     if (this.status !== newStatus) {
+      const prev = this.status;
       this.status = newStatus;
+      if (import.meta.env.DEV) {
+        console.log(
+          `[AgentStatus] ${this.agentType}: ${prev} → ${newStatus}${reason ? ` | ${reason}` : ''}`
+        );
+      }
       this.onStatusChangeCb?.(newStatus);
     }
   }
 
-  protected checkWaitingPatterns(text: string): boolean {
-    return this.patterns.waitingPatterns.some(p => p.test(text));
+  protected findMatchingWaitingPattern(text: string): string | null {
+    for (const p of this.patterns.waitingPatterns) {
+      if (p.test(text)) return p.source;
+    }
+    return null;
   }
 
-  protected checkErrorPatterns(text: string): boolean {
-    return this.patterns.errorPatterns.some(p => p.test(text));
+  protected findMatchingErrorPattern(text: string): string | null {
+    for (const p of this.patterns.errorPatterns) {
+      if (p.test(text)) return p.source;
+    }
+    return null;
   }
 
   private startIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
       if (this.status === 'working') {
-        this.transitionTo('done');
+        this.transitionTo('done', `idle timeout (${this.patterns.idleTimeoutMs}ms with no output)`);
         this.startDoneTimer();
       }
     }, this.patterns.idleTimeoutMs);
@@ -148,7 +175,7 @@ export abstract class BaseDetector implements AgentDetector {
     this.clearDoneTimer();
     this.doneTimer = setTimeout(() => {
       if (this.status === 'done') {
-        this.transitionTo('idle');
+        this.transitionTo('idle', `done timeout expired (${DONE_TO_IDLE_MS / 1000}s)`);
       }
     }, DONE_TO_IDLE_MS);
   }

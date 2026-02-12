@@ -82,8 +82,8 @@ describe('ClaudeDetector', () => {
     vi.advanceTimersByTime(4100); // → done
     expect(detector.getStatus()).toBe('done');
 
-    // Agent starts responding — large chunk
-    detector.feedChunk('Here is the code I generated for you...');
+    // Agent starts responding — large chunk (>= 50 bytes)
+    detector.feedChunk('Here is the code I generated for you. Let me walk you through it...');
     expect(detector.getStatus()).toBe('working');
   });
 
@@ -116,5 +116,32 @@ describe('ClaudeDetector', () => {
   it('detects [Y/n] prompt as waiting_for_input', () => {
     detector.feedChunk('Continue? [Y/n]');
     expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  // ANSI-wrapped prompts (realistic TUI output from Claude Code's Ink renderer)
+  it('detects "Do you want to proceed?" wrapped in ANSI escape sequences', () => {
+    // Simulates Ink TUI output with color codes
+    detector.feedChunk('\x1b[1m\x1b[36mDo you want to proceed?\x1b[39m\x1b[22m\r\n \x1b[36m❯\x1b[39m 1. Yes\r\n   2. No');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('detects "Would you like" with cursor positioning and color escapes', () => {
+    detector.feedChunk('\x1b[2K\x1b[1G\x1b[33mWould you like\x1b[39m me to apply these changes?');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('detects "(y)es/(n)o" prompt with ANSI styling', () => {
+    detector.feedChunk('\x1b[0m\x1b[1mApply changes?\x1b[22m \x1b[2m(y)es/(n)o\x1b[22m');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('detects "Should I" with mixed ANSI sequences', () => {
+    detector.feedChunk('\x1b[2J\x1b[H\x1b[1mShould I \x1b[36mcontinue\x1b[39m with the refactor?\x1b[0m');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('detects error pattern wrapped in ANSI escape sequences', () => {
+    detector.feedChunk('\x1b[31merror:\x1b[39m connection timed out');
+    expect(detector.getStatus()).toBe('error');
   });
 });
