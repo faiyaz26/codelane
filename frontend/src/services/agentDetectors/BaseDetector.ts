@@ -51,6 +51,11 @@ export abstract class BaseDetector implements AgentDetector {
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);
 
+    // Debug: Log received text to help diagnose pattern matching issues
+    if (import.meta.env.DEV && plain.trim().length > 0) {
+      console.log(`[AgentStatus] ${this.agentType} received text:`, plain.slice(0, 200));
+    }
+
     // Reset idle timer on any output
     this.clearIdleTimer();
 
