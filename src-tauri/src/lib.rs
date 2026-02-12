@@ -165,6 +165,21 @@ pub fn run() {
                 window.open_devtools();
             }
 
+            // Cleanup old hook events on startup (remove events older than 1 hour)
+            if let Err(e) = hook_monitor::HookMonitorState::cleanup_old_events(1) {
+                tracing::warn!("Failed to cleanup old hook events on startup: {}", e);
+            }
+
+            // Start periodic cleanup timer (every 30 minutes)
+            std::thread::spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(30 * 60));
+                    if let Err(e) = hook_monitor::HookMonitorState::cleanup_old_events(1) {
+                        tracing::warn!("Periodic hook event cleanup failed: {}", e);
+                    }
+                }
+            });
+
             tracing::info!("Codelane window initialized with menu");
             Ok(())
         })

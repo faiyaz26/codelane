@@ -223,6 +223,15 @@ pub fn lane_delete(lane_id: String, state: State<LaneState>) -> Result<(), Strin
     // Delete from disk
     state.delete_lane_file(&lane_id)?;
 
+    // Clean up hook events directory for this lane
+    if let Ok(lane_events_dir) = codelane_core::paths::lane_hook_events_dir(&lane_id) {
+        if lane_events_dir.exists() {
+            if let Err(e) = std::fs::remove_dir_all(&lane_events_dir) {
+                tracing::warn!("Failed to remove hook events directory for lane {}: {}", lane_id, e);
+            }
+        }
+    }
+
     Ok(())
 }
 

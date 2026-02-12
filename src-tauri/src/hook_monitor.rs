@@ -24,6 +24,67 @@ impl HookMonitorState {
         }
     }
 
+    /// Clean up old hook event files and empty lane directories
+    pub fn cleanup_old_events(max_age_hours: u64) -> Result<(), String> {
+        let hook_events_dir = codelane_core::paths::hook_events_dir()
+            .map_err(|e| format!("Failed to get hook events dir: {}", e))?;
+
+        if !hook_events_dir.exists() {
+            return Ok(());
+        }
+
+        let max_age = std::time::Duration::from_secs(max_age_hours * 3600);
+        let now = std::time::SystemTime::now();
+        let mut cleaned_count = 0;
+
+        // Iterate through lane directories
+        let entries = std::fs::read_dir(&hook_events_dir)
+            .map_err(|e| format!("Failed to read hook events directory: {}", e))?;
+
+        for entry in entries.flatten() {
+            let lane_dir = entry.path();
+            if !lane_dir.is_dir() {
+                continue;
+            }
+
+            // Clean up old event files in this lane directory
+            if let Ok(event_entries) = std::fs::read_dir(&lane_dir) {
+                for event_entry in event_entries.flatten() {
+                    let event_file = event_entry.path();
+                    if event_file.extension().and_then(|s| s.to_str()) != Some("json") {
+                        continue;
+                    }
+
+                    // Check file age
+                    if let Ok(metadata) = std::fs::metadata(&event_file) {
+                        if let Ok(modified) = metadata.modified() {
+                            if let Ok(age) = now.duration_since(modified) {
+                                if age > max_age {
+                                    if std::fs::remove_file(&event_file).is_ok() {
+                                        cleaned_count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Remove empty lane directories
+            if let Ok(entries) = std::fs::read_dir(&lane_dir) {
+                if entries.count() == 0 {
+                    let _ = std::fs::remove_dir(&lane_dir);
+                }
+            }
+        }
+
+        if cleaned_count > 0 {
+            tracing::info!("Cleaned up {} old hook event files", cleaned_count);
+        }
+
+        Ok(())
+    }
+
     /// Start monitoring hook events for a lane
     pub fn start_monitoring(&self, lane_id: String, app: AppHandle) -> Result<(), String> {
         // Get the lane's hook events directory
