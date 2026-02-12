@@ -1,6 +1,6 @@
 import { createContext, useContext, createSignal, onMount } from 'solid-js';
 
-export type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'codelane-dark' | 'light';
 
 interface ThemeContextType {
   theme: () => Theme;
@@ -15,28 +15,28 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider(props: ThemeProviderProps) {
-  // Default to dark theme (Zed-inspired)
-  const [theme, setTheme] = createSignal<Theme>('dark');
+  // Default to codelane-dark theme
+  const [theme, setTheme] = createSignal<Theme>('codelane-dark');
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setTheme((prev) => (prev === 'dark' ? 'codelane-dark' : prev === 'codelane-dark' ? 'light' : 'dark'));
   };
 
   // Apply theme class to document root
   const applyTheme = (newTheme: Theme) => {
     setTheme(newTheme);
-    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.remove('dark', 'codelane-dark', 'light');
     document.documentElement.classList.add(newTheme);
     localStorage.setItem('codelane-theme', newTheme);
   };
 
   // Load theme from localStorage on mount
   onMount(() => {
-    const savedTheme = localStorage.getItem('codelane-theme') as Theme | null;
-    if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
-      applyTheme(savedTheme);
+    const savedTheme = localStorage.getItem('codelane-theme') as string | null;
+    if (savedTheme && (savedTheme === 'dark' || savedTheme === 'codelane-dark' || savedTheme === 'light')) {
+      applyTheme(savedTheme as Theme);
     } else {
-      applyTheme('dark');
+      applyTheme('codelane-dark');
     }
   });
 
