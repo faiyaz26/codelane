@@ -77,15 +77,6 @@ pub fn lane_hook_events_dir(lane_id: &str) -> crate::Result<PathBuf> {
     Ok(dir)
 }
 
-/// Returns the directory where hook scripts are stored (environment-specific).
-///
-/// Example: `~/.codelane/dev/hook-scripts/`
-pub fn hook_scripts_dir() -> crate::Result<PathBuf> {
-    let dir = data_dir()?.join("hook-scripts");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
