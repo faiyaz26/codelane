@@ -54,12 +54,15 @@ pub fn worktree_path(project_name: &str, branch: &str) -> crate::Result<PathBuf>
     Ok(data_dir()?.join("worktrees").join(project_name).join(safe_branch))
 }
 
-/// Returns the hook events directory for the current environment.
+/// Returns the shared hook events directory (not environment-specific).
 ///
 /// Hook scripts write JSON event files here when agents need input.
-/// Example: `~/.codelane/dev/hook-events/`
+/// Shared between dev and prod since events are transient and deleted after processing.
+/// Example: `~/.codelane/hook-events/`
 pub fn hook_events_dir() -> crate::Result<PathBuf> {
-    let dir = data_dir()?.join("hook-events");
+    let home = std::env::var("HOME")
+        .map_err(|_| crate::Error::Config("Could not determine home directory".into()))?;
+    let dir = PathBuf::from(home).join(".codelane").join("hook-events");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
@@ -67,14 +70,14 @@ pub fn hook_events_dir() -> crate::Result<PathBuf> {
 /// Returns the hook events directory for a specific lane.
 ///
 /// Each lane has its own subdirectory for event isolation.
-/// Example: `~/.codelane/dev/hook-events/lane-123/`
+/// Example: `~/.codelane/hook-events/lane-123/`
 pub fn lane_hook_events_dir(lane_id: &str) -> crate::Result<PathBuf> {
     let dir = hook_events_dir()?.join(lane_id);
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
-/// Returns the directory where hook scripts are stored.
+/// Returns the directory where hook scripts are stored (environment-specific).
 ///
 /// Example: `~/.codelane/dev/hook-scripts/`
 pub fn hook_scripts_dir() -> crate::Result<PathBuf> {
