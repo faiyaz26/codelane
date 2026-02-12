@@ -30,7 +30,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_sql::Builder::default().build());  // SQLite database
+        .plugin(tauri_plugin_sql::Builder::default().build())  // SQLite database
+        .plugin(tauri_plugin_notification::init());
 
     // Add updater plugin on desktop platforms
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

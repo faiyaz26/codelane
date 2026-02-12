@@ -14,6 +14,7 @@ import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
 import { tabManager } from './services/TabManager';
 import { resourceManager } from './services/ResourceManager';
+import { agentNotificationService } from './services/AgentNotificationService';
 import codelaneLogoWhite from './assets/codelane-logo-white.png';
 
 function App() {
@@ -127,6 +128,14 @@ function App() {
     // Cleanup resource monitoring on unmount
     onCleanup(() => {
       resourceManager.stop();
+    });
+  });
+
+  // Start agent notification service
+  onMount(async () => {
+    await agentNotificationService.start();
+    onCleanup(() => {
+      agentNotificationService.stop();
     });
   });
 

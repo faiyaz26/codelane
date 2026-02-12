@@ -2,7 +2,7 @@
  * Agent type definitions for CLI agents
  */
 
-export type AgentType = 'claude' | 'cursor' | 'aider' | 'shell';
+export type AgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | 'gemini' | 'shell';
 
 /**
  * Configuration for a CLI agent
@@ -68,6 +68,39 @@ export const aiderPreset: AgentConfig = {
 };
 
 /**
+ * OpenCode preset
+ */
+export const openCodePreset: AgentConfig = {
+  agentType: 'opencode',
+  command: 'opencode',
+  args: [],
+  env: {},
+  useLaneCwd: true,
+};
+
+/**
+ * Codex preset
+ */
+export const codexPreset: AgentConfig = {
+  agentType: 'codex',
+  command: 'codex',
+  args: [],
+  env: {},
+  useLaneCwd: true,
+};
+
+/**
+ * Gemini preset
+ */
+export const geminiPreset: AgentConfig = {
+  agentType: 'gemini',
+  command: 'gemini',
+  args: [],
+  env: {},
+  useLaneCwd: true,
+};
+
+/**
  * Default agent settings
  */
 export const defaultAgentSettings: AgentSettings = {
@@ -77,6 +110,9 @@ export const defaultAgentSettings: AgentSettings = {
     claude: claudePreset,
     cursor: cursorPreset,
     aider: aiderPreset,
+    opencode: openCodePreset,
+    codex: codexPreset,
+    gemini: geminiPreset,
   },
 };
 

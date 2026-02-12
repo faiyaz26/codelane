@@ -1,9 +1,16 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [solid()],
+
+  // Vitest configuration
+  test: {
+    environment: "node",
+    globals: true,
+  },
 
   // Vite options tailored for Tauri development
   clearScreen: false,

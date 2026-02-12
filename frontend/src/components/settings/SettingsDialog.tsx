@@ -9,6 +9,7 @@ import type { AgentSettings } from '../../types/agent';
 // Import settings page components
 import { GeneralSettings } from './GeneralSettings';
 import { AgentsSettings } from './AgentsSettings';
+import { NotificationSettings } from './NotificationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
@@ -157,6 +158,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       onSettingsChange={setSettings}
                       onValidationChange={setIsAgentValid}
                     />
+                  </Show>
+
+                  {/* Notifications Tab */}
+                  <Show when={activeTab() === 'notifications'}>
+                    <NotificationSettings />
                   </Show>
 
                   {/* Appearance Tab */}

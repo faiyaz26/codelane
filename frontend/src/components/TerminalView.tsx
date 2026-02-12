@@ -1,4 +1,4 @@
-import { onCleanup, onMount, createEffect } from 'solid-js';
+import { onCleanup, onMount, createEffect, createSignal, Show } from 'solid-js';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import { spawn, type PtyHandle } from '../services/PortablePty';
@@ -6,6 +6,8 @@ import { getTerminalTheme } from '../theme';
 import { themeManager } from '../services/ThemeManager';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
 import { createTerminal, createFitAddon, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
+import { agentStatusManager } from '../services/AgentStatusManager';
+import type { DetectableAgentType } from '../types/agentStatus';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
@@ -22,6 +24,9 @@ export function TerminalView(props: TerminalViewProps) {
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
   let pty: PtyHandle | undefined;
+
+  const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
+  let isAgentLane = false;
 
   // Watch for theme changes and update terminal
   createEffect(() => {
@@ -50,6 +55,7 @@ export function TerminalView(props: TerminalViewProps) {
     try {
       let spawnSuccess = false;
       const useAgent = props.useAgent !== false; // Default to true
+      let agentConfig: Awaited<ReturnType<typeof getLaneAgentConfig>> | null = null;
 
       // Base environment
       const baseEnv: Record<string, string> = {
@@ -61,7 +67,7 @@ export function TerminalView(props: TerminalViewProps) {
 
       // Load agent config only if useAgent is true
       if (useAgent) {
-        const agentConfig = await getLaneAgentConfig(props.laneId);
+        agentConfig = await getLaneAgentConfig(props.laneId);
 
         // Merge agent env with terminal env
         const env = {
@@ -111,6 +117,28 @@ export function TerminalView(props: TerminalViewProps) {
         });
       }
 
+      // Track resolved agent type for status detection
+      const resolvedAgentType: DetectableAgentType = (spawnSuccess && useAgent)
+        ? (agentConfig?.agentType || 'shell') as DetectableAgentType
+        : 'shell';
+      agentStatusManager.registerLane(props.laneId, resolvedAgentType);
+      isAgentLane = resolvedAgentType !== 'shell';
+
+      // Show notification prompt when agent first starts working
+      if (isAgentLane) {
+        const unsub = agentStatusManager.onStatusChange((change) => {
+          if (
+            change.laneId === props.laneId &&
+            change.newStatus === 'working' &&
+            agentStatusManager.shouldShowNotificationPrompt()
+          ) {
+            setShowNotificationPrompt(true);
+            unsub();
+          }
+        });
+        onCleanup(unsub);
+      }
+
       // Attach custom key handlers (Shift+Enter, etc.)
       attachKeyHandlers(terminal, (data) => pty!.write(data));
 
@@ -120,6 +148,8 @@ export function TerminalView(props: TerminalViewProps) {
         if (terminal) {
           terminal.write(data);
         }
+        // Feed output to agent status detector
+        agentStatusManager.feedOutput(props.laneId, data);
       });
 
       // Terminal input → PTY
@@ -135,6 +165,7 @@ export function TerminalView(props: TerminalViewProps) {
           terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
         }
         props.onTerminalExit?.();
+        agentStatusManager.markExited(props.laneId);
       });
 
       // Call ready callback with terminal ID
@@ -192,6 +223,7 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Cleanup on unmount
   onCleanup(async () => {
+    agentStatusManager.unregisterLane(props.laneId);
     if (pty) {
       try {
         await pty.kill();
@@ -205,10 +237,64 @@ export function TerminalView(props: TerminalViewProps) {
     }
   });
 
+  const handleEnableNotification = (type: 'done' | 'input' | 'both') => {
+    if (type === 'done' || type === 'both') {
+      agentStatusManager.updateNotificationSettings({ notifyOnDone: true });
+    }
+    if (type === 'input' || type === 'both') {
+      agentStatusManager.updateNotificationSettings({ notifyOnWaitingForInput: true });
+    }
+    setShowNotificationPrompt(false);
+  };
+
+  const handleDismissPrompt = () => {
+    agentStatusManager.dismissNotificationPrompt();
+    setShowNotificationPrompt(false);
+  };
+
   return (
-    <div
-      ref={containerRef}
-      class="w-full h-full bg-zed-bg-panel"
-    />
+    <div class="relative w-full h-full">
+      <div
+        ref={containerRef}
+        class="w-full h-full bg-zed-bg-panel"
+      />
+      <Show when={showNotificationPrompt()}>
+        <div class="absolute bottom-3 left-3 right-3 flex items-center gap-3 px-4 py-3 rounded-lg bg-zed-bg-overlay border border-zed-border-default shadow-lg animate-slide-up">
+          <svg class="w-4 h-4 text-zed-accent-blue shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span class="text-xs text-zed-text-secondary flex-1">Get notified when the agent finishes or needs your input?</span>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors"
+              onClick={() => handleEnableNotification('done')}
+            >
+              When finished
+            </button>
+            <button
+              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors"
+              onClick={() => handleEnableNotification('input')}
+            >
+              When needs input
+            </button>
+            <button
+              class="px-2.5 py-1 text-xs font-medium text-white bg-zed-accent-blue hover:bg-zed-accent-blue-hover rounded transition-colors"
+              onClick={() => handleEnableNotification('both')}
+            >
+              Both
+            </button>
+            <button
+              class="p-1 text-zed-text-tertiary hover:text-zed-text-primary transition-colors"
+              onClick={handleDismissPrompt}
+              title="Don't ask again"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </Show>
+    </div>
   );
 }

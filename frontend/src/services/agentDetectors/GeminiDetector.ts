@@ -1,0 +1,26 @@
+import { BaseDetector } from './BaseDetector';
+import type { DetectorPatterns } from './types';
+
+/**
+ * Detector for Gemini CLI.
+ * Gemini uses cursor shape escape sequences and vim-style mode footers.
+ */
+export class GeminiDetector extends BaseDetector {
+  readonly agentType = 'gemini' as const;
+
+  protected readonly patterns: DetectorPatterns = {
+    waitingPatterns: [/\[NORMAL\]/],
+    errorPatterns: [/error:/i, /failed/i],
+    idleTimeoutMs: 3000,
+  };
+
+  override feedChunk(text: string): void {
+    // Cursor shape sequences (\x1b[1 q = blinking block, \x1b[2 q = steady block)
+    // or [NORMAL]/[INSERT] footer indicate Gemini is waiting for input
+    if (/\x1b\[[12] q/.test(text) || /\[(NORMAL|INSERT)\]/.test(text)) {
+      this.transitionTo('waiting_for_input');
+      return;
+    }
+    super.feedChunk(text);
+  }
+}

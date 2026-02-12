@@ -197,6 +197,12 @@ pub enum AgentType {
     Cursor,
     /// Aider CLI
     Aider,
+    /// OpenCode CLI
+    OpenCode,
+    /// Codex CLI
+    Codex,
+    /// Gemini CLI
+    Gemini,
     /// Traditional shell (backward compatibility)
     Shell,
 }
@@ -325,6 +331,39 @@ impl AgentConfig {
             use_lane_cwd: true,
         }
     }
+
+    /// OpenCode preset
+    pub fn opencode_preset() -> Self {
+        Self {
+            agent_type: AgentType::OpenCode,
+            command: "opencode".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// Codex preset
+    pub fn codex_preset() -> Self {
+        Self {
+            agent_type: AgentType::Codex,
+            command: "codex".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// Gemini preset
+    pub fn gemini_preset() -> Self {
+        Self {
+            agent_type: AgentType::Gemini,
+            command: "gemini".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
 }
 
 /// Global agent settings
@@ -345,6 +384,9 @@ impl Default for AgentSettings {
         presets.insert("claude".to_string(), AgentConfig::claude_preset());
         presets.insert("cursor".to_string(), AgentConfig::cursor_preset());
         presets.insert("aider".to_string(), AgentConfig::aider_preset());
+        presets.insert("opencode".to_string(), AgentConfig::opencode_preset());
+        presets.insert("codex".to_string(), AgentConfig::codex_preset());
+        presets.insert("gemini".to_string(), AgentConfig::gemini_preset());
 
         Self {
             default_agent: AgentConfig::shell_default(),

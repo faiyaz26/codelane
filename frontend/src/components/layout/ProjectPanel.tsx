@@ -2,6 +2,7 @@ import { createSignal, createMemo, For, Show, onMount } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
 import { Dialog, Button, TextField } from '../ui';
 import { updateLane, deleteLane } from '../../lib/lane-api';
+import { agentStatusManager } from '../../services/AgentStatusManager';
 import type { Lane } from '../../types/lane';
 
 interface GitBranchInfo {
@@ -258,6 +259,28 @@ export function ProjectPanel(props: ProjectPanelProps) {
                             }`}
                             onClick={() => props.onLaneSelect(lane.id)}
                           >
+                            {/* Agent status indicator */}
+                            {(() => {
+                              const status = agentStatusManager.getStatus(lane.id);
+                              if (!status || status === 'idle') return null;
+
+                              const config: Record<string, { color: string; pulse: boolean; label: string }> = {
+                                working: { color: 'bg-yellow-400', pulse: true, label: 'Working' },
+                                done: { color: 'bg-green-400', pulse: false, label: 'Done' },
+                                waiting_for_input: { color: 'bg-orange-400', pulse: true, label: 'Needs input' },
+                                error: { color: 'bg-red-400', pulse: false, label: 'Error' },
+                              };
+
+                              const c = config[status];
+                              if (!c) return null;
+
+                              return (
+                                <span
+                                  class={`w-2 h-2 rounded-full flex-shrink-0 ${c.color} ${c.pulse ? 'animate-pulse' : ''}`}
+                                  title={`Agent: ${c.label}`}
+                                />
+                              );
+                            })()}
                             {/* Lane icon - branch if has branch, terminal otherwise */}
                             <Show when={getLaneBranch(lane.id)} fallback={
                               <svg class={`w-3.5 h-3.5 flex-shrink-0 ${isActive() ? 'text-zed-accent-blue' : 'text-zed-text-tertiary'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
