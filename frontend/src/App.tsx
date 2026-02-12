@@ -5,9 +5,10 @@ import { MainLayout } from './components/layout';
 import { CreateLaneDialog } from './components/lanes';
 import { SettingsDialog } from './components/SettingsDialog';
 import { AboutDialog } from './components/AboutDialog';
+import { OnboardingWizard, type WizardData } from './components/onboarding';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
-import { getAgentSettings } from './lib/settings-api';
+import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
 import { initDatabase } from './lib/db';
 import { initPlatform } from './lib/platform';
 import type { Lane } from './types/lane';
@@ -15,12 +16,14 @@ import type { AgentSettings } from './types/agent';
 import { tabManager } from './services/TabManager';
 import { resourceManager } from './services/ResourceManager';
 import { agentNotificationService } from './services/AgentNotificationService';
+import { hookService } from './services/HookService';
 import codelaneLogoWhite from './assets/codelane-logo-white.png';
 
 function App() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [aboutOpen, setAboutOpen] = createSignal(false);
+  const [onboardingOpen, setOnboardingOpen] = createSignal(false);
   const [lanes, setLanes] = createSignal<Lane[]>([]);
   const [activeLaneId, setActiveLaneIdSignal] = createSignal<string | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
@@ -40,14 +43,32 @@ function App() {
     }
   });
 
+  // Check for first launch and show onboarding
+  onMount(() => {
+    const onboarded = localStorage.getItem('codelane:onboarding-completed');
+    if (!onboarded) {
+      // Show onboarding after a short delay to let the app initialize
+      setTimeout(() => {
+        setOnboardingOpen(true);
+      }, 500);
+    }
+  });
+
   // Listen for menu events from Tauri
   onMount(async () => {
     const { listen } = await import('@tauri-apps/api/event');
-    const unlisten = await listen('menu:about', () => {
+
+    const unlistenAbout = await listen('menu:about', () => {
       setAboutOpen(true);
     });
+
+    const unlistenOnboarding = await listen('menu:first-time-setup', () => {
+      setOnboardingOpen(true);
+    });
+
     onCleanup(() => {
-      unlisten();
+      unlistenAbout();
+      unlistenOnboarding();
     });
   });
 
@@ -249,6 +270,49 @@ function App() {
     }, 100);
   };
 
+  const handleOnboardingComplete = async (data: WizardData) => {
+    // Save agent configuration
+    if (data.agent) {
+      try {
+        await updateAgentSettings({
+          defaultAgent: data.agent,
+        });
+        setAgentSettings({ defaultAgent: data.agent });
+      } catch (err) {
+        console.error('Failed to save agent settings:', err);
+      }
+    }
+
+    // Install hooks if enabled
+    if (data.hooksEnabled && data.agent) {
+      try {
+        await hookService.installHooks(data.agent.agentType);
+      } catch (err) {
+        console.error('Failed to install hooks:', err);
+      }
+    }
+
+    // Save notification settings
+    const { agentStatusManager } = await import('./services/AgentStatusManager');
+    agentStatusManager.updateNotificationSettings({
+      notifyOnDone: data.notifications.onTaskComplete,
+      notifyOnWaitingForInput: data.notifications.onNeedsInput,
+      notifyOnError: data.notifications.onError,
+      onlyWhenUnfocused: data.notifications.onlyWhenUnfocused,
+    });
+
+    // Mark onboarding as complete
+    localStorage.setItem('codelane:onboarding-completed', 'completed');
+
+    // Close wizard
+    setOnboardingOpen(false);
+  };
+
+  const handleOnboardingSkip = () => {
+    localStorage.setItem('codelane:onboarding-completed', 'skipped');
+    setOnboardingOpen(false);
+  };
+
   return (
     <ThemeProvider>
       <Show
@@ -297,6 +361,13 @@ function App() {
       <AboutDialog
         open={aboutOpen()}
         onOpenChange={setAboutOpen}
+      />
+
+      {/* Onboarding Wizard */}
+      <OnboardingWizard
+        open={onboardingOpen()}
+        onComplete={handleOnboardingComplete}
+        onSkip={handleOnboardingSkip}
       />
 
       {/* Notification Toast */}

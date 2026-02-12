@@ -141,20 +141,49 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let app_menu = {
                 let submenu = Submenu::new(app, "Help", true)?;
-                let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
-                submenu.append(&about_item)?;
                 submenu
             };
 
+            // Create Help menu (always shown)
+            let help_menu = {
+                let submenu = Submenu::new(app, "Help", true)?;
+                let first_time_setup_item = MenuItem::with_id(app, "first-time-setup", "First-Time Setup", true, None::<&str>)?;
+                submenu.append(&first_time_setup_item)?;
+
+                // Add About to Help menu on non-macOS platforms
+                #[cfg(not(target_os = "macos"))]
+                {
+                    use tauri::menu::PredefinedMenuItem;
+                    let separator = PredefinedMenuItem::separator(app)?;
+                    submenu.append(&separator)?;
+                    let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
+                    submenu.append(&about_item)?;
+                }
+
+                submenu
+            };
+
+            #[cfg(target_os = "macos")]
             menu.append(&app_menu)?;
+            menu.append(&help_menu)?;
+
+            #[cfg(not(target_os = "macos"))]
+            menu.append(&help_menu)?;
+
             app.set_menu(menu)?;
 
             // Handle menu events
             let app_handle = app.handle().clone();
             app.on_menu_event(move |_app, event| {
-                if event.id() == "about" {
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.emit("menu:about", ());
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    match event.id().as_ref() {
+                        "about" => {
+                            let _ = window.emit("menu:about", ());
+                        }
+                        "first-time-setup" => {
+                            let _ = window.emit("menu:first-time-setup", ());
+                        }
+                        _ => {}
                     }
                 }
             });
