@@ -2,6 +2,8 @@
 
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import codelaneLogoWhite from '../assets/codelane-logo-white.png';
+import codelaneLogoDark from '../assets/codelane-logo-dark.png';
+import { themeManager } from '../services/ThemeManager';
 
 interface AboutDialogProps {
   open: boolean;
@@ -9,6 +11,9 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog(props: AboutDialogProps) {
+  const currentTheme = themeManager.getTheme();
+  const logoSrc = () => currentTheme() === 'light' ? codelaneLogoDark : codelaneLogoWhite;
+
   return (
     <KobalteDialog open={props.open} onOpenChange={props.onOpenChange}>
       <KobalteDialog.Portal>
@@ -19,7 +24,7 @@ export function AboutDialog(props: AboutDialogProps) {
             <div class="p-8 text-center">
               {/* Logo */}
               <div class="mb-6 flex justify-center">
-                <img src={codelaneLogoWhite} alt="Codelane" class="w-16 h-16 object-contain" />
+                <img src={logoSrc()} alt="Codelane" class="w-16 h-16 object-contain" />
               </div>
 
               {/* App Name */}

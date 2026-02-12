@@ -1,5 +1,7 @@
 import { For } from 'solid-js';
 import codelaneLogoWhite from '../../assets/codelane-logo-white.png';
+import codelaneLogoDark from '../../assets/codelane-logo-dark.png';
+import { themeManager } from '../../services/ThemeManager';
 
 export enum ActivityView {
   Explorer = 'explorer',
@@ -115,6 +117,9 @@ function ActivityIcon(props: { icon: string; class?: string }) {
 }
 
 export function ActivityBar(props: ActivityBarProps) {
+  const currentTheme = themeManager.getTheme();
+  const logoSrc = () => currentTheme() === 'light' ? codelaneLogoDark : codelaneLogoWhite;
+
   return (
     <div class="w-14 bg-zed-bg-panel border-l border-zed-border-subtle flex flex-col">
       {/* Top Activity Icons */}
@@ -176,7 +181,7 @@ export function ActivityBar(props: ActivityBarProps) {
           onClick={props.onAboutOpen}
           title="About Codelane"
         >
-          <img src={codelaneLogoWhite} alt="Codelane" class="w-7 h-7 object-contain opacity-60 hover:opacity-100 transition-opacity" />
+          <img src={logoSrc()} alt="Codelane" class="w-7 h-7 object-contain opacity-60 hover:opacity-100 transition-opacity" />
         </button>
       </div>
     </div>
