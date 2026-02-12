@@ -51,18 +51,6 @@ export abstract class BaseDetector implements AgentDetector {
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);
 
-    // Debug: Log received text to help diagnose pattern matching issues
-    if (import.meta.env.DEV && plain.trim().length > 0) {
-      // Show first 500 chars and indicate if there's more
-      const preview = plain.length > 500 ? plain.slice(0, 500) + '...' : plain;
-      console.log(`[AgentStatus] ${this.agentType} received text (${plain.length} bytes):`, preview);
-
-      // If text contains "Do you want" or "proceed", log it prominently
-      if (/do you want|proceed|yes.*no/i.test(plain)) {
-        console.warn(`[AgentStatus] PROMPT DETECTED in text:`, preview);
-      }
-    }
-
     // Reset idle timer on any output
     this.clearIdleTimer();
 
@@ -202,9 +190,6 @@ export abstract class BaseDetector implements AgentDetector {
 
   protected findMatchingWaitingPattern(text: string): string | null {
     for (const p of this.patterns.waitingPatterns) {
-      if (import.meta.env.DEV) {
-        console.log(`[AgentStatus] Testing waiting pattern ${p.source} against text...`, p.test(text));
-      }
       if (p.test(text)) return p.source;
     }
     return null;
