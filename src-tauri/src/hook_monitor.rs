@@ -149,6 +149,11 @@ fn handle_file_event(event: Event, app: &AppHandle) {
             continue;
         }
 
+        // Check if file still exists (might have been deleted by another event)
+        if !path.exists() {
+            continue;
+        }
+
         // Read and parse event file
         match std::fs::read_to_string(&path) {
             Ok(content) => match serde_json::from_str::<HookEvent>(&content) {
@@ -167,7 +172,10 @@ fn handle_file_event(event: Event, app: &AppHandle) {
 
                     // Clean up processed event file
                     if let Err(e) = std::fs::remove_file(&path) {
-                        tracing::warn!("Failed to remove processed event file {:?}: {}", path, e);
+                        // Only warn if not already deleted (race condition is OK)
+                        if e.kind() != std::io::ErrorKind::NotFound {
+                            tracing::warn!("Failed to remove processed event file {:?}: {}", path, e);
+                        }
                     }
                 }
                 Err(e) => {
@@ -177,7 +185,10 @@ fn handle_file_event(event: Event, app: &AppHandle) {
                 }
             },
             Err(e) => {
-                tracing::error!("Failed to read hook event file {:?}: {}", path, e);
+                // Only log error if not "file not found" (race condition)
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    tracing::error!("Failed to read hook event file {:?}: {}", path, e);
+                }
             }
         }
     }
