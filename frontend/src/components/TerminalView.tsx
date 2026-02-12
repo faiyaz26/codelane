@@ -170,30 +170,6 @@ export function TerminalView(props: TerminalViewProps) {
         agentStatusManager.markExited(props.laneId);
       });
 
-      // Periodic buffer sampling for prompt detection (4s interval)
-      // This catches prompts that might be missed by chunk-based detection
-      const bufferCheckInterval = setInterval(() => {
-        if (!terminal) return;
-
-        // Read last 20 lines from terminal buffer
-        const buffer = terminal.buffer.active;
-        const lines: string[] = [];
-        const startLine = Math.max(0, buffer.baseY + buffer.cursorY - 20);
-        const endLine = buffer.baseY + buffer.cursorY;
-
-        for (let i = startLine; i <= endLine; i++) {
-          const line = buffer.getLine(i);
-          if (line) {
-            lines.push(line.translateToString(true)); // trimRight = true
-          }
-        }
-
-        const snapshot = lines.join('\n');
-        agentStatusManager.feedBufferSnapshot(props.laneId, snapshot);
-      }, 4000);
-
-      onCleanup(() => clearInterval(bufferCheckInterval));
-
       // Call ready callback with terminal ID
       props.onTerminalReady?.(pty!.id);
 
