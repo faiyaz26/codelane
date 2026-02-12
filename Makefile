@@ -19,6 +19,12 @@ help:
 	@echo "  make fmt          - Format code with rustfmt"
 	@echo "  make lint         - Run clippy lints"
 	@echo ""
+	@echo "Performance:"
+	@echo "  make bench        - Run all benchmarks"
+	@echo "  make bench-quick  - Run quick benchmarks (smaller sample size)"
+	@echo "  make profile      - Profile and analyze bundle size"
+	@echo "  make perf-report  - Generate complete performance report"
+	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make install      - Install required tools"
@@ -62,6 +68,40 @@ install:
 	@echo "Installing dependencies..."
 	pnpm install
 	@echo "Installation complete!"
+
+# Performance & Benchmarking
+bench:
+	@echo "Running comprehensive benchmarks..."
+	cargo bench --package codelane-benchmarks
+	@echo "\nBenchmark results available in: target/criterion/report/index.html"
+
+bench-quick:
+	@echo "Running quick benchmarks..."
+	cargo bench --package codelane-benchmarks -- --sample-size 10
+
+bench-terminal:
+	cargo bench --package codelane-benchmarks --bench terminal_benchmarks
+
+bench-git:
+	cargo bench --package codelane-benchmarks --bench git_benchmarks
+
+bench-ipc:
+	cargo bench --package codelane-benchmarks --bench ipc_benchmarks
+
+bench-file:
+	cargo bench --package codelane-benchmarks --bench file_operations
+
+profile:
+	@echo "Building and analyzing bundle size..."
+	cd frontend && pnpm build
+	@echo "\nBundle analysis:"
+	@du -sh frontend/dist/*
+	@echo "\nDetailed size breakdown:"
+	@find frontend/dist -type f -exec ls -lh {} \; | awk '{print $$5 "\t" $$9}' | sort -hr
+
+perf-report:
+	@echo "Generating comprehensive performance report..."
+	@./scripts/perf-report.sh
 
 # Platform-specific builds
 build-macos:

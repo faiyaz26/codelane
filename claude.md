@@ -120,6 +120,25 @@ Build a fast, efficient Agentic Development Environment that:
 4. **Async Tauri commands** - Don't block the UI thread
 5. **Batch updates** - Use createEffect for batched terminal updates
 
+### Bundle Size Monitoring
+
+**Current state (as of 2026-02-12):**
+- Main app: **85 KB gzipped** ✅ (target: <200 KB)
+- Initial load: **361 KB gzipped** ✅ (target: <500 KB)
+- Shiki (lazy): 2 MB gzipped ⚠️ (optimization pending)
+
+**Commands:**
+```bash
+make profile      # Check bundle size
+make bench        # Run backend benchmarks
+make perf-report  # Full performance report
+```
+
+**Docs:**
+- [BUNDLE_OPTIMIZATION.md](BUNDLE_OPTIMIZATION.md) - Shiki optimization plan
+- [PERFORMANCE_ANALYSIS.md](PERFORMANCE_ANALYSIS.md) - Detailed analysis
+- [PERFORMANCE_QUICK_START.md](PERFORMANCE_QUICK_START.md) - Quick reference
+
 ## Development Workflow
 
 ### Starting Development

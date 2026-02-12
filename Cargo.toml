@@ -5,6 +5,7 @@ members = [
     "crates/codelane-terminal",
     "crates/codelane-git",
     "crates/codelane-lsp",
+    "crates/codelane-benchmarks",
     "src-tauri",
 ]
 
