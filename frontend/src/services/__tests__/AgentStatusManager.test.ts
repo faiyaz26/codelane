@@ -139,6 +139,19 @@ describe('AgentStatusManager', () => {
     expect(agentStatusManager.getStatus('lane-1')).toBe('done');
   });
 
+  it('feedUserInput transitions from waiting_for_input to working', () => {
+    agentStatusManager.registerLane('lane-1', 'claude');
+    agentStatusManager.feedOutput('lane-1', new TextEncoder().encode('Do you want to proceed?'));
+    expect(agentStatusManager.getStatus('lane-1')).toBe('waiting_for_input');
+
+    agentStatusManager.feedUserInput('lane-1', 'y');
+    expect(agentStatusManager.getStatus('lane-1')).toBe('working');
+  });
+
+  it('feedUserInput is no-op for unregistered lane', () => {
+    agentStatusManager.feedUserInput('nonexistent', 'y');
+  });
+
   it('getStatusStore returns the reactive store', () => {
     const store = agentStatusManager.getStatusStore();
     agentStatusManager.registerLane('lane-1', 'claude');

@@ -104,6 +104,17 @@ class AgentStatusManager {
   }
 
   /**
+   * Signal that the user typed input into the terminal for a lane.
+   * This transitions the detector out of 'waiting_for_input' state.
+   */
+  feedUserInput(laneId: string, data: string): void {
+    const entry = this.lanes.get(laneId);
+    if (!entry) return;
+
+    entry.detector.feedUserInput(data);
+  }
+
+  /**
    * Mark a lane's process as exited. Resets detector and sets status to idle.
    */
   markExited(laneId: string): void {

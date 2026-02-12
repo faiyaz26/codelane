@@ -27,6 +27,7 @@ const DONE_TO_WORKING_DEBOUNCE_MS = 300;
  *   working → error (error pattern matched)
  *   done → idle (after 5 minutes)
  *   done → working (sustained output, not just keystroke echoes)
+ *   waiting_for_input → working (user provided input via feedUserInput)
  */
 export abstract class BaseDetector implements AgentDetector {
   abstract readonly agentType: string;
@@ -66,8 +67,15 @@ export abstract class BaseDetector implements AgentDetector {
       return;
     }
 
-    // When in 'done' state, debounce the transition to 'working'
-    // to avoid flicker from echoed user keystrokes
+    // waiting_for_input is fully sticky — ignore all PTY output.
+    // Only feedUserInput() can transition out of this state.
+    if (this.status === 'waiting_for_input') {
+      return;
+    }
+
+    // When in 'done' state, debounce the transition to 'working'.
+    // Avoids flicker from echoed user keystrokes — only transition
+    // when sustained output indicates the agent is actually working again.
     if (this.status === 'done') {
       const threshold = this.patterns.doneToWorkingBytes ?? DEFAULT_DONE_TO_WORKING_BYTES;
       this.pendingOutputBytes += text.length;
@@ -87,7 +95,7 @@ export abstract class BaseDetector implements AgentDetector {
             const bytes = this.pendingOutputBytes;
             this.clearDoneTimer();
             this.pendingOutputBytes = 0;
-            this.transitionTo('working', `sustained output after debounce (${bytes} bytes >= ${threshold} threshold)`);
+            this.transitionTo('working', `sustained output after debounce from done (${bytes} bytes >= ${threshold} threshold)`);
           }
           this.pendingOutputBytes = 0;
         }, DONE_TO_WORKING_DEBOUNCE_MS);
@@ -105,6 +113,13 @@ export abstract class BaseDetector implements AgentDetector {
 
     // Start idle timer — when output stops, infer 'done'
     this.startIdleTimer();
+  }
+
+  feedUserInput(_text: string): void {
+    // User typed into the terminal — if we're waiting for input, transition to working
+    if (this.status === 'waiting_for_input') {
+      this.transitionTo('working', 'user provided input');
+    }
   }
 
   getStatus(): AgentStatus {

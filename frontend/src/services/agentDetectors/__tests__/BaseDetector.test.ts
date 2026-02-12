@@ -157,7 +157,7 @@ describe('BaseDetector', () => {
     vi.advanceTimersByTime(4100);
     expect(detector.getStatus()).toBe('done');
 
-    // Short echo (< 50 bytes for Claude) should NOT transition to working
+    // Short echo (< 100 bytes for Claude) should NOT transition to working
     detector.feedChunk('a');
     expect(detector.getStatus()).toBe('done');
 
@@ -173,8 +173,41 @@ describe('BaseDetector', () => {
     vi.advanceTimersByTime(4100);
     expect(detector.getStatus()).toBe('done');
 
-    // Large chunk (>= 50 bytes for Claude) should transition immediately
-    detector.feedChunk('This is a long output from the agent that exceeds threshold');
+    // Large chunk (>= 200 bytes default) should transition immediately
+    detector.feedChunk('This is a long output from the agent that clearly exceeds the byte threshold we configured for the Claude detector. It needs to be over two hundred bytes to trigger an immediate transition from done back to working state.');
     expect(detector.getStatus()).toBe('working');
+  });
+
+  // waiting_for_input is fully sticky — only feedUserInput transitions out
+  it('waiting_for_input ignores all PTY output', () => {
+    detector.feedChunk('Do you want to proceed?');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Even large output should not transition out
+    detector.feedChunk('x'.repeat(500));
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Time passing should not change it either
+    vi.advanceTimersByTime(10000);
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('feedUserInput transitions from waiting_for_input to working', () => {
+    detector.feedChunk('Do you want to proceed?');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('working');
+    expect(statusChanges).toEqual(['waiting_for_input', 'working']);
+  });
+
+  it('feedUserInput is no-op when not in waiting_for_input state', () => {
+    detector.feedChunk('some output');
+    expect(detector.getStatus()).toBe('working');
+
+    detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('working');
+    // No additional transition
+    expect(statusChanges).toEqual(['working']);
   });
 });

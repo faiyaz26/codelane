@@ -9,8 +9,11 @@ export interface AgentDetector {
   /** Unique agent type identifier */
   readonly agentType: string;
 
-  /** Feed a chunk of decoded text output to the detector */
+  /** Feed a chunk of decoded text output (PTY → terminal) to the detector */
   feedChunk(text: string): void;
+
+  /** Signal that the user typed input into the terminal */
+  feedUserInput(text: string): void;
 
   /** Get the current detected status */
   getStatus(): AgentStatus;

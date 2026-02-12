@@ -256,6 +256,10 @@ export function ProjectPanel(props: ProjectPanelProps) {
                               isActive()
                                 ? 'bg-zed-bg-active text-zed-text-primary'
                                 : 'hover:bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary'
+                            } ${
+                              agentStatusManager.getStatus(lane.id) === 'waiting_for_input'
+                                ? 'border-l-2 border-orange-400 pl-[26px]'
+                                : ''
                             }`}
                             onClick={() => props.onLaneSelect(lane.id)}
                           >

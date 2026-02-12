@@ -82,8 +82,8 @@ describe('ClaudeDetector', () => {
     vi.advanceTimersByTime(4100); // → done
     expect(detector.getStatus()).toBe('done');
 
-    // Agent starts responding — large chunk (>= 50 bytes)
-    detector.feedChunk('Here is the code I generated for you. Let me walk you through it...');
+    // Agent starts responding — large chunk (>= 200 bytes default)
+    detector.feedChunk('Here is the code I generated for you. Let me walk you through the changes I made to each of the files in your project. First, I updated the main configuration file to include the new settings, then I modified the component to handle the new props correctly...');
     expect(detector.getStatus()).toBe('working');
   });
 
@@ -143,5 +143,38 @@ describe('ClaudeDetector', () => {
   it('detects error pattern wrapped in ANSI escape sequences', () => {
     detector.feedChunk('\x1b[31merror:\x1b[39m connection timed out');
     expect(detector.getStatus()).toBe('error');
+  });
+
+  // waiting_for_input stays sticky during TUI redraws
+  it('stays waiting_for_input when TUI redraws menu (small output)', () => {
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // TUI renders menu options, cursor animations — small output chunks
+    detector.feedChunk('\x1b[36m❯\x1b[39m 1. Yes');
+    detector.feedChunk('\x1b[2K\x1b[1G  2. No');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Even after debounce window
+    vi.advanceTimersByTime(400);
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('stays waiting_for_input even on large PTY output (fully sticky)', () => {
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // Large PTY output (TUI redraws, menus, etc.) should NOT transition to working
+    detector.feedChunk('Great, I will now apply the changes to the following files in your project. Let me start with the main configuration file and then move on to the component updates. Here is what I am changing in each file and why these changes are necessary...');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+  });
+
+  it('transitions from waiting_for_input to working when user provides input', () => {
+    detector.feedChunk('Do you want to proceed? (y/n)');
+    expect(detector.getStatus()).toBe('waiting_for_input');
+
+    // User types into the terminal
+    detector.feedUserInput('y');
+    expect(detector.getStatus()).toBe('working');
   });
 });

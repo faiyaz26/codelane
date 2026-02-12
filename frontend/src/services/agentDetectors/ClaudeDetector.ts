@@ -25,6 +25,5 @@ export class ClaudeDetector extends BaseDetector {
     ],
     errorPatterns: [/error:/i, /RATE_LIMIT/i, /APIError/i],
     idleTimeoutMs: 4000,
-    doneToWorkingBytes: 50,
   };
 }

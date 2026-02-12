@@ -157,6 +157,8 @@ export function TerminalView(props: TerminalViewProps) {
         if (pty) {
           pty.write(data);
         }
+        // Signal user input to agent status detector (transitions out of waiting_for_input)
+        agentStatusManager.feedUserInput(props.laneId, data);
       });
 
       // Handle PTY exit
