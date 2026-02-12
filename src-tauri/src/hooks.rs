@@ -48,7 +48,7 @@ EVENT_TYPE="${{1:-permission_prompt}}"
 MESSAGE="${{2:-}}"
 
 # Write JSON event
-cat > "$EVENT_FILE" <<'EOF'
+cat > "$EVENT_FILE" <<EOF
 {{
   "laneId": "$LANE_ID",
   "agentType": "claude",
@@ -82,7 +82,7 @@ TIMESTAMP=$(date +%s%N)
 EVENT_FILE="$EVENT_DIR/event-$TIMESTAMP.json"
 
 # Write JSON event
-cat > "$EVENT_FILE" <<'EOF'
+cat > "$EVENT_FILE" <<EOF
 {{
   "laneId": "$LANE_ID",
   "agentType": "codex",
@@ -116,7 +116,7 @@ TIMESTAMP=$(date +%s%N)
 EVENT_FILE="$EVENT_DIR/event-$TIMESTAMP.json"
 
 # Write JSON event
-cat > "$EVENT_FILE" <<'EOF'
+cat > "$EVENT_FILE" <<EOF
 {{
   "laneId": "$LANE_ID",
   "agentType": "gemini",
