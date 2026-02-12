@@ -51,22 +51,10 @@ export abstract class BaseDetector implements AgentDetector {
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);
 
-    // Check for spinner animation (agent actively thinking/working)
-    const spinnerChar = this.checkWorkingAnimation(plain);
-    if (spinnerChar) {
-      // Spinner is animating — agent is actively working, reset idle timer
-      this.clearIdleTimer();
-      if (this.status !== 'working') {
-        this.transitionTo('working', `spinner animation detected (char: ${spinnerChar})`);
-      }
-      this.startIdleTimer();
-      return;
-    }
-
-    // Reset idle timer on any output (non-spinner)
+    // Reset idle timer on any output
     this.clearIdleTimer();
 
-    // Check for waiting patterns (agent specifically needs user attention)
+    // Check for waiting patterns FIRST (highest priority - prompts always take precedence)
     const matchedWaiting = this.findMatchingWaitingPattern(plain);
     if (matchedWaiting) {
       this.clearDoneToWorkingTimer();
@@ -77,12 +65,23 @@ export abstract class BaseDetector implements AgentDetector {
       return;
     }
 
-    // Check for error patterns
+    // Check for error patterns (second priority)
     const matchedError = this.findMatchingErrorPattern(plain);
     if (matchedError) {
       this.clearDoneToWorkingTimer();
       this.userInputPending = false;
       this.transitionTo('error', `error pattern matched: ${matchedError}`);
+      return;
+    }
+
+    // Check for spinner animation (third priority - only if not waiting or errored)
+    const spinnerChar = this.checkWorkingAnimation(plain);
+    if (spinnerChar) {
+      // Spinner is animating — agent is actively working
+      if (this.status !== 'working') {
+        this.transitionTo('working', `spinner animation detected (char: ${spinnerChar})`);
+      }
+      this.startIdleTimer();
       return;
     }
 
