@@ -4,6 +4,7 @@
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import { getTerminalTheme } from '../theme';
 
 /**
@@ -37,6 +38,8 @@ export function updateTerminalTheme(terminal: Terminal): void {
 
 /**
  * Attaches custom key handlers to a terminal
+ * - Cmd/Ctrl+C: copy selected text to clipboard (falls through to SIGINT if no selection)
+ * - Cmd/Ctrl+V: paste from clipboard into PTY
  * - Shift+Enter: sends ESC + CR sequence for Claude Code compatibility
  *
  * Returns a cleanup function to remove the event listener
@@ -50,7 +53,7 @@ export function attachKeyHandlers(
   // Track if we've already handled this event to prevent double-firing
   let lastHandledTimestamp = 0;
 
-  const sendShiftEnter = (source: string) => {
+  const sendShiftEnter = () => {
     const now = Date.now();
     // Debounce - only send if more than 50ms since last send
     if (now - lastHandledTimestamp > 50) {
@@ -61,20 +64,44 @@ export function attachKeyHandlers(
 
   // 1. xterm.js custom key handler (catches most events)
   terminal.attachCustomKeyEventHandler((event) => {
-    if (event.key === 'Enter' && event.shiftKey && event.type === 'keydown') {
-      sendShiftEnter('xterm');
-      return false; // Prevent default handling
+    if (event.type !== 'keydown') return true;
+
+    const isMod = event.metaKey || event.ctrlKey;
+
+    // Cmd/Ctrl+C: copy selection (if text is selected)
+    if (isMod && event.key === 'c' && terminal.hasSelection()) {
+      const selection = terminal.getSelection();
+      if (selection) {
+        writeText(selection).catch(() => {});
+        terminal.clearSelection();
+      }
+      return false;
     }
+
+    // Cmd/Ctrl+V: paste from clipboard
+    if (isMod && event.key === 'v') {
+      readText().then((text) => {
+        if (text) writeToPty(text);
+      }).catch(() => {});
+      return false;
+    }
+
+    // Shift+Enter: Claude Code compatibility
+    if (event.key === 'Enter' && event.shiftKey) {
+      sendShiftEnter();
+      return false;
+    }
+
     return true;
   });
 
-  // 2. DOM-level keydown listener on terminal element (backup)
+  // 2. DOM-level keydown listener on terminal element (backup for Shift+Enter)
   const terminalElement = terminal.element;
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
-      sendShiftEnter('DOM');
+      sendShiftEnter();
     }
   };
 
