@@ -202,6 +202,9 @@ export abstract class BaseDetector implements AgentDetector {
 
   protected findMatchingWaitingPattern(text: string): string | null {
     for (const p of this.patterns.waitingPatterns) {
+      if (import.meta.env.DEV) {
+        console.log(`[AgentStatus] Testing waiting pattern ${p.source} against text...`, p.test(text));
+      }
       if (p.test(text)) return p.source;
     }
     return null;
