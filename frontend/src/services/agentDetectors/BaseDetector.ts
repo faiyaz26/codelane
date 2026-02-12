@@ -53,7 +53,14 @@ export abstract class BaseDetector implements AgentDetector {
 
     // Debug: Log received text to help diagnose pattern matching issues
     if (import.meta.env.DEV && plain.trim().length > 0) {
-      console.log(`[AgentStatus] ${this.agentType} received text:`, plain.slice(0, 200));
+      // Show first 500 chars and indicate if there's more
+      const preview = plain.length > 500 ? plain.slice(0, 500) + '...' : plain;
+      console.log(`[AgentStatus] ${this.agentType} received text (${plain.length} bytes):`, preview);
+
+      // If text contains "Do you want" or "proceed", log it prominently
+      if (/do you want|proceed|yes.*no/i.test(plain)) {
+        console.warn(`[AgentStatus] PROMPT DETECTED in text:`, preview);
+      }
     }
 
     // Reset idle timer on any output
