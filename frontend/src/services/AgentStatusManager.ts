@@ -115,6 +115,17 @@ class AgentStatusManager {
   }
 
   /**
+   * Feed a snapshot of the terminal buffer for periodic checking.
+   * This samples the actual terminal screen content to catch prompts.
+   */
+  feedBufferSnapshot(laneId: string, text: string): void {
+    const entry = this.lanes.get(laneId);
+    if (!entry) return;
+
+    entry.detector.feedBufferSnapshot(text);
+  }
+
+  /**
    * Mark a lane's process as exited. Resets detector and sets status to idle.
    */
   markExited(laneId: string): void {

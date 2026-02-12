@@ -42,9 +42,44 @@ export abstract class BaseDetector implements AgentDetector {
   private lastSpinnerChar: string | null = null;
   private lastSpinnerTime = 0;
   private onStatusChangeCb: ((status: AgentStatus) => void) | null = null;
+  private lastBufferSnapshot = '';
 
   setOnStatusChange(cb: (status: AgentStatus) => void): void {
     this.onStatusChangeCb = cb;
+  }
+
+  /**
+   * Feed a snapshot of the terminal buffer for periodic checking.
+   * This samples the actual terminal screen content to catch prompts
+   * that might be missed by streaming chunk detection.
+   */
+  feedBufferSnapshot(text: string): void {
+    // Skip if snapshot is identical to last one (no change)
+    if (text === this.lastBufferSnapshot) return;
+    this.lastBufferSnapshot = text;
+
+    // Strip ANSI and check for patterns (same logic as feedChunk)
+    const plain = stripAnsi(text);
+
+    // Check for waiting patterns (highest priority)
+    const matchedWaiting = this.findMatchingWaitingPattern(plain);
+    if (matchedWaiting) {
+      // Don't clear idle timer - let feedChunk handle that
+      this.userInputPending = false;
+      this.transitionTo('waiting_for_input', `waiting pattern in buffer: ${matchedWaiting}`);
+      return;
+    }
+
+    // Check for error patterns
+    const matchedError = this.findMatchingErrorPattern(plain);
+    if (matchedError) {
+      this.userInputPending = false;
+      this.transitionTo('error', `error pattern in buffer: ${matchedError}`);
+      return;
+    }
+
+    // Note: We don't check spinner animation here because buffer snapshots
+    // are static - spinner animation requires comparing across frames (feedChunk handles this)
   }
 
   feedChunk(text: string): void {
@@ -162,6 +197,7 @@ export abstract class BaseDetector implements AgentDetector {
     this.userInputPending = false;
     this.lastSpinnerChar = null;
     this.lastSpinnerTime = 0;
+    this.lastBufferSnapshot = '';
   }
 
   dispose(): void {
@@ -172,6 +208,7 @@ export abstract class BaseDetector implements AgentDetector {
     this.userInputPending = false;
     this.lastSpinnerChar = null;
     this.lastSpinnerTime = 0;
+    this.lastBufferSnapshot = '';
     this.onStatusChangeCb = null;
   }
 

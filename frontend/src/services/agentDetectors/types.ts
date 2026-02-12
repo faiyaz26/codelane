@@ -15,6 +15,9 @@ export interface AgentDetector {
   /** Signal that the user typed input into the terminal */
   feedUserInput(text: string): void;
 
+  /** Feed a snapshot of the terminal buffer for periodic checking */
+  feedBufferSnapshot(text: string): void;
+
   /** Get the current detected status */
   getStatus(): AgentStatus;
 
