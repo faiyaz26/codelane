@@ -7,6 +7,7 @@ export enum ActivityView {
   Explorer = 'explorer',
   Search = 'search',
   GitManager = 'git-manager',
+  CodeReview = 'code-review',
   Extensions = 'extensions',
 }
 
@@ -40,6 +41,11 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
     id: ActivityView.GitManager,
     icon: 'folder-git',
     label: 'Git Manager',
+  },
+  {
+    id: ActivityView.CodeReview,
+    icon: 'code-review',
+    label: 'Code Review',
   },
 ];
 
@@ -97,6 +103,29 @@ function ActivityIcon(props: { icon: string; class?: string }) {
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="1.5"
+          />
+        </svg>
+      );
+    case 'code-review':
+      return (
+        <svg class={props.class} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9 5a2 2 0 012-2h2a2 2 0 012 2v0a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9 14l2 2 4-4"
           />
         </svg>
       );

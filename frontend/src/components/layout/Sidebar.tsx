@@ -3,6 +3,7 @@ import { ActivityView } from './ActivityBar';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { SearchPanel } from '../search';
 import { CodeReviewChanges } from './CodeReviewChanges';
+import { CodeReviewFileList } from '../review/CodeReviewFileList';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -26,6 +27,8 @@ export function Sidebar(props: SidebarProps) {
         return 'Search';
       case ActivityView.GitManager:
         return 'Git Manager';
+      case ActivityView.CodeReview:
+        return 'Code Review';
       case ActivityView.Extensions:
         return 'Extensions';
       default:
@@ -72,6 +75,11 @@ export function Sidebar(props: SidebarProps) {
                 // Open file in editor to show diff
                 props.onFileSelect(path);
               }}
+            />
+          </Match>
+          <Match when={props.activeView === ActivityView.CodeReview}>
+            <CodeReviewFileList
+              laneId={props.lane.id}
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>

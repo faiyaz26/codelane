@@ -11,6 +11,7 @@ import { GeneralSettings } from './GeneralSettings';
 import { AgentsSettings } from './AgentsSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { CodeReviewSettings } from './CodeReviewSettings';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
 
@@ -158,6 +159,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       onSettingsChange={setSettings}
                       onValidationChange={setIsAgentValid}
                     />
+                  </Show>
+
+                  {/* Code Review Tab */}
+                  <Show when={activeTab() === 'code-review'}>
+                    <CodeReviewSettings />
                   </Show>
 
                   {/* Notifications Tab */}

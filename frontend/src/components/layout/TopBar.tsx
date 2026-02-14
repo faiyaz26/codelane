@@ -8,6 +8,7 @@ import { CommitDialog } from '../git';
 import { ActivityView } from './ActivityBar';
 import { editorStateManager } from '../../services/EditorStateManager';
 import { aiReviewService, type AITool } from '../../services/AIReviewService';
+import { codeReviewStore } from '../../services/CodeReviewStore';
 
 interface GitBranchInfo {
   current: string | null;
@@ -275,6 +276,31 @@ export function TopBar(props: TopBarProps) {
                 >
                   Review Changes
                 </button>
+              </Show>
+
+              {/* Show "Generate AI Review" button when IN Code Review tab */}
+              <Show when={props.activeView === ActivityView.CodeReview}>
+                {(() => {
+                  const reviewState = () => codeReviewStore.getState(props.activeLaneId!)();
+                  const isGenerating = () => reviewState().status === 'loading';
+                  const hasReview = () => reviewState().status === 'ready';
+
+                  return (
+                    <button
+                      onClick={() => {
+                        if (hasReview()) {
+                          codeReviewStore.reset(props.activeLaneId!);
+                        }
+                        codeReviewStore.generateReview(props.activeLaneId!, props.effectiveWorkingDir!);
+                      }}
+                      disabled={isGenerating()}
+                      class="px-4 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                      title={hasReview() ? 'Regenerate AI review' : 'Generate AI review'}
+                    >
+                      {isGenerating() ? 'Generating...' : hasReview() ? 'Regenerate Review' : 'Generate AI Review'}
+                    </button>
+                  );
+                })()}
               </Show>
 
               {/* Show "AI Summary" and "Commit" buttons when IN Git Manager tab */}

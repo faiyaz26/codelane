@@ -9,6 +9,7 @@ import { BottomPanel } from './BottomPanel';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
+import { CodeReviewLayout } from '../review';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -162,8 +163,8 @@ export function MainLayout(props: MainLayoutProps) {
             <div class="flex-1 flex flex-col overflow-hidden min-w-0">
               {/* Main content row */}
               <div class="flex-1 flex overflow-hidden">
-                {/* Agent Terminal - Always rendered, hidden in Code Review view */}
-                <div style={{ display: activeView() === ActivityView.GitManager ? 'none' : 'contents' }}>
+                {/* Agent Terminal - Always rendered, hidden in Git Manager and Code Review views */}
+                <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview) ? 'none' : 'contents' }}>
                   <AgentTerminalPanel
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
@@ -177,8 +178,16 @@ export function MainLayout(props: MainLayoutProps) {
                   />
                 </div>
 
-                {/* Editor - Center (shared by all views) */}
-                <Show when={showEditor() && props.activeLaneId}>
+                {/* Code Review - takes over main content area */}
+                <Show when={activeView() === ActivityView.CodeReview}>
+                  <CodeReviewLayout
+                    laneId={lane().id}
+                    workingDir={getEffectiveWorkingDir(lane())}
+                  />
+                </Show>
+
+                {/* Editor - Center (shared by non-review views) */}
+                <Show when={activeView() !== ActivityView.CodeReview && showEditor() && props.activeLaneId}>
                   <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
                   <div class="flex flex-col overflow-hidden min-w-0 flex-1">
                     <EditorPanel

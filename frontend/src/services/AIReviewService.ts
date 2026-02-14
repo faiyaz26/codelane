@@ -188,7 +188,7 @@ Be concise and actionable.`;
   /**
    * Get the default review prompt
    */
-  private getDefaultPrompt(): string {
+  getDefaultPrompt(): string {
     return `You are an expert code analyst. Analyze these changes and provide a structured summary with feedback.
 
 ## Instructions
@@ -200,6 +200,70 @@ Be concise and actionable.`;
 5. **Positive Notes**: What was done well
 
 Be concise, specific, and constructive. Focus on actionable feedback.`;
+  }
+
+  /**
+   * Get an enhanced review prompt with file-by-file analysis
+   */
+  getEnhancedReviewPrompt(): string {
+    return `You are an expert code analyst performing a thorough code review. Analyze these changes and provide a structured review.
+
+## Output Format (use exact headings)
+
+### Summary
+Brief overview of what changed and why (2-3 sentences).
+
+### Key Changes
+- Bullet points of the main modifications across all files
+
+### Concerns
+- Potential issues, bugs, security vulnerabilities, or areas needing attention
+- Include severity (low/medium/high) for each concern
+
+### Suggestions
+- Specific, actionable improvements or recommendations
+- Reference file paths and line numbers when possible
+
+### Positive Notes
+- What was done well, good patterns observed
+
+Be concise, specific, and constructive. Focus on actionable feedback. Use markdown formatting.`;
+  }
+
+  /**
+   * Get the default per-file review prompt
+   */
+  getDefaultFilePrompt(): string {
+    return `Analyze the changes in this file and provide brief, focused feedback.
+
+Include:
+1. What changed and why (1-2 sentences)
+2. Any concerns (bugs, security, performance)
+3. Specific suggestions for improvement
+
+Be very concise — aim for 3-5 bullet points total. No preamble.`;
+  }
+
+  /**
+   * Generate focused per-file review feedback
+   */
+  async generateFileReview(
+    tool: AITool,
+    filePath: string,
+    diffContent: string,
+    workingDir: string,
+    model?: string,
+    customPrompt?: string
+  ): Promise<AIReviewResult> {
+    const prompt = customPrompt || `${this.getDefaultFilePrompt()}\n\nFile: ${filePath}`;
+
+    return this.generateReview({
+      tool,
+      diffContent,
+      workingDir,
+      customPrompt: prompt,
+      model,
+    });
   }
 
   /**
