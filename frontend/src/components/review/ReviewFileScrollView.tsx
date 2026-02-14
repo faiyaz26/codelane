@@ -217,12 +217,13 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                       </div>
                     }
                   >
-                    <div class="max-h-[600px] overflow-auto">
+                    <div class="w-full">
                       <DiffViewer
                         diff={diff()}
                         fileName={getFileName(file.path)}
                         filePath={file.path}
                         workingDir={props.workingDir}
+                        embedded={true}
                       />
                     </div>
                   </Show>

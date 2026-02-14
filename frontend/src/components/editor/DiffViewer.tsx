@@ -17,6 +17,7 @@ interface DiffViewerProps {
   fileName: string;
   filePath?: string;
   workingDir?: string;
+  embedded?: boolean; // If true, don't add overflow-auto (parent handles scrolling)
 }
 
 export function DiffViewer(props: DiffViewerProps) {
@@ -108,7 +109,7 @@ export function DiffViewer(props: DiffViewerProps) {
   });
 
   return (
-    <div class="h-full w-full overflow-auto bg-zed-bg-app">
+    <div class={`w-full bg-zed-bg-app ${props.embedded ? '' : 'h-full overflow-auto'}`}>
       <Show
         when={props.diff && props.diff.trim().length > 0}
         fallback={
