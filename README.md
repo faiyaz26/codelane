@@ -212,4 +212,17 @@ make build
 
 ## License
 
-MIT
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+This means:
+- You are free to use, modify, and distribute this software
+- Any modifications or forks **must also be open source** under AGPL-3.0
+- If you run a modified version as a network service, you must share the source code
+
+See [LICENSE](LICENSE) for the full license text.
+
+### Commercial Licensing
+
+If you wish to use Codelane in a proprietary product, build closed-source premium features, or need a license without copyleft obligations, a commercial license is available.
+
+Contact **faiyaz26@gmail.com** for commercial licensing inquiries.
