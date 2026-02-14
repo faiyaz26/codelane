@@ -26,9 +26,8 @@ Under AGPL-3.0, all modifications must be open source. A commercial license remo
 Please include:
 - Your use case
 - Company/individual name
-- Number of developers (if applicable)
 
 ---
 
 **Codelane** - Licensed under AGPL-3.0
-Copyright © 2025-2026 Faiyaz Ahmed Sezan
+Copyright © 2025-2026 Ahmad Faiyaz. All rights reserved.
