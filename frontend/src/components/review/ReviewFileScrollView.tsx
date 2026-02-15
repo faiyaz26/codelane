@@ -6,7 +6,7 @@
  * Uses IntersectionObserver to track which file is currently visible.
  */
 
-import { For, Show, createSignal, onMount, onCleanup, createEffect } from 'solid-js';
+import { For, Show, createSignal, onMount, onCleanup, createEffect, createMemo } from 'solid-js';
 import { DiffViewer } from '../editor/DiffViewer';
 import type { FileChangeStats } from '../../types/git';
 
@@ -24,6 +24,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
   let scrollContainerRef: HTMLDivElement | undefined;
   const fileRefs = new Map<string, HTMLElement>();
   const [shouldRenderDiff, setShouldRenderDiff] = createSignal<Set<string>>(new Set());
+  let isManualScrolling = false; // Flag to prevent observer override during manual scroll
 
   // Memoize file path index for O(1) lookup instead of O(n)
   const pathIndexMap = createMemo(() => {
@@ -71,7 +72,8 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
         }
 
         // Notify parent of topmost visible file (O(n) instead of O(n²))
-        if (changed && visibleFiles.size > 0) {
+        // Skip if manual scrolling is in progress
+        if (!isManualScrolling && changed && visibleFiles.size > 0) {
           let topmost: string | null = null;
           let minIdx = Infinity;
           for (const path of visibleFiles) {
@@ -126,14 +128,24 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
   });
 
   // Watch for scroll requests from the store
+  let lastScrollPath: string | null = null;
   createEffect(() => {
     const path = props.scrollToPath;
-    if (path) {
+    if (path && path !== lastScrollPath) {
+      lastScrollPath = path;
       const ref = fileRefs.get(path);
       if (ref) {
+        // Set manual scroll flag to prevent observer override
+        isManualScrolling = true;
+
         ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
         // Immediately update visible file to the scrolled-to file
         props.onVisibleFileChange(path);
+
+        // Clear flag after scroll animation completes (~500ms for smooth scroll)
+        setTimeout(() => {
+          isManualScrolling = false;
+        }, 600);
       }
     }
   });

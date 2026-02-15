@@ -278,7 +278,18 @@ export function TopBar(props: TopBarProps) {
                 </button>
               </Show>
 
-              {/* Show "Generate AI Review" button when IN Code Review tab */}
+              {/* Show "Review Changes" button when NOT in Code Review tab */}
+              <Show when={props.activeView !== ActivityView.CodeReview && props.activeView !== ActivityView.GitManager}>
+                <button
+                  class="px-4 py-1.5 text-xs bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-active rounded-md transition-colors"
+                  onClick={() => props.onNavigateToCodeReview?.()}
+                  title="Open Code Review tab"
+                >
+                  Review Changes
+                </button>
+              </Show>
+
+              {/* Show "Generate AI Review" and "Commit" buttons when IN Code Review tab */}
               <Show when={props.activeView === ActivityView.CodeReview}>
                 {(() => {
                   const reviewState = () => codeReviewStore.getState(props.activeLaneId!)();
@@ -286,19 +297,27 @@ export function TopBar(props: TopBarProps) {
                   const hasReview = () => reviewState().status === 'ready';
 
                   return (
-                    <button
-                      onClick={() => {
-                        if (hasReview()) {
-                          codeReviewStore.reset(props.activeLaneId!);
-                        }
-                        codeReviewStore.generateReview(props.activeLaneId!, props.effectiveWorkingDir!);
-                      }}
-                      disabled={isGenerating() || !gitWatcher.hasChanges()}
-                      class="px-4 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                      title={!gitWatcher.hasChanges() ? 'No changes to review' : hasReview() ? 'Regenerate AI review' : 'Generate AI review'}
-                    >
-                      {isGenerating() ? 'Generating...' : !gitWatcher.hasChanges() ? 'No Changes' : hasReview() ? 'Regenerate Review' : 'Generate AI Review'}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          if (hasReview()) {
+                            codeReviewStore.reset(props.activeLaneId!);
+                          }
+                          codeReviewStore.generateReview(props.activeLaneId!, props.effectiveWorkingDir!);
+                        }}
+                        disabled={isGenerating() || !gitWatcher.hasChanges()}
+                        class="px-4 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                        title={!gitWatcher.hasChanges() ? 'No changes to review' : hasReview() ? 'Regenerate AI review' : 'Generate AI review'}
+                      >
+                        {isGenerating() ? 'Generating...' : !gitWatcher.hasChanges() ? 'No Changes' : hasReview() ? 'Regenerate Review' : 'Generate AI Review'}
+                      </button>
+                      <button
+                        class="px-4 py-1.5 text-xs bg-zed-accent-blue text-white rounded-md hover:opacity-90 transition-opacity"
+                        onClick={() => setCommitDialogOpen(true)}
+                      >
+                        Commit
+                      </button>
+                    </>
                   );
                 })()}
               </Show>

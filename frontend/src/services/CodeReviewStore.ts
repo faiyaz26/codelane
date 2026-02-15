@@ -105,6 +105,17 @@ export const codeReviewStore = {
       loadingProgress: 'Fetching changes...',
     }));
 
+    // Setup timeout (5 minutes for large changesets)
+    const timeoutMs = 5 * 60 * 1000;
+    const timeoutId = setTimeout(() => {
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Review generation timed out after 5 minutes. Try reducing the number of changed files or check your AI tool configuration.',
+        loadingProgress: null,
+      }));
+    }, timeoutMs);
+
     try {
       // 1. Get changed files with stats
       const changesWithStats = await getChangesWithStats(workingDir);
@@ -191,21 +202,36 @@ export const codeReviewStore = {
         ? reviewResult.content
         : `## Error Generating Review\n\n${reviewResult.error || 'Unknown error'}`;
 
+      console.log('[CodeReviewStore] Setting status to ready, markdown length:', reviewMarkdown.length);
+
       // Update state with summary (show layout immediately)
-      setState(prev => ({
-        ...prev,
-        status: 'ready',
-        reviewMarkdown,
-        sortedFiles,
-        fileDiffs,
-        generatedAt: Date.now(),
-        loadingProgress: null,
-      }));
+      try {
+        setState(prev => {
+          console.log('[CodeReviewStore] setState callback running, prev status:', prev.status);
+          return {
+            ...prev,
+            status: 'ready' as ReviewStatus,
+            reviewMarkdown,
+            sortedFiles,
+            fileDiffs,
+            generatedAt: Date.now(),
+            loadingProgress: null,
+            scrollToPath: null,
+          };
+        });
+        console.log('[CodeReviewStore] setState completed');
+      } catch (err) {
+        console.error('[CodeReviewStore] setState error:', err);
+        throw err;
+      }
+
+      console.log('[CodeReviewStore] State updated to ready, status:', getOrCreateLaneState(laneId).state().status);
 
       // 6. Generate per-file feedback in parallel (non-blocking)
       const filePrompt = settings.filePrompt || aiReviewService.getDefaultFilePrompt();
       const filesToReview = sortedFiles.filter(f => fileDiffs.has(f.path));
 
+      let completedFiles = 0;
       const tasks = filesToReview.map(file => async () => {
         const diff = fileDiffs.get(file.path);
         if (!diff) return;
@@ -227,15 +253,22 @@ export const codeReviewStore = {
               return { ...prev, perFileFeedback: newFeedback };
             });
           }
+
+          completedFiles++;
         } catch (err) {
           console.error(`Failed to generate review for ${file.path}:`, err);
+          completedFiles++;
         }
       });
 
       // Run per-file reviews with concurrency limit of 3
       await parallelLimit(tasks, 3);
 
+      // Clear timeout on success
+      clearTimeout(timeoutId);
+
     } catch (err) {
+      clearTimeout(timeoutId);
       const errorMessage = err instanceof Error ? err.message : String(err);
       setState(prev => ({
         ...prev,
@@ -250,8 +283,11 @@ export const codeReviewStore = {
    * Update the currently visible file (tracked by scroll position)
    */
   setVisibleFile(laneId: string, path: string | null) {
-    const { setState } = getOrCreateLaneState(laneId);
-    setState(prev => ({ ...prev, visibleFilePath: path }));
+    const { state, setState } = getOrCreateLaneState(laneId);
+    // Only update if different (prevent infinite loops)
+    if (state().visibleFilePath !== path) {
+      setState(prev => ({ ...prev, visibleFilePath: path }));
+    }
   },
 
   /**

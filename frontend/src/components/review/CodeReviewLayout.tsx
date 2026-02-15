@@ -94,14 +94,20 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       {/* Loading State */}
       <Show when={reviewState().status === 'loading'}>
         <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
-          <div class="w-12 h-12 mb-6 relative">
-            <div class="absolute inset-0 border-2 border-zed-border-subtle rounded-full" />
-            <div class="absolute inset-0 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <div class="w-16 h-16 mb-6 relative">
+            <div class="absolute inset-0 border-3 border-zed-border-subtle rounded-full" />
+            <div class="absolute inset-0 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            {/* Inner pulse */}
+            <div class="absolute inset-2 border-2 border-purple-500/30 rounded-full animate-pulse" />
           </div>
           <h3 class="text-lg font-medium text-zed-text-primary mb-2">Generating Review</h3>
-          <p class="text-sm text-zed-text-secondary">
+          <p class="text-sm text-zed-text-secondary mb-4">
             {reviewState().loadingProgress || 'Analyzing your changes...'}
           </p>
+          <div class="flex flex-col items-center gap-2 text-xs text-zed-text-tertiary">
+            <p>Using <span class="text-zed-text-secondary font-medium">{toolName()}</span></p>
+            <p class="max-w-md">This may take a few minutes for large changesets. The AI is analyzing each file for quality, bugs, and improvements.</p>
+          </div>
         </div>
       </Show>
 

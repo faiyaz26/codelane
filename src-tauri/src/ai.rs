@@ -65,6 +65,8 @@ fn command_exists(cmd: &str) -> bool {
 
 /// Execute Claude Code CLI
 fn execute_claude(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
+    eprintln!("[AI] Executing Claude with model: {:?}, prompt length: {}", model, prompt.len());
+
     if !command_exists("claude") {
         return Err("Claude Code CLI not found. Install: npm install -g @anthropic-ai/claude-code".to_string());
     }
@@ -107,15 +109,21 @@ fn execute_claude(prompt: &str, working_dir: &str, model: Option<&str>) -> Resul
     let _ = std::fs::remove_file(prompt_file);
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        eprintln!("[AI] Claude completed successfully, output length: {}", stdout.len());
+        Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[AI] Claude failed with exit code: {:?}", output.status.code());
+        eprintln!("[AI] Claude stderr: {}", stderr);
         Err(format!("Claude error: {}", stderr))
     }
 }
 
 /// Execute Aider CLI
 fn execute_aider(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
+    eprintln!("[AI] Executing Aider with model: {:?}, prompt length: {}", model, prompt.len());
+
     if !command_exists("aider") {
         return Err("Aider not found. Install: pip install aider-chat".to_string());
     }
@@ -140,15 +148,21 @@ fn execute_aider(prompt: &str, working_dir: &str, model: Option<&str>) -> Result
         .map_err(|e| format!("Failed to execute aider: {}", e))?;
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        eprintln!("[AI] Aider completed successfully, output length: {}", stdout.len());
+        Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[AI] Aider failed with exit code: {:?}", output.status.code());
+        eprintln!("[AI] Aider stderr: {}", stderr);
         Err(format!("Aider error: {}", stderr))
     }
 }
 
 /// Execute OpenCode CLI
 fn execute_opencode(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
+    eprintln!("[AI] Executing OpenCode with model: {:?}, prompt length: {}", model, prompt.len());
+
     if !command_exists("opencode") {
         return Err("OpenCode not found. Install: npm install -g opencode".to_string());
     }
@@ -181,15 +195,21 @@ fn execute_opencode(prompt: &str, working_dir: &str, model: Option<&str>) -> Res
         .map_err(|e| format!("Failed to wait for output: {}", e))?;
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        eprintln!("[AI] OpenCode completed successfully, output length: {}", stdout.len());
+        Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[AI] OpenCode failed with exit code: {:?}", output.status.code());
+        eprintln!("[AI] OpenCode stderr: {}", stderr);
         Err(format!("OpenCode error: {}", stderr))
     }
 }
 
 /// Execute Gemini CLI
 fn execute_gemini(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
+    eprintln!("[AI] Executing Gemini with model: {:?}, prompt length: {}", model, prompt.len());
+
     if !command_exists("gemini") {
         return Err("Gemini CLI not found. Install: npm install -g @google/generative-ai-cli".to_string());
     }
@@ -223,9 +243,13 @@ fn execute_gemini(prompt: &str, working_dir: &str, model: Option<&str>) -> Resul
         .map_err(|e| format!("Failed to wait for output: {}", e))?;
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        eprintln!("[AI] Gemini completed successfully, output length: {}", stdout.len());
+        Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[AI] Gemini failed with exit code: {:?}", output.status.code());
+        eprintln!("[AI] Gemini stderr: {}", stderr);
         Err(format!("Gemini error: {}", stderr))
     }
 }
