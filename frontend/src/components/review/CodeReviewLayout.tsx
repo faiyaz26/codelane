@@ -12,6 +12,7 @@ import { ReviewChangesPanel } from './ReviewChangesPanel';
 import { ResizeHandle } from '../layout/ResizeHandle';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
+import { useGitService } from '../../hooks/useGitService';
 
 interface CodeReviewLayoutProps {
   laneId: string;
@@ -28,6 +29,14 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   let scrollToFileFn: ((path: string) => void) | null = null;
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
+
+  // Watch for git changes
+  const gitWatcher = useGitService({
+    laneId: () => props.laneId,
+    workingDir: () => props.workingDir,
+  });
+
+  const hasChanges = () => gitWatcher.hasChanges();
 
   // Expose the scroll function to parent (Sidebar)
   createEffect(() => {
@@ -75,16 +84,19 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
           </p>
           <button
             onClick={handleGenerate}
-            class="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm flex items-center gap-2"
+            disabled={!hasChanges()}
+            class="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            Generate AI Summary & Review
+            {hasChanges() ? 'Generate AI Summary & Review' : 'No Changes to Review'}
           </button>
-          <p class="text-xs text-zed-text-tertiary mt-3">
-            Using <span class="text-zed-text-secondary font-medium">{toolName()}</span>
-          </p>
+          <Show when={hasChanges()}>
+            <p class="text-xs text-zed-text-tertiary mt-3">
+              Using <span class="text-zed-text-secondary font-medium">{toolName()}</span>
+            </p>
+          </Show>
         </div>
       </Show>
 

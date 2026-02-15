@@ -293,11 +293,11 @@ export function TopBar(props: TopBarProps) {
                         }
                         codeReviewStore.generateReview(props.activeLaneId!, props.effectiveWorkingDir!);
                       }}
-                      disabled={isGenerating()}
+                      disabled={isGenerating() || !gitWatcher.hasChanges()}
                       class="px-4 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                      title={hasReview() ? 'Regenerate AI review' : 'Generate AI review'}
+                      title={!gitWatcher.hasChanges() ? 'No changes to review' : hasReview() ? 'Regenerate AI review' : 'Generate AI review'}
                     >
-                      {isGenerating() ? 'Generating...' : hasReview() ? 'Regenerate Review' : 'Generate AI Review'}
+                      {isGenerating() ? 'Generating...' : !gitWatcher.hasChanges() ? 'No Changes' : hasReview() ? 'Regenerate Review' : 'Generate AI Review'}
                     </button>
                   );
                 })()}
