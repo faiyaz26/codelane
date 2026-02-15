@@ -25,6 +25,7 @@ export interface CodeReviewState {
   generatedAt: number | null;
   visibleFilePath: string | null;
   loadingProgress: string | null;
+  scrollToPath: string | null; // Path to scroll to (set by sidebar click, consumed by scroll view)
 }
 
 function createDefaultState(): CodeReviewState {
@@ -33,6 +34,7 @@ function createDefaultState(): CodeReviewState {
     reviewMarkdown: null,
     perFileFeedback: new Map(),
     sortedFiles: [],
+    scrollToPath: null,
     fileDiffs: new Map(),
     error: null,
     generatedAt: null,
@@ -134,21 +136,16 @@ export const codeReviewStore = {
 
       // 3. Fetch diffs for all changed files
       const fileDiffs = new Map<string, string>();
-      console.log('[CodeReviewStore] Fetching diffs for files:', allChangedFiles);
       for (const filePath of allChangedFiles) {
         try {
           const diff = await getGitDiff(workingDir, filePath, false);
           if (diff && diff.trim()) {
             fileDiffs.set(filePath, diff);
-            console.log(`[CodeReviewStore] Got diff for ${filePath}, length: ${diff.length}`);
-          } else {
-            console.log(`[CodeReviewStore] Empty diff for ${filePath}`);
           }
-        } catch (err) {
-          console.error(`[CodeReviewStore] Failed to get diff for ${filePath}:`, err);
+        } catch {
+          // Skip files that can't be diffed (binary, etc.)
         }
       }
-      console.log('[CodeReviewStore] Total diffs collected:', fileDiffs.size);
 
       // 4. Smart-sort files
       setState(prev => ({
@@ -255,6 +252,19 @@ export const codeReviewStore = {
   setVisibleFile(laneId: string, path: string | null) {
     const { setState } = getOrCreateLaneState(laneId);
     setState(prev => ({ ...prev, visibleFilePath: path }));
+  },
+
+  /**
+   * Request scroll to a specific file (called by sidebar file click)
+   */
+  requestScrollToFile(laneId: string, path: string) {
+    const { setState } = getOrCreateLaneState(laneId);
+    // Set path, then immediately clear (scroll view reads it via createEffect)
+    setState(prev => ({ ...prev, scrollToPath: path }));
+    // Use queueMicrotask to clear after current reactive cycle
+    queueMicrotask(() => {
+      setState(prev => ({ ...prev, scrollToPath: null }));
+    });
   },
 
   /**

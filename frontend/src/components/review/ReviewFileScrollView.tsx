@@ -16,44 +16,71 @@ interface ReviewFileScrollViewProps {
   sortedFiles: FileChangeStats[];
   fileDiffs: Map<string, string>;
   onVisibleFileChange: (path: string) => void;
-  onScrollToFile?: (scrollFn: (path: string) => void) => void;
+  scrollToPath: string | null; // Reactive prop from store - triggers scroll when set
   contextPanelHeightPercent?: number; // Height of context panel as percentage (for bottom padding)
 }
 
 export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
   let scrollContainerRef: HTMLDivElement | undefined;
   const fileRefs = new Map<string, HTMLElement>();
-  const [visibleFiles, setVisibleFiles] = createSignal<Set<string>>(new Set());
   const [shouldRenderDiff, setShouldRenderDiff] = createSignal<Set<string>>(new Set());
 
-  // Set up IntersectionObserver for scroll tracking AND lazy diff rendering
+  // Memoize file path index for O(1) lookup instead of O(n)
+  const pathIndexMap = createMemo(() => {
+    const map = new Map<string, number>();
+    props.sortedFiles.forEach((f, i) => map.set(f.path, i));
+    return map;
+  });
+
+  // Single merged IntersectionObserver for both visibility and lazy rendering
   onMount(() => {
     if (!scrollContainerRef) return;
 
-    // Observer 1: Track which file is visible for context panel (narrow threshold)
-    const visibilityObserver = new IntersectionObserver(
+    const visibleFiles = new Set<string>();
+
+    const observer = new IntersectionObserver(
       (entries) => {
-        const newVisible = new Set(visibleFiles());
+        let changed = false;
+        const toRender = new Set(shouldRenderDiff());
+
         for (const entry of entries) {
           const filePath = entry.target.getAttribute('data-file-path');
           if (!filePath) continue;
 
           if (entry.isIntersecting) {
-            newVisible.add(filePath);
+            // Track visible files
+            if (!visibleFiles.has(filePath)) {
+              visibleFiles.add(filePath);
+              changed = true;
+            }
+            // Mark for rendering (once added, never removed)
+            if (!toRender.has(filePath)) {
+              toRender.add(filePath);
+            }
           } else {
-            newVisible.delete(filePath);
+            if (visibleFiles.has(filePath)) {
+              visibleFiles.delete(filePath);
+              changed = true;
+            }
           }
         }
-        setVisibleFiles(newVisible);
 
-        // Notify parent of the topmost visible file
-        const visible = Array.from(newVisible);
-        if (visible.length > 0) {
-          // Find the topmost visible file by checking order in sortedFiles
-          const sortedPaths = props.sortedFiles.map(f => f.path);
-          const topmost = visible.sort(
-            (a, b) => sortedPaths.indexOf(a) - sortedPaths.indexOf(b)
-          )[0];
+        // Update render set if changed
+        if (toRender.size !== shouldRenderDiff().size) {
+          setShouldRenderDiff(toRender);
+        }
+
+        // Notify parent of topmost visible file (O(n) instead of O(n²))
+        if (changed && visibleFiles.size > 0) {
+          let topmost: string | null = null;
+          let minIdx = Infinity;
+          for (const path of visibleFiles) {
+            const idx = pathIndexMap().get(path) ?? Infinity;
+            if (idx < minIdx) {
+              minIdx = idx;
+              topmost = path;
+            }
+          }
           if (topmost) {
             props.onVisibleFileChange(topmost);
           }
@@ -61,68 +88,53 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
       },
       {
         root: scrollContainerRef,
-        threshold: [0, 0.1, 0.5, 1.0],
-        rootMargin: '0px', // No margin - detect file anywhere in viewport
+        threshold: [0, 1], // Just top/bottom - simpler
+        rootMargin: '200px 0px 200px 0px', // Render margin for lazy loading
       }
     );
 
-    // Observer 2: Lazy render diffs (wider threshold - render before visible)
-    const renderObserver = new IntersectionObserver(
-      (entries) => {
-        setShouldRenderDiff(prev => {
-          const newSet = new Set(prev);
-          for (const entry of entries) {
-            const filePath = entry.target.getAttribute('data-file-path');
-            if (!filePath) continue;
-
-            if (entry.isIntersecting) {
-              newSet.add(filePath); // Once added, never remove (diff stays mounted)
-            }
-          }
-          return newSet;
-        });
-      },
-      {
-        root: scrollContainerRef,
-        threshold: 0,
-        rootMargin: '300px 0px 300px 0px', // Render diffs 300px before they enter viewport
-      }
-    );
-
-    // Re-observe when file list changes
+    // Observe files only on mount and when file list changes
+    let observedFiles = new Set<string>();
     createEffect(() => {
-      // Access sortedFiles to track it
       const files = props.sortedFiles;
+      const currentPaths = new Set(files.map(f => f.path));
 
-      // Disconnect old observations
-      visibilityObserver.disconnect();
-      renderObserver.disconnect();
-
-      // Re-observe all file headers
-      for (const file of files) {
-        const ref = fileRefs.get(file.path);
-        if (ref) {
-          visibilityObserver.observe(ref);
-          renderObserver.observe(ref);
+      // Remove observations for deleted files
+      for (const path of observedFiles) {
+        if (!currentPaths.has(path)) {
+          const ref = fileRefs.get(path);
+          if (ref) observer.unobserve(ref);
+          fileRefs.delete(path);
         }
       }
+
+      // Add observations for new files
+      for (const file of files) {
+        if (!observedFiles.has(file.path)) {
+          const ref = fileRefs.get(file.path);
+          if (ref) observer.observe(ref);
+        }
+      }
+
+      observedFiles = currentPaths;
     });
 
     onCleanup(() => {
-      visibilityObserver.disconnect();
-      renderObserver.disconnect();
+      observer.disconnect();
+      fileRefs.clear();
     });
   });
 
-  // Expose scroll-to-file function
+  // Watch for scroll requests from the store
   createEffect(() => {
-    if (props.onScrollToFile) {
-      props.onScrollToFile((path: string) => {
-        const ref = fileRefs.get(path);
-        if (ref) {
-          ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      });
+    const path = props.scrollToPath;
+    if (path) {
+      const ref = fileRefs.get(path);
+      if (ref) {
+        ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Immediately update visible file to the scrolled-to file
+        props.onVisibleFileChange(path);
+      }
     }
   });
 
@@ -178,14 +190,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
         <div style={{ 'padding-bottom': bottomPadding() }}>
         <For each={props.sortedFiles}>
           {(file) => {
-            const diff = () => {
-              const d = props.fileDiffs.get(file.path);
-              // Debug: log when diff is missing
-              if (!d) {
-                console.log(`[ReviewFileScrollView] No diff for ${file.path}, available paths:`, Array.from(props.fileDiffs.keys()));
-              }
-              return d || '';
-            };
+            const diff = () => props.fileDiffs.get(file.path) || '';
 
             return (
               <div

@@ -12,7 +12,6 @@ import type { FileChangeStats } from '../../types/git';
 
 interface CodeReviewFileListProps {
   laneId: string;
-  onFileClick?: (path: string) => void;
 }
 
 export function CodeReviewFileList(props: CodeReviewFileListProps) {
@@ -112,7 +111,7 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
             <For each={sortedFiles()}>
               {(file) => (
                 <button
-                  onClick={() => props.onFileClick?.(file.path)}
+                  onClick={() => codeReviewStore.requestScrollToFile(props.laneId, file.path)}
                   class={`w-full flex items-start gap-2 px-2 py-1.5 hover:bg-zed-bg-hover transition-colors text-left border-b border-zed-border-subtle/50 ${
                     visibleFile() === file.path ? 'bg-zed-bg-hover border-l-2 border-l-zed-accent-blue' : ''
                   }`}

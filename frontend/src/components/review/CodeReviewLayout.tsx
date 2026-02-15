@@ -17,7 +17,6 @@ import { useGitService } from '../../hooks/useGitService';
 interface CodeReviewLayoutProps {
   laneId: string;
   workingDir: string;
-  onScrollToFile?: (scrollFn: (path: string) => void) => void;
 }
 
 // Min/max widths for the left panel (summary)
@@ -26,7 +25,6 @@ const LEFT_PANEL_MAX_WIDTH_RATIO = 0.6; // 60% of container
 
 export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   const [leftPanelWidth, setLeftPanelWidth] = createSignal(400);
-  let scrollToFileFn: ((path: string) => void) | null = null;
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
 
@@ -37,13 +35,6 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   });
 
   const hasChanges = () => gitWatcher.hasChanges();
-
-  // Expose the scroll function to parent (Sidebar)
-  createEffect(() => {
-    if (props.onScrollToFile && scrollToFileFn) {
-      props.onScrollToFile(scrollToFileFn);
-    }
-  });
 
   const handleGenerate = () => {
     codeReviewStore.generateReview(props.laneId, props.workingDir);
@@ -164,8 +155,8 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
               fileDiffs={reviewState().fileDiffs}
               perFileFeedback={reviewState().perFileFeedback}
               visibleFilePath={reviewState().visibleFilePath}
+              scrollToPath={reviewState().scrollToPath}
               onVisibleFileChange={handleVisibleFileChange}
-              onScrollToFile={(fn) => { scrollToFileFn = fn; }}
             />
           </div>
         </div>

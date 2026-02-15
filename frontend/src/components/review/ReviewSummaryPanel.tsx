@@ -5,7 +5,7 @@
  * Has a header with timestamp and regenerate button.
  */
 
-import { Show } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 interface ReviewSummaryPanelProps {
   markdown: string;
@@ -19,6 +19,9 @@ export function ReviewSummaryPanel(props: ReviewSummaryPanelProps) {
     if (!props.generatedAt) return '';
     return new Date(props.generatedAt).toLocaleString();
   };
+
+  // Memoize markdown conversion to avoid re-parsing on every render
+  const renderedHtml = createMemo(() => markdownToHtml(props.markdown));
 
   return (
     <div class="flex flex-col h-full overflow-hidden bg-zed-bg-app">
@@ -51,7 +54,7 @@ export function ReviewSummaryPanel(props: ReviewSummaryPanelProps) {
       <div class="flex-1 overflow-y-auto p-4">
         <div
           class="prose prose-sm prose-invert max-w-none text-zed-text-secondary leading-relaxed [&_h1]:text-lg [&_h1]:text-zed-text-primary [&_h1]:font-semibold [&_h1]:mb-3 [&_h1]:mt-4 [&_h2]:text-base [&_h2]:text-zed-text-primary [&_h2]:font-medium [&_h2]:mb-2 [&_h2]:mt-3 [&_h3]:text-sm [&_h3]:text-zed-text-primary [&_h3]:font-medium [&_h3]:mb-2 [&_h3]:mt-2 [&_strong]:text-zed-text-primary [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_code]:bg-zed-bg-hover [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-zed-accent-blue [&_code]:text-xs [&_pre]:bg-zed-bg-panel [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_blockquote]:border-l-2 [&_blockquote]:border-zed-accent-blue/30 [&_blockquote]:pl-3 [&_blockquote]:italic [&_hr]:border-zed-border-subtle"
-          innerHTML={markdownToHtml(props.markdown)}
+          innerHTML={renderedHtml()}
         />
       </div>
     </div>

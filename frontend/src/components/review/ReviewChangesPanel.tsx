@@ -17,8 +17,8 @@ interface ReviewChangesPanelProps {
   fileDiffs: Map<string, string>;
   perFileFeedback: Map<string, string>;
   visibleFilePath: string | null;
+  scrollToPath: string | null;
   onVisibleFileChange: (path: string) => void;
-  onScrollToFile?: (scrollFn: (path: string) => void) => void;
 }
 
 export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
@@ -84,7 +84,7 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
           sortedFiles={props.sortedFiles}
           fileDiffs={props.fileDiffs}
           onVisibleFileChange={props.onVisibleFileChange}
-          onScrollToFile={props.onScrollToFile}
+          scrollToPath={props.scrollToPath}
           contextPanelHeightPercent={100 - splitPosition()}
         />
       </div>

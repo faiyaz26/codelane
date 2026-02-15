@@ -5,7 +5,7 @@
  * Content updates reactively based on scroll position in ReviewFileScrollView.
  */
 
-import { Show } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 interface FileContextPanelProps {
   filePath: string | null;
@@ -14,6 +14,11 @@ interface FileContextPanelProps {
 }
 
 export function FileContextPanel(props: FileContextPanelProps) {
+  // Memoize markdown conversion
+  const renderedFeedback = createMemo(() =>
+    props.feedback ? simpleMarkdownToHtml(props.feedback) : ''
+  );
+
   const getFileName = () => {
     if (!props.filePath) return '';
     const parts = props.filePath.split('/');
@@ -82,7 +87,7 @@ export function FileContextPanel(props: FileContextPanelProps) {
           >
             <div
               class="prose prose-sm prose-invert max-w-none text-xs text-zed-text-secondary leading-relaxed [&_h1]:text-sm [&_h1]:text-zed-text-primary [&_h2]:text-xs [&_h2]:text-zed-text-primary [&_h3]:text-xs [&_h3]:text-zed-text-primary [&_strong]:text-zed-text-primary [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:bg-zed-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-zed-accent-blue"
-              innerHTML={simpleMarkdownToHtml(props.feedback!)}
+              innerHTML={renderedFeedback()}
             />
           </Show>
         </Show>

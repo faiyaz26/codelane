@@ -15,25 +15,9 @@ interface SidebarProps {
   collapsed: boolean;
   onFileSelect: (path: string | undefined) => void;
   onToggleCollapse: () => void;
-  onScrollToFile?: (scrollFn: (path: string) => void) => void;
 }
 
 export function Sidebar(props: SidebarProps) {
-  let scrollToFileFn: ((path: string) => void) | null = null;
-
-  // Receive the scroll function from parent
-  createEffect(() => {
-    if (props.onScrollToFile) {
-      props.onScrollToFile((fn) => {
-        scrollToFileFn = fn;
-      });
-    }
-  });
-
-  const handleFileClick = (path: string) => {
-    scrollToFileFn?.(path);
-  };
-
   // Get the title for the current view
   const getViewTitle = () => {
     switch (props.activeView) {
@@ -96,7 +80,6 @@ export function Sidebar(props: SidebarProps) {
           <Match when={props.activeView === ActivityView.CodeReview}>
             <CodeReviewFileList
               laneId={props.lane.id}
-              onFileClick={handleFileClick}
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>

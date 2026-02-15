@@ -50,9 +50,6 @@ export function MainLayout(props: MainLayoutProps) {
   const [laneActiveViews, setLaneActiveViews] = createSignal<Map<string, ActivityView>>(new Map());
   const [selectedFiles, setSelectedFiles] = createSignal<Map<string, string>>(new Map());
 
-  // Scroll-to-file function reference (passed from CodeReviewLayout to Sidebar)
-  let scrollToFileFn: ((path: string) => void) | null = null;
-
   // Derived state
   const activeLane = createMemo(() => props.lanes.find((l) => l.id === props.activeLaneId));
 
@@ -186,7 +183,6 @@ export function MainLayout(props: MainLayoutProps) {
                   <CodeReviewLayout
                     laneId={lane().id}
                     workingDir={getEffectiveWorkingDir(lane())}
-                    onScrollToFile={(fn) => { scrollToFileFn = fn; }}
                   />
                 </Show>
 
@@ -235,7 +231,6 @@ export function MainLayout(props: MainLayoutProps) {
                   collapsed={sidebarCollapsed()}
                   onFileSelect={setSelectedFile}
                   onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                  onScrollToFile={(fn) => { scrollToFileFn = fn; }}
                 />
               </div>
 
