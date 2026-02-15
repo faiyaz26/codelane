@@ -138,20 +138,13 @@ export const codeReviewStore = {
         loadingProgress: `Fetching diffs for ${changesWithStats.length} files...`,
       }));
 
-      // 2. Get git status for staged/unstaged info
-      const status = await getGitStatus(workingDir);
-      const allChangedFiles = [
-        ...status.staged.map(f => f.path),
-        ...status.unstaged.map(f => f.path),
-      ];
-
-      // 3. Fetch diffs for all changed files
+      // 2. Fetch diffs for all changed files (use changesWithStats as source of truth)
       const fileDiffs = new Map<string, string>();
-      for (const filePath of allChangedFiles) {
+      for (const file of changesWithStats) {
         try {
-          const diff = await getGitDiff(workingDir, filePath, false);
+          const diff = await getGitDiff(workingDir, file.path, false);
           if (diff && diff.trim()) {
-            fileDiffs.set(filePath, diff);
+            fileDiffs.set(file.path, diff);
           }
         } catch {
           // Skip files that can't be diffed (binary, etc.)
