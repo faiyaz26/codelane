@@ -16,6 +16,7 @@ import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsMana
 interface CodeReviewLayoutProps {
   laneId: string;
   workingDir: string;
+  onScrollToFile?: (scrollFn: (path: string) => void) => void;
 }
 
 // Min/max widths for the left panel (summary)
@@ -27,6 +28,13 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   let scrollToFileFn: ((path: string) => void) | null = null;
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
+
+  // Expose the scroll function to parent (Sidebar)
+  createEffect(() => {
+    if (props.onScrollToFile && scrollToFileFn) {
+      props.onScrollToFile(scrollToFileFn);
+    }
+  });
 
   const handleGenerate = () => {
     codeReviewStore.generateReview(props.laneId, props.workingDir);

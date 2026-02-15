@@ -17,6 +17,7 @@ interface ReviewFileScrollViewProps {
   fileDiffs: Map<string, string>;
   onVisibleFileChange: (path: string) => void;
   onScrollToFile?: (scrollFn: (path: string) => void) => void;
+  contextPanelHeightPercent?: number; // Height of context panel as percentage (for bottom padding)
 }
 
 export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
@@ -60,8 +61,8 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
       },
       {
         root: scrollContainerRef,
-        threshold: 0.1,
-        rootMargin: '0px 0px -60% 0px', // Trigger when file is in top 40%
+        threshold: [0, 0.1, 0.5, 1.0],
+        rootMargin: '0px', // No margin - detect file anywhere in viewport
       }
     );
 
@@ -158,6 +159,12 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
     return parts.slice(0, -1).join('/');
   };
 
+  // Calculate bottom padding: context panel height % of the scroll view height
+  const bottomPadding = () => {
+    const panelPercent = props.contextPanelHeightPercent ?? 33;
+    return `${panelPercent}%`;
+  };
+
   return (
     <div ref={scrollContainerRef} class="flex-1 overflow-y-auto">
       <Show
@@ -168,9 +175,17 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
           </div>
         }
       >
+        <div style={{ 'padding-bottom': bottomPadding() }}>
         <For each={props.sortedFiles}>
           {(file) => {
-            const diff = () => props.fileDiffs.get(file.path) || '';
+            const diff = () => {
+              const d = props.fileDiffs.get(file.path);
+              // Debug: log when diff is missing
+              if (!d) {
+                console.log(`[ReviewFileScrollView] No diff for ${file.path}, available paths:`, Array.from(props.fileDiffs.keys()));
+              }
+              return d || '';
+            };
 
             return (
               <div
@@ -217,7 +232,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                       </div>
                     }
                   >
-                    <div class="w-full">
+                    <div class="w-full min-h-[200px]">
                       <DiffViewer
                         diff={diff()}
                         fileName={getFileName(file.path)}
@@ -232,6 +247,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
             );
           }}
         </For>
+        </div>
       </Show>
     </div>
   );

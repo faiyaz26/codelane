@@ -113,7 +113,7 @@ export function DiffViewer(props: DiffViewerProps) {
       <Show
         when={props.diff && props.diff.trim().length > 0}
         fallback={
-          <div class="flex items-center justify-center h-full text-zed-text-tertiary">
+          <div class={`flex items-center justify-center text-zed-text-tertiary ${props.embedded ? 'py-8' : 'h-full'}`}>
             <div class="text-center">
               <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -128,37 +128,39 @@ export function DiffViewer(props: DiffViewerProps) {
           </div>
         }
       >
-        {/* Diff Header */}
-        <div class="sticky top-0 bg-zed-bg-panel border-b border-zed-border-subtle px-4 py-2 z-10">
-          <div class="flex items-center justify-between">
-            {/* View mode tabs */}
-            <div class="flex items-center gap-1">
-              <button
-                onClick={() => setViewMode('unified')}
-                class={`px-3 py-1 text-xs rounded transition-colors ${
-                  viewMode() === 'unified'
-                    ? 'bg-zed-bg-hover text-zed-text-primary'
-                    : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover/50'
-                }`}
-              >
-                Unified
-              </button>
-              <button
-                onClick={() => setViewMode('split')}
-                class={`px-3 py-1 text-xs rounded transition-colors ${
-                  viewMode() === 'split'
-                    ? 'bg-zed-bg-hover text-zed-text-primary'
-                    : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover/50'
-                }`}
-              >
-                Split
-              </button>
-              <Show when={!highlighterReady() || !dataReady()}>
-                <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(loading...)</span>
-              </Show>
+        {/* Diff Header - hide in embedded mode (ReviewFileScrollView has its own headers) */}
+        <Show when={!props.embedded}>
+          <div class="sticky top-0 bg-zed-bg-panel border-b border-zed-border-subtle px-4 py-2 z-10">
+            <div class="flex items-center justify-between">
+              {/* View mode tabs */}
+              <div class="flex items-center gap-1">
+                <button
+                  onClick={() => setViewMode('unified')}
+                  class={`px-3 py-1 text-xs rounded transition-colors ${
+                    viewMode() === 'unified'
+                      ? 'bg-zed-bg-hover text-zed-text-primary'
+                      : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover/50'
+                  }`}
+                >
+                  Unified
+                </button>
+                <button
+                  onClick={() => setViewMode('split')}
+                  class={`px-3 py-1 text-xs rounded transition-colors ${
+                    viewMode() === 'split'
+                      ? 'bg-zed-bg-hover text-zed-text-primary'
+                      : 'text-zed-text-tertiary hover:text-zed-text-secondary hover:bg-zed-bg-hover/50'
+                  }`}
+                >
+                  Split
+                </button>
+                <Show when={!highlighterReady() || !dataReady()}>
+                  <span class="ml-2 text-xs text-zed-text-tertiary opacity-70">(loading...)</span>
+                </Show>
+              </div>
             </div>
           </div>
-        </div>
+        </Show>
 
         {/* Diff Content - render once DiffFile is fully initialized */}
         <Show when={diffFileInstance()}>

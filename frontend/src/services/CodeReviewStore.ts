@@ -134,16 +134,21 @@ export const codeReviewStore = {
 
       // 3. Fetch diffs for all changed files
       const fileDiffs = new Map<string, string>();
+      console.log('[CodeReviewStore] Fetching diffs for files:', allChangedFiles);
       for (const filePath of allChangedFiles) {
         try {
           const diff = await getGitDiff(workingDir, filePath, false);
           if (diff && diff.trim()) {
             fileDiffs.set(filePath, diff);
+            console.log(`[CodeReviewStore] Got diff for ${filePath}, length: ${diff.length}`);
+          } else {
+            console.log(`[CodeReviewStore] Empty diff for ${filePath}`);
           }
-        } catch {
-          // Skip files that can't be diffed (binary, etc.)
+        } catch (err) {
+          console.error(`[CodeReviewStore] Failed to get diff for ${filePath}:`, err);
         }
       }
+      console.log('[CodeReviewStore] Total diffs collected:', fileDiffs.size);
 
       // 4. Smart-sort files
       setState(prev => ({

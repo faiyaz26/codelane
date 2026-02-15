@@ -77,7 +77,7 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
       classList={{ 'select-none': isResizing() }}
     >
       {/* Top: File Diffs */}
-      <div class="overflow-hidden" style={{ height: `${splitPosition()}%` }}>
+      <div class="flex flex-col overflow-hidden" style={{ height: `${splitPosition()}%` }}>
         <ReviewFileScrollView
           laneId={props.laneId}
           workingDir={props.workingDir}
@@ -85,6 +85,7 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
           fileDiffs={props.fileDiffs}
           onVisibleFileChange={props.onVisibleFileChange}
           onScrollToFile={props.onScrollToFile}
+          contextPanelHeightPercent={100 - splitPosition()}
         />
       </div>
 
