@@ -5,11 +5,13 @@
  * No tab management - just a single agent terminal for asking follow-up questions.
  */
 
-import { Show, createSignal, createEffect, onMount } from 'solid-js';
+import { Show, createSignal, onMount, onCleanup } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { PortablePty } from '../../services/PortablePty';
+import { spawn, type PtyHandle } from '../../services/PortablePty';
 import { codeReviewStore } from '../../services/CodeReviewStore';
+
+import '@xterm/xterm/css/xterm.css';
 
 interface CodeReviewAgentPanelProps {
   laneId: string;
@@ -17,24 +19,18 @@ interface CodeReviewAgentPanelProps {
 }
 
 export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
-  const [collapsed, setCollapsed] = createSignal(true);
+  const [collapsed, setCollapsed] = createSignal(false); // Start expanded
   const [panelHeight, setPanelHeight] = createSignal(300);
   const [isResizing, setIsResizing] = createSignal(false);
   let terminalRef: HTMLDivElement | undefined;
   let terminal: Terminal | null = null;
-  let pty: PortablePty | null = null;
+  let pty: PtyHandle | null = null;
   let fitAddon: FitAddon | null = null;
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
 
-  // Initialize terminal when panel expands
-  createEffect(() => {
-    if (!collapsed() && terminalRef && !terminal) {
-      initializeTerminal();
-    }
-  });
-
-  const initializeTerminal = async () => {
+  // Initialize terminal on mount
+  onMount(async () => {
     if (!terminalRef) return;
 
     terminal = new Terminal({
@@ -52,28 +48,41 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     terminal.open(terminalRef);
     fitAddon.fit();
 
-    // Create PTY for the agent
-    pty = new PortablePty(props.laneId, props.workingDir);
-    await pty.spawn();
+    // Spawn PTY with agent
+    try {
+      pty = await spawn({
+        cwd: props.workingDir,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
 
-    // Connect terminal to PTY
-    terminal.onData((data) => {
-      pty?.write(data);
-    });
+      // Connect terminal to PTY
+      terminal.onData((data) => {
+        pty?.write(data);
+      });
 
-    pty.onData((data) => {
-      terminal?.write(data);
-    });
+      pty.onData((data) => {
+        terminal?.write(data);
+      });
 
-    // Send initial context message
-    const context = codeReviewStore.getReviewContext(props.laneId);
-    if (context) {
-      // Give agent the review context as initial context
-      setTimeout(() => {
-        pty?.write(`# Code Review Context\n\n${context}\n\n# Ask your questions about the code changes:\n`);
-      }, 500);
+      // Send initial context message after terminal is ready
+      const context = codeReviewStore.getReviewContext(props.laneId);
+      if (context) {
+        setTimeout(() => {
+          terminal?.writeln('\x1b[1;35m# Code Review Context Loaded\x1b[0m');
+          terminal?.writeln('\x1b[90mAsk me questions about the code changes.\x1b[0m');
+          terminal?.writeln('');
+        }, 500);
+      }
+    } catch (err) {
+      terminal?.writeln(`\x1b[31mFailed to spawn terminal: ${err}\x1b[0m`);
     }
-  };
+
+    onCleanup(() => {
+      pty?.kill();
+      terminal?.dispose();
+    });
+  });
 
   const handleCollapse = () => {
     setCollapsed(!collapsed());
@@ -101,12 +110,10 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
 
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
-      pty?.kill();
-      terminal?.dispose();
-    };
+    });
   });
 
   return (
