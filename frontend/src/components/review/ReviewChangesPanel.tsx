@@ -5,7 +5,7 @@
  * Resizable divider between the two panels.
  */
 
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onMount, onCleanup, createMemo } from 'solid-js';
 import { ReviewFileScrollView } from './ReviewFileScrollView';
 import { FileContextPanel } from './FileContextPanel';
 import type { FileChangeStats } from '../../types/git';
@@ -59,23 +59,29 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
     });
   });
 
-  const visibleFileStatus = () => {
+  // Memoize file lookups to avoid repeated find() and get() operations
+  // Impact: Avoid O(n) find on every render when file changes, convert to O(1) lookup
+  const visibleFileStatus = createMemo(() => {
     if (!props.visibleFilePath) return undefined;
     const file = props.sortedFiles.find(f => f.path === props.visibleFilePath);
     return file?.status;
-  };
+  });
 
-  const visibleFileFeedback = () => {
+  // Memoize feedback lookup to avoid repeated Map.get() on every render
+  // Impact: Stabilize reference and avoid multiple lookups per render cycle
+  const visibleFileFeedback = createMemo(() => {
     if (!props.visibleFilePath) return null;
     return props.perFileFeedback.get(props.visibleFilePath) || null;
-  };
+  });
 
   return (
-    <div
+    <section
       id="review-changes-split"
       class="flex flex-col h-full overflow-hidden"
       classList={{ 'select-none': isResizing() }}
+      aria-labelledby="changed-files-heading"
     >
+      <h2 id="changed-files-heading" class="sr-only">Changed Files</h2>
       {/* Top: File Diffs */}
       <div class="flex flex-col overflow-hidden" style={{ height: `${splitPosition()}%` }}>
         <ReviewFileScrollView
@@ -92,6 +98,9 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
       {/* Resize Handle */}
       <div
         onMouseDown={handleMouseDown}
+        role="separator"
+        aria-label="Resize file diff and context panels"
+        aria-orientation="horizontal"
         class="h-1 bg-zed-border-default hover:bg-zed-accent-blue cursor-ns-resize flex-shrink-0 transition-colors"
         classList={{ 'bg-zed-accent-blue': isResizing() }}
       />
@@ -104,6 +113,6 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
           fileStatus={visibleFileStatus()}
         />
       </div>
-    </div>
+    </section>
   );
 }

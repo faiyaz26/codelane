@@ -6,6 +6,7 @@
  */
 
 import { Show, createMemo } from 'solid-js';
+import { MarkdownRenderer } from '../../lib/markdown/MarkdownRenderer';
 
 interface FileContextPanelProps {
   filePath: string | null;
@@ -14,37 +15,42 @@ interface FileContextPanelProps {
 }
 
 export function FileContextPanel(props: FileContextPanelProps) {
-  // Memoize markdown conversion
-  const renderedFeedback = createMemo(() =>
-    props.feedback ? simpleMarkdownToHtml(props.feedback) : ''
-  );
-
-  const getFileName = () => {
+  // Memoize path parsing to avoid repeated string operations on every render
+  // Impact: Even for single file display, memoization avoids re-parsing on every render cycle
+  const getFileName = createMemo(() => {
     if (!props.filePath) return '';
     const parts = props.filePath.split('/');
     return parts[parts.length - 1];
-  };
+  });
 
-  const getStatusColor = () => {
-    switch (props.fileStatus) {
-      case 'added': return 'text-green-400';
-      case 'modified': return 'text-blue-400';
-      case 'deleted': return 'text-red-400';
-      case 'renamed': return 'text-yellow-400';
-      default: return 'text-zed-text-secondary';
-    }
-  };
+  // Memoize status lookup maps for efficient color/letter resolution
+  // Impact: Convert repeated switch statements to O(1) map lookups
+  const statusColorMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'text-green-400');
+    map.set('modified', 'text-blue-400');
+    map.set('deleted', 'text-red-400');
+    map.set('renamed', 'text-yellow-400');
+    return map;
+  });
 
-  const getStatusLetter = () => {
-    switch (props.fileStatus) {
-      case 'added': return 'A';
-      case 'modified': return 'M';
-      case 'deleted': return 'D';
-      case 'renamed': return 'R';
-      case 'copied': return 'C';
-      default: return '?';
-    }
-  };
+  const statusLetterMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'A');
+    map.set('modified', 'M');
+    map.set('deleted', 'D');
+    map.set('renamed', 'R');
+    map.set('copied', 'C');
+    return map;
+  });
+
+  const getStatusColor = createMemo(() => {
+    return statusColorMap().get(props.fileStatus!) ?? 'text-zed-text-secondary';
+  });
+
+  const getStatusLetter = createMemo(() => {
+    return statusLetterMap().get(props.fileStatus!) ?? '?';
+  });
 
   return (
     <div class="flex flex-col h-full overflow-hidden bg-zed-bg-panel">
@@ -85,9 +91,10 @@ export function FileContextPanel(props: FileContextPanelProps) {
               </div>
             }
           >
-            <div
+            <MarkdownRenderer
+              markdown={props.feedback || ''}
+              mode="simple"
               class="prose prose-sm prose-invert max-w-none text-xs text-zed-text-secondary leading-relaxed [&_h1]:text-sm [&_h1]:text-zed-text-primary [&_h2]:text-xs [&_h2]:text-zed-text-primary [&_h3]:text-xs [&_h3]:text-zed-text-primary [&_strong]:text-zed-text-primary [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:bg-zed-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-zed-accent-blue"
-              innerHTML={renderedFeedback()}
             />
           </Show>
         </Show>
@@ -96,51 +103,3 @@ export function FileContextPanel(props: FileContextPanelProps) {
   );
 }
 
-/**
- * Very lightweight markdown → HTML for per-file feedback.
- * Handles: headers, bold, inline code, lists, paragraphs.
- */
-function simpleMarkdownToHtml(md: string): string {
-  return md
-    .split('\n')
-    .map(line => {
-      // Headers
-      if (line.startsWith('### ')) return `<h3>${escapeHtml(line.slice(4))}</h3>`;
-      if (line.startsWith('## ')) return `<h2>${escapeHtml(line.slice(3))}</h2>`;
-      if (line.startsWith('# ')) return `<h1>${escapeHtml(line.slice(2))}</h1>`;
-
-      // List items
-      if (line.match(/^[-*]\s/)) {
-        const content = line.slice(2);
-        return `<li>${inlineFormat(content)}</li>`;
-      }
-      if (line.match(/^\d+\.\s/)) {
-        const content = line.replace(/^\d+\.\s/, '');
-        return `<li>${inlineFormat(content)}</li>`;
-      }
-
-      // Empty line
-      if (line.trim() === '') return '<br/>';
-
-      // Regular paragraph
-      return `<p>${inlineFormat(line)}</p>`;
-    })
-    .join('\n');
-}
-
-function inlineFormat(text: string): string {
-  let html = escapeHtml(text);
-  // Bold
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // Inline code
-  html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-  return html;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}

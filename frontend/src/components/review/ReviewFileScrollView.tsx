@@ -4,10 +4,18 @@
  * Scrollable container rendering all changed files sequentially.
  * Each file has a sticky header and inline DiffViewer.
  * Uses IntersectionObserver to track which file is currently visible.
+ *
+ * Performance optimizations:
+ * - Debounced visibility updates to reduce callback frequency
+ * - Sorted array of visible file indices for O(1) topmost lookup
+ * - Binary search insertion for O(log n) updates
+ * - Simplified intersection thresholds
  */
 
 import { For, Show, createSignal, onMount, onCleanup, createEffect, createMemo } from 'solid-js';
 import { DiffViewer } from '../editor/DiffViewer';
+import { debounce } from '../../utils/debounce';
+import { useLazyDiff } from '../../hooks/useLazyDiff';
 import type { FileChangeStats } from '../../types/git';
 
 interface ReviewFileScrollViewProps {
@@ -33,11 +41,35 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
     return map;
   });
 
+  // Debounced visibility update - reduces callback frequency from every scroll to max once per 100ms
+  const debouncedVisibleFileUpdate = debounce((filePath: string) => {
+    props.onVisibleFileChange(filePath);
+  }, 100);
+
+  // Helper function to insert value in sorted array (binary search insertion, O(log n))
+  const insertSorted = (arr: number[], value: number): void => {
+    let low = 0;
+    let high = arr.length;
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (arr[mid] < value) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    arr.splice(low, 0, value);
+  };
+
   // Single merged IntersectionObserver for both visibility and lazy rendering
   onMount(() => {
     if (!scrollContainerRef) return;
 
     const visibleFiles = new Set<string>();
+    // Keep sorted array of visible file indices for O(1) topmost lookup
+    const visibleIndices: number[] = [];
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -48,10 +80,15 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
           const filePath = entry.target.getAttribute('data-file-path');
           if (!filePath) continue;
 
+          const idx = pathIndexMap().get(filePath);
+          if (idx === undefined) continue;
+
           if (entry.isIntersecting) {
             // Track visible files
             if (!visibleFiles.has(filePath)) {
               visibleFiles.add(filePath);
+              // Insert index in sorted position (O(log n) insertion)
+              insertSorted(visibleIndices, idx);
               changed = true;
             }
             // Mark for rendering (once added, never removed)
@@ -61,6 +98,11 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
           } else {
             if (visibleFiles.has(filePath)) {
               visibleFiles.delete(filePath);
+              // Remove index from sorted array (O(n) but rare)
+              const idxPos = visibleIndices.indexOf(idx);
+              if (idxPos !== -1) {
+                visibleIndices.splice(idxPos, 1);
+              }
               changed = true;
             }
           }
@@ -71,26 +113,19 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
           setShouldRenderDiff(toRender);
         }
 
-        // Notify parent of topmost visible file (O(n) instead of O(n²))
+        // Notify parent of topmost visible file (O(1) - just take first index from sorted array)
         // Skip if manual scrolling is in progress
-        if (!isManualScrolling && changed && visibleFiles.size > 0) {
-          let topmost: string | null = null;
-          let minIdx = Infinity;
-          for (const path of visibleFiles) {
-            const idx = pathIndexMap().get(path) ?? Infinity;
-            if (idx < minIdx) {
-              minIdx = idx;
-              topmost = path;
-            }
-          }
-          if (topmost) {
-            props.onVisibleFileChange(topmost);
+        if (!isManualScrolling && changed && visibleIndices.length > 0) {
+          const topmostIdx = visibleIndices[0]; // Smallest index
+          const topmostPath = props.sortedFiles[topmostIdx]?.path;
+          if (topmostPath) {
+            debouncedVisibleFileUpdate(topmostPath);
           }
         }
       },
       {
         root: scrollContainerRef,
-        threshold: [0, 1], // Just top/bottom - simpler
+        threshold: [0, 0.1], // Simpler threshold for better performance
         rootMargin: '200px 0px 200px 0px', // Render margin for lazy loading
       }
     );
@@ -150,26 +185,34 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
     }
   });
 
+  // Memoize status lookup maps for O(1) header rendering
+  // Impact: File headers are sticky and render frequently as user scrolls; efficient lookups improve scroll performance
+  const statusColorMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'text-green-400 bg-green-400/10');
+    map.set('modified', 'text-blue-400 bg-blue-400/10');
+    map.set('deleted', 'text-red-400 bg-red-400/10');
+    map.set('renamed', 'text-yellow-400 bg-yellow-400/10');
+    map.set('copied', 'text-purple-400 bg-purple-400/10');
+    return map;
+  });
+
+  const statusLetterMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'A');
+    map.set('modified', 'M');
+    map.set('deleted', 'D');
+    map.set('renamed', 'R');
+    map.set('copied', 'C');
+    return map;
+  });
+
   const getStatusColor = (status: FileChangeStats['status']) => {
-    switch (status) {
-      case 'added': return 'text-green-400 bg-green-400/10';
-      case 'modified': return 'text-blue-400 bg-blue-400/10';
-      case 'deleted': return 'text-red-400 bg-red-400/10';
-      case 'renamed': return 'text-yellow-400 bg-yellow-400/10';
-      case 'copied': return 'text-purple-400 bg-purple-400/10';
-      default: return 'text-zed-text-secondary bg-zed-bg-hover';
-    }
+    return statusColorMap().get(status) ?? 'text-zed-text-secondary bg-zed-bg-hover';
   };
 
   const getStatusLetter = (status: FileChangeStats['status']) => {
-    switch (status) {
-      case 'added': return 'A';
-      case 'modified': return 'M';
-      case 'deleted': return 'D';
-      case 'renamed': return 'R';
-      case 'copied': return 'C';
-      default: return '?';
-    }
+    return statusLetterMap().get(status) ?? '?';
   };
 
   const getFileName = (path: string) => {
@@ -183,11 +226,12 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
     return parts.slice(0, -1).join('/');
   };
 
-  // Calculate bottom padding: context panel height % of the scroll view height
-  const bottomPadding = () => {
+  // Memoize bottom padding calculation to stabilize style binding
+  // Impact: Avoid recalculating padding string on every render cycle
+  const bottomPadding = createMemo(() => {
     const panelPercent = props.contextPanelHeightPercent ?? 33;
     return `${panelPercent}%`;
-  };
+  });
 
   return (
     <div ref={scrollContainerRef} class="flex-1 overflow-y-auto">
@@ -202,7 +246,21 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
         <div style={{ 'padding-bottom': bottomPadding() }}>
         <For each={props.sortedFiles}>
           {(file) => {
-            const diff = () => props.fileDiffs.get(file.path) || '';
+            // Check if file should render (near viewport)
+            const shouldRender = () => shouldRenderDiff().has(file.path);
+
+            // For files with cached diffs (from summary), use them
+            const cachedDiff = () => props.fileDiffs.get(file.path);
+
+            // For files without cached diffs, lazy load on demand
+            const lazyDiff = useLazyDiff({
+              filePath: file.path,
+              workingDir: props.workingDir,
+              shouldLoad: shouldRender,
+            });
+
+            // Use cached diff if available, otherwise lazy-loaded diff
+            const diff = () => cachedDiff() ?? lazyDiff.diff();
 
             return (
               <div
@@ -229,29 +287,41 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                   </div>
                 </div>
 
-                {/* Diff Content - Lazy rendered */}
+                {/* Diff Content - Lazy rendered and lazy loaded */}
                 <Show
-                  when={diff()}
+                  when={shouldRender()}
                   fallback={
-                    <div class="p-4 text-center text-zed-text-tertiary text-xs">
-                      No diff available
+                    <div class="h-64 flex items-center justify-center text-zed-text-tertiary">
+                      <div class="flex items-center gap-2 text-xs">
+                        <div class="w-2 h-2 bg-zed-accent-blue rounded-full animate-pulse" />
+                        <span>Scroll to load...</span>
+                      </div>
                     </div>
                   }
                 >
                   <Show
-                    when={shouldRenderDiff().has(file.path)}
+                    when={diff()}
                     fallback={
-                      <div class="h-64 flex items-center justify-center text-zed-text-tertiary">
-                        <div class="flex items-center gap-2 text-xs">
-                          <div class="w-2 h-2 bg-zed-accent-blue rounded-full animate-pulse" />
-                          <span>Loading diff...</span>
+                      <Show
+                        when={lazyDiff.loading()}
+                        fallback={
+                          <div class="p-4 text-center text-zed-text-tertiary text-xs">
+                            {lazyDiff.error() || 'No diff available'}
+                          </div>
+                        }
+                      >
+                        <div class="h-64 flex items-center justify-center">
+                          <div class="flex flex-col items-center gap-2">
+                            <div class="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                            <span class="text-xs text-zed-text-tertiary">Loading diff...</span>
+                          </div>
                         </div>
-                      </div>
+                      </Show>
                     }
                   >
                     <div class="w-full min-h-[200px]">
                       <DiffViewer
-                        diff={diff()}
+                        diff={diff()!}
                         fileName={getFileName(file.path)}
                         filePath={file.path}
                         workingDir={props.workingDir}

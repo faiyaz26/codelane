@@ -293,7 +293,10 @@ export function TopBar(props: TopBarProps) {
               <Show when={props.activeView === ActivityView.CodeReview}>
                 {(() => {
                   const reviewState = () => codeReviewStore.getState(props.activeLaneId!)();
-                  const isGenerating = () => reviewState().status === 'loading';
+                  const isGenerating = () => {
+                    const status = reviewState().status;
+                    return status !== 'idle' && status !== 'ready' && status !== 'error';
+                  };
                   const hasReview = () => reviewState().status === 'ready';
 
                   return (

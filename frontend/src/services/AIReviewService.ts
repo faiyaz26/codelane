@@ -4,7 +4,8 @@
  * Handles interaction with local AI CLI tools for code changes summary and feedback generation
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { reviewAPI } from './api/provider';
+import type { ReviewGenerationParams, FileReviewParams } from './api/types';
 
 export type AITool = 'claude' | 'aider' | 'opencode' | 'gemini';
 
@@ -20,6 +21,7 @@ export interface AIReviewRequest {
   workingDir: string;
   customPrompt?: string;
   model?: string;
+  signal?: AbortSignal;
 }
 
 // Model options for each tool
@@ -53,14 +55,16 @@ export class AIReviewService {
     const prompt = request.customPrompt || this.getDefaultPrompt();
 
     try {
-      const result = await invoke<AIReviewResult>('ai_generate_review', {
+      const params: ReviewGenerationParams = {
         tool: request.tool,
         diffContent: request.diffContent,
         prompt,
         workingDir: request.workingDir,
         model: request.model || null,
-      });
+        signal: request.signal,
+      };
 
+      const result = await reviewAPI.generateReview(params);
       return result;
     } catch (error) {
       return {
@@ -165,7 +169,7 @@ Be concise and actionable.`;
    */
   async testTool(tool: AITool): Promise<boolean> {
     try {
-      return await invoke<boolean>('ai_test_tool', { tool });
+      return await reviewAPI.testTool({ tool });
     } catch (error) {
       console.error(`Failed to test tool ${tool}:`, error);
       return false;
@@ -177,8 +181,7 @@ Be concise and actionable.`;
    */
   async getAvailableTools(): Promise<AITool[]> {
     try {
-      const tools = await invoke<string[]>('ai_get_available_tools');
-      return tools as AITool[];
+      return await reviewAPI.getAvailableTools();
     } catch (error) {
       console.error('Failed to get available tools:', error);
       return [];
@@ -253,17 +256,30 @@ Be very concise — aim for 3-5 bullet points total. No preamble.`;
     diffContent: string,
     workingDir: string,
     model?: string,
-    customPrompt?: string
+    customPrompt?: string,
+    signal?: AbortSignal
   ): Promise<AIReviewResult> {
     const prompt = customPrompt || `${this.getDefaultFilePrompt()}\n\nFile: ${filePath}`;
 
-    return this.generateReview({
-      tool,
-      diffContent,
-      workingDir,
-      customPrompt: prompt,
-      model,
-    });
+    try {
+      const params: FileReviewParams = {
+        tool,
+        filePath,
+        diffContent,
+        workingDir,
+        model: model || null,
+        customPrompt: prompt,
+        signal,
+      };
+
+      return await reviewAPI.generateFileReview(params);
+    } catch (error) {
+      return {
+        success: false,
+        content: '',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**

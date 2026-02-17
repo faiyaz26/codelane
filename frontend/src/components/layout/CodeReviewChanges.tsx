@@ -2,6 +2,7 @@ import { createSignal, For, Show, createEffect, onMount, onCleanup } from 'solid
 import { invoke } from '@tauri-apps/api/core';
 import { useGitChanges } from '../../hooks/useGitChanges';
 import { editorStateManager } from '../../services/EditorStateManager';
+import { reviewAPI } from '../../services/api/provider';
 import type { FileChangeStats } from '../../types/git';
 
 interface GitBranchInfo {
@@ -119,7 +120,7 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
         });
 
         // Sort the commit changes
-        const sorted = await invoke<FileChangeStats[]>('git_sort_files', {
+        const sorted = await reviewAPI.sortFiles({
           files: commitChanges,
           sortOrder: sortOrder(),
           workingDir: props.workingDir,
@@ -142,7 +143,7 @@ export function CodeReviewChanges(props: CodeReviewChangesProps) {
     }
 
     try {
-      const sorted = await invoke<FileChangeStats[]>('git_sort_files', {
+      const sorted = await reviewAPI.sortFiles({
         files,
         sortOrder: order,
         workingDir: props.workingDir,

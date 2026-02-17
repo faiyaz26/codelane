@@ -9,7 +9,7 @@ import { BottomPanel } from './BottomPanel';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
-import { CodeReviewLayout } from '../review';
+import { CodeReviewLayout, ReviewErrorBoundary } from '../review';
 import { CodeReviewAgentPanel } from '../review/CodeReviewAgentPanel';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
@@ -181,10 +181,12 @@ export function MainLayout(props: MainLayoutProps) {
 
                 {/* Code Review - takes over main content area */}
                 <Show when={activeView() === ActivityView.CodeReview}>
-                  <CodeReviewLayout
-                    laneId={lane().id}
-                    workingDir={getEffectiveWorkingDir(lane())}
-                  />
+                  <ReviewErrorBoundary>
+                    <CodeReviewLayout
+                      laneId={lane().id}
+                      workingDir={getEffectiveWorkingDir(lane())}
+                    />
+                  </ReviewErrorBoundary>
                 </Show>
 
                 {/* Editor - Center (shared by non-review views) */}

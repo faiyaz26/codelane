@@ -6,7 +6,7 @@
  * The currently visible file is highlighted.
  */
 
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import type { FileChangeStats } from '../../types/git';
 
@@ -16,10 +16,13 @@ interface CodeReviewFileListProps {
 
 export function CodeReviewFileList(props: CodeReviewFileListProps) {
   const reviewState = () => codeReviewStore.getState(props.laneId)();
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const sortedFiles = createMemo(() => reviewState().sortedFiles);
   const visibleFile = createMemo(() => reviewState().visibleFilePath);
 
+  // Memoize O(n) aggregations to avoid recalculating on every render
+  // Impact: Used in header display, reduces computation from O(n) to O(1) after first change
   const totalAdditions = createMemo(() =>
     sortedFiles().reduce((sum, f) => sum + f.additions, 0)
   );
@@ -27,26 +30,34 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
     sortedFiles().reduce((sum, f) => sum + f.deletions, 0)
   );
 
+  // Memoize status lookup maps for O(1) access instead of repeated switch statements
+  // Impact: Each file item in the list calls getStatusColor/Letter - converting O(n) switch calls to O(1) lookups
+  const statusColorMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'text-green-400');
+    map.set('modified', 'text-blue-400');
+    map.set('deleted', 'text-red-400');
+    map.set('renamed', 'text-yellow-400');
+    map.set('copied', 'text-purple-400');
+    return map;
+  });
+
+  const statusLetterMap = createMemo(() => {
+    const map = new Map<string, string>();
+    map.set('added', 'A');
+    map.set('modified', 'M');
+    map.set('deleted', 'D');
+    map.set('renamed', 'R');
+    map.set('copied', 'C');
+    return map;
+  });
+
   const getStatusColor = (status: FileChangeStats['status']) => {
-    switch (status) {
-      case 'added': return 'text-green-400';
-      case 'modified': return 'text-blue-400';
-      case 'deleted': return 'text-red-400';
-      case 'renamed': return 'text-yellow-400';
-      case 'copied': return 'text-purple-400';
-      default: return 'text-zed-text-secondary';
-    }
+    return statusColorMap().get(status) ?? 'text-zed-text-secondary';
   };
 
   const getStatusLetter = (status: FileChangeStats['status']) => {
-    switch (status) {
-      case 'added': return 'A';
-      case 'modified': return 'M';
-      case 'deleted': return 'D';
-      case 'renamed': return 'R';
-      case 'copied': return 'C';
-      default: return '?';
-    }
+    return statusLetterMap().get(status) ?? '?';
   };
 
   const getFileName = (path: string) => {
@@ -58,6 +69,29 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
     const parts = path.split('/');
     if (parts.length <= 1) return '';
     return parts.slice(0, -1).join('/');
+  };
+
+  // Keyboard navigation handler
+  const handleKeyDown = (e: KeyboardEvent, index: number) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        const nextIndex = Math.min(index + 1, sortedFiles().length - 1);
+        setSelectedIndex(nextIndex);
+        document.getElementById(`file-item-${nextIndex}`)?.focus();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        const prevIndex = Math.max(index - 1, 0);
+        setSelectedIndex(prevIndex);
+        document.getElementById(`file-item-${prevIndex}`)?.focus();
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        codeReviewStore.requestScrollToFile(props.laneId, sortedFiles()[index].path);
+        break;
+    }
   };
 
   return (
@@ -78,15 +112,19 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
       </Show>
 
       {/* File List */}
-      <div class="flex-1 overflow-y-auto">
+      <div
+        class="flex-1 overflow-y-auto"
+        role="listbox"
+        aria-label="Changed files"
+      >
         <Show
           when={reviewState().status === 'ready'}
           fallback={
             <Show
               when={reviewState().status === 'loading'}
               fallback={
-                <div class="p-4 text-center text-zed-text-tertiary text-sm">
-                  <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-4 text-center text-zed-text-tertiary text-sm" role="status">
+                  <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 14l2 2 4-4" />
                   </svg>
@@ -94,7 +132,7 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
                 </div>
               }
             >
-              <div class="p-4 text-center text-zed-text-tertiary text-sm">
+              <div class="p-4 text-center text-zed-text-tertiary text-sm" role="status">
                 Loading files...
               </div>
             </Show>
@@ -103,21 +141,27 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
           <Show
             when={sortedFiles().length > 0}
             fallback={
-              <div class="p-4 text-center text-zed-text-tertiary text-sm">
+              <div class="p-4 text-center text-zed-text-tertiary text-sm" role="status">
                 No changes to review
               </div>
             }
           >
             <For each={sortedFiles()}>
-              {(file) => (
+              {(file, index) => (
                 <button
+                  id={`file-item-${index()}`}
+                  role="option"
+                  aria-selected={visibleFile() === file.path}
+                  aria-label={`${getStatusLetter(file.status)} ${getFileName(file.path)}, ${file.additions} additions, ${file.deletions} deletions`}
+                  tabIndex={visibleFile() === file.path ? 0 : -1}
                   onClick={() => codeReviewStore.requestScrollToFile(props.laneId, file.path)}
+                  onKeyDown={(e) => handleKeyDown(e, index())}
                   class={`w-full flex items-start gap-2 px-2 py-1.5 hover:bg-zed-bg-hover transition-colors text-left border-b border-zed-border-subtle/50 ${
                     visibleFile() === file.path ? 'bg-zed-bg-hover border-l-2 border-l-zed-accent-blue' : ''
                   }`}
                 >
                   {/* Status Badge */}
-                  <div class={`w-4 h-4 flex items-center justify-center text-xs font-bold rounded flex-shrink-0 ${getStatusColor(file.status)}`}>
+                  <div class={`w-4 h-4 flex items-center justify-center text-xs font-bold rounded flex-shrink-0 ${getStatusColor(file.status)}`} aria-hidden="true">
                     {getStatusLetter(file.status)}
                   </div>
 
@@ -134,7 +178,7 @@ export function CodeReviewFileList(props: CodeReviewFileListProps) {
                   </div>
 
                   {/* Line counts */}
-                  <div class="text-xs font-mono flex-shrink-0 flex items-center gap-1">
+                  <div class="text-xs font-mono flex-shrink-0 flex items-center gap-1" aria-hidden="true">
                     <span class="text-green-400">+{file.additions}</span>
                     <span class="text-red-400">-{file.deletions}</span>
                   </div>

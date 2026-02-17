@@ -8,11 +8,23 @@
 import { createSignal, createRoot, type Accessor } from 'solid-js';
 import type { AITool } from './AIReviewService';
 
+export interface FileExclusionCategories {
+  documentation: boolean;     // .md, .txt, .rst, .adoc
+  lockFiles: boolean;         // package-lock.json, yarn.lock, Cargo.lock, etc.
+  generatedFiles: boolean;    // .min.js, .bundle.js, .chunk.js
+  binaryFiles: boolean;       // images, fonts, archives
+  testFiles: boolean;         // *.test.ts, *.spec.js, __tests__/
+  configFiles: boolean;       // tsconfig.json, .eslintrc, etc.
+}
+
 export interface CodeReviewSettings {
   aiTool: AITool;
   aiModel: Record<AITool, string>;
   reviewPrompt: string | null;  // null = use default
   filePrompt: string | null;    // null = use default
+  concurrency: number;           // Number of files to process in parallel (1-8)
+  excludeCategories: FileExclusionCategories; // File categories to exclude from review
+  customExcludePatterns: string[]; // Custom glob patterns to exclude (e.g., "*.generated.ts")
 }
 
 const DEFAULT_SETTINGS: CodeReviewSettings = {
@@ -25,6 +37,16 @@ const DEFAULT_SETTINGS: CodeReviewSettings = {
   },
   reviewPrompt: null,
   filePrompt: null,
+  concurrency: 4,
+  excludeCategories: {
+    documentation: true,
+    lockFiles: true,
+    generatedFiles: true,
+    binaryFiles: true,
+    testFiles: false,
+    configFiles: false,
+  },
+  customExcludePatterns: [],
 };
 
 const STORAGE_KEY = 'codelane-code-review-settings';
@@ -143,6 +165,41 @@ export const codeReviewSettingsManager = {
 
   setFilePrompt(prompt: string | null) {
     updateSettings({ filePrompt: prompt });
+  },
+
+  getConcurrency(): number {
+    return settings().concurrency;
+  },
+
+  setConcurrency(concurrency: number) {
+    // Clamp between 1 and 8 for safety
+    const clamped = Math.max(1, Math.min(8, concurrency));
+    updateSettings({ concurrency: clamped });
+  },
+
+  getExcludeCategories(): FileExclusionCategories {
+    return settings().excludeCategories;
+  },
+
+  setExcludeCategory(category: keyof FileExclusionCategories, enabled: boolean) {
+    const current = settings().excludeCategories;
+    updateSettings({ excludeCategories: { ...current, [category]: enabled } });
+  },
+
+  getCustomExcludePatterns(): string[] {
+    return settings().customExcludePatterns;
+  },
+
+  addCustomExcludePattern(pattern: string) {
+    const current = settings().customExcludePatterns;
+    if (!current.includes(pattern)) {
+      updateSettings({ customExcludePatterns: [...current, pattern] });
+    }
+  },
+
+  removeCustomExcludePattern(pattern: string) {
+    const current = settings().customExcludePatterns;
+    updateSettings({ customExcludePatterns: current.filter(p => p !== pattern) });
   },
 
   getDefaults(): CodeReviewSettings {

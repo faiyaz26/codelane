@@ -6,11 +6,8 @@
  */
 
 import { Show, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { spawn, type PtyHandle } from '../../services/PortablePty';
 import { codeReviewStore } from '../../services/CodeReviewStore';
-import { getAgentSettings } from '../../lib/settings-api';
+import { useCodeReviewTerminal } from '../../hooks/useCodeReviewTerminal';
 
 import '@xterm/xterm/css/xterm.css';
 
@@ -23,95 +20,22 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
   const [collapsed, setCollapsed] = createSignal(false); // Start expanded
   const [panelHeight, setPanelHeight] = createSignal(300);
   const [isResizing, setIsResizing] = createSignal(false);
-  let terminalRef: HTMLDivElement | undefined;
-  let terminal: Terminal | null = null;
-  let pty: PtyHandle | null = null;
-  let fitAddon: FitAddon | null = null;
+  const [terminalContainer, setTerminalContainer] = createSignal<HTMLElement>();
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
-  const [terminalInitialized, setTerminalInitialized] = createSignal(false);
-  const [terminalRefReady, setTerminalRefReady] = createSignal(false);
 
-  // Initialize terminal when status becomes ready and terminal ref is available
+  // Terminal lifecycle managed by hook
+  const terminal = useCodeReviewTerminal({
+    workingDir: props.workingDir,
+    enabled: reviewState().status === 'ready',
+    containerRef: terminalContainer,
+  });
+
+  // Fit terminal on resize (when not actively resizing)
   createEffect(() => {
-    const status = reviewState().status;
-    const refReady = terminalRefReady();
-    console.log('[CodeReviewAgentPanel] createEffect running, status:', status, 'refReady:', refReady, 'initialized:', terminalInitialized(), 'terminalRef:', !!terminalRef);
-
-    if (status !== 'ready' || !refReady || terminalInitialized()) {
-      return;
+    if (!isResizing() && terminal.isReady()) {
+      terminal.fitTerminal();
     }
-
-    console.log('[CodeReviewAgentPanel] All conditions met, initializing terminal...');
-    setTerminalInitialized(true);
-
-    if (!terminalRef) {
-      console.error('[CodeReviewAgentPanel] terminalRef is null even though refReady is true!');
-      return;
-    }
-
-    terminal = new Terminal({
-      theme: {
-        background: '#111111',
-        foreground: '#e6e6e6',
-      },
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      cursorBlink: true,
-    });
-
-    fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(terminalRef);
-    fitAddon.fit();
-    console.log('[CodeReviewAgentPanel] Terminal opened and fitted');
-
-    // Spawn PTY with agent (async)
-    (async () => {
-      try {
-        console.log('[CodeReviewAgentPanel] Spawning PTY...');
-        pty = await spawn(undefined, undefined, {
-        cwd: props.workingDir,
-        cols: terminal.cols,
-        rows: terminal.rows,
-      });
-
-      // Connect terminal to PTY
-      terminal.onData((data) => {
-        pty?.write(data);
-      });
-
-      pty.onData((data) => {
-        terminal?.write(data);
-      });
-
-      // Send welcome message with user's default agent
-      setTimeout(async () => {
-        terminal?.writeln('\x1b[1;35m━━━ AI Review Assistant ━━━\x1b[0m');
-        terminal?.writeln('');
-        terminal?.writeln('\x1b[90mThis terminal is ready for asking questions about your code changes.\x1b[0m');
-
-        // Get user's default agent
-        try {
-          const settings = await getAgentSettings();
-          const agentCmd = settings.defaultAgent.command || 'claude';
-          terminal?.writeln(`\x1b[90mStart your AI agent to get assistance:\x1b[0m`);
-          terminal?.writeln('');
-          terminal?.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
-        } catch {
-          terminal?.writeln('\x1b[90mStart an AI agent (claude, aider, etc.) to get assistance.\x1b[0m');
-        }
-        terminal?.writeln('');
-      }, 500);
-      } catch (err) {
-        terminal?.writeln(`\x1b[31mFailed to spawn terminal: ${err}\x1b[0m`);
-      }
-    })();
-
-    onCleanup(() => {
-      pty?.kill();
-      terminal?.dispose();
-    });
   });
 
   const handleCollapse = () => {
@@ -128,7 +52,7 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     const newHeight = window.innerHeight - e.clientY;
     if (newHeight >= 40 && newHeight <= window.innerHeight * 0.5) {
       setPanelHeight(newHeight);
-      fitAddon?.fit();
+      terminal.fitTerminal();
     }
   };
 
@@ -150,24 +74,15 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
   const isCollapsed = collapsed();
   const height = panelHeight();
 
-  console.log('[CodeReviewAgentPanel] Rendering, status:', status, 'collapsed:', isCollapsed, 'height:', height);
-
   return (
     <Show
       when={status === 'ready'}
       fallback={
         <div class="h-10 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs text-zed-text-tertiary">
-          {(() => {
-            console.log('[CodeReviewAgentPanel] Showing fallback, status:', status);
-            return 'Generate a review to enable AI assistant';
-          })()}
+          Generate a review to enable AI assistant
         </div>
       }
     >
-      {(() => {
-        console.log('[CodeReviewAgentPanel] Showing main content, status:', status);
-        return null;
-      })()}
       <div
         class="bg-zed-bg-panel border-t border-zed-border-subtle flex flex-col"
         style={{ height: isCollapsed ? '40px' : `${height}px` }}
@@ -206,11 +121,7 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
 
         {/* Terminal */}
         <div
-          ref={(el) => {
-            terminalRef = el;
-            console.log('[CodeReviewAgentPanel] Terminal div ref set:', !!el);
-            if (el) setTerminalRefReady(true);
-          }}
+          ref={setTerminalContainer}
           class="flex-1 overflow-hidden"
           style={{ display: collapsed() ? 'none' : 'block' }}
         />
