@@ -5,11 +5,12 @@
  * No tab management - just a single agent terminal for asking follow-up questions.
  */
 
-import { Show, createSignal, onMount, onCleanup } from 'solid-js';
+import { Show, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { spawn, type PtyHandle } from '../../services/PortablePty';
 import { codeReviewStore } from '../../services/CodeReviewStore';
+import { getAgentSettings } from '../../lib/settings-api';
 
 import '@xterm/xterm/css/xterm.css';
 
@@ -28,10 +29,26 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
   let fitAddon: FitAddon | null = null;
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
+  const [terminalInitialized, setTerminalInitialized] = createSignal(false);
+  const [terminalRefReady, setTerminalRefReady] = createSignal(false);
 
-  // Initialize terminal on mount
-  onMount(async () => {
-    if (!terminalRef) return;
+  // Initialize terminal when status becomes ready and terminal ref is available
+  createEffect(() => {
+    const status = reviewState().status;
+    const refReady = terminalRefReady();
+    console.log('[CodeReviewAgentPanel] createEffect running, status:', status, 'refReady:', refReady, 'initialized:', terminalInitialized(), 'terminalRef:', !!terminalRef);
+
+    if (status !== 'ready' || !refReady || terminalInitialized()) {
+      return;
+    }
+
+    console.log('[CodeReviewAgentPanel] All conditions met, initializing terminal...');
+    setTerminalInitialized(true);
+
+    if (!terminalRef) {
+      console.error('[CodeReviewAgentPanel] terminalRef is null even though refReady is true!');
+      return;
+    }
 
     terminal = new Terminal({
       theme: {
@@ -47,10 +64,13 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     terminal.loadAddon(fitAddon);
     terminal.open(terminalRef);
     fitAddon.fit();
+    console.log('[CodeReviewAgentPanel] Terminal opened and fitted');
 
-    // Spawn PTY with agent
-    try {
-      pty = await spawn({
+    // Spawn PTY with agent (async)
+    (async () => {
+      try {
+        console.log('[CodeReviewAgentPanel] Spawning PTY...');
+        pty = await spawn(undefined, undefined, {
         cwd: props.workingDir,
         cols: terminal.cols,
         rows: terminal.rows,
@@ -65,18 +85,28 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
         terminal?.write(data);
       });
 
-      // Send initial context message after terminal is ready
-      const context = codeReviewStore.getReviewContext(props.laneId);
-      if (context) {
-        setTimeout(() => {
-          terminal?.writeln('\x1b[1;35m# Code Review Context Loaded\x1b[0m');
-          terminal?.writeln('\x1b[90mAsk me questions about the code changes.\x1b[0m');
+      // Send welcome message with user's default agent
+      setTimeout(async () => {
+        terminal?.writeln('\x1b[1;35m━━━ AI Review Assistant ━━━\x1b[0m');
+        terminal?.writeln('');
+        terminal?.writeln('\x1b[90mThis terminal is ready for asking questions about your code changes.\x1b[0m');
+
+        // Get user's default agent
+        try {
+          const settings = await getAgentSettings();
+          const agentCmd = settings.defaultAgent.command || 'claude';
+          terminal?.writeln(`\x1b[90mStart your AI agent to get assistance:\x1b[0m`);
           terminal?.writeln('');
-        }, 500);
+          terminal?.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
+        } catch {
+          terminal?.writeln('\x1b[90mStart an AI agent (claude, aider, etc.) to get assistance.\x1b[0m');
+        }
+        terminal?.writeln('');
+      }, 500);
+      } catch (err) {
+        terminal?.writeln(`\x1b[31mFailed to spawn terminal: ${err}\x1b[0m`);
       }
-    } catch (err) {
-      terminal?.writeln(`\x1b[31mFailed to spawn terminal: ${err}\x1b[0m`);
-    }
+    })();
 
     onCleanup(() => {
       pty?.kill();
@@ -116,18 +146,31 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     });
   });
 
+  const status = reviewState().status;
+  const isCollapsed = collapsed();
+  const height = panelHeight();
+
+  console.log('[CodeReviewAgentPanel] Rendering, status:', status, 'collapsed:', isCollapsed, 'height:', height);
+
   return (
     <Show
-      when={reviewState().status === 'ready'}
+      when={status === 'ready'}
       fallback={
         <div class="h-10 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs text-zed-text-tertiary">
-          Generate a review to enable AI assistant
+          {(() => {
+            console.log('[CodeReviewAgentPanel] Showing fallback, status:', status);
+            return 'Generate a review to enable AI assistant';
+          })()}
         </div>
       }
     >
+      {(() => {
+        console.log('[CodeReviewAgentPanel] Showing main content, status:', status);
+        return null;
+      })()}
       <div
         class="bg-zed-bg-panel border-t border-zed-border-subtle flex flex-col"
-        style={{ height: collapsed() ? '40px' : `${panelHeight()}px` }}
+        style={{ height: isCollapsed ? '40px' : `${height}px` }}
       >
         {/* Header with collapse button */}
         <div class="h-10 flex items-center justify-between px-3 border-b border-zed-border-subtle flex-shrink-0">
@@ -154,18 +197,23 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
         </div>
 
         {/* Resize handle */}
-        <Show when={!collapsed()}>
-          <div
-            onMouseDown={handleMouseDown}
-            class="h-1 bg-zed-border-default hover:bg-zed-accent-blue cursor-ns-resize flex-shrink-0 transition-colors"
-            classList={{ 'bg-zed-accent-blue': isResizing() }}
-          />
-        </Show>
+        <div
+          onMouseDown={handleMouseDown}
+          class="h-1 bg-zed-border-default hover:bg-zed-accent-blue cursor-ns-resize flex-shrink-0 transition-colors"
+          classList={{ 'bg-zed-accent-blue': isResizing() }}
+          style={{ display: collapsed() ? 'none' : 'block' }}
+        />
 
         {/* Terminal */}
-        <Show when={!collapsed()}>
-          <div ref={terminalRef} class="flex-1 overflow-hidden" />
-        </Show>
+        <div
+          ref={(el) => {
+            terminalRef = el;
+            console.log('[CodeReviewAgentPanel] Terminal div ref set:', !!el);
+            if (el) setTerminalRefReady(true);
+          }}
+          class="flex-1 overflow-hidden"
+          style={{ display: collapsed() ? 'none' : 'block' }}
+        />
       </div>
     </Show>
   );
