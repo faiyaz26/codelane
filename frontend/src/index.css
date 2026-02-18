@@ -330,6 +330,8 @@
   width: 100%;
   padding: 0 16px 0 0;
   line-height: 1.5;
+  user-select: text;
+  cursor: text;
 }
 
 .shiki-container code .line::before {
@@ -435,6 +437,8 @@
 .shiki-container-custom .line-content {
   flex: 1;
   white-space: pre;
+  user-select: text;
+  cursor: text;
 }
 
 /* Fold indicator */

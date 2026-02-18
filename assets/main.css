@@ -108,6 +108,8 @@ html, body {
 .diff-line-content {
   flex: 1;
   overflow-x: auto;
+  user-select: text;
+  cursor: text;
 }
 
 .diff-line.added {
@@ -288,4 +290,21 @@ html, body {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* @git-diff-view text selection overrides */
+.diff-view-wrapper,
+.diff-view-wrapper * {
+  user-select: text;
+  cursor: text;
+}
+
+/* But disable selection for line numbers and UI elements */
+.diff-line-num,
+.diff-line-gutter,
+[class*="gutter"],
+[class*="line-num"],
+.diff-widget {
+  user-select: none;
+  cursor: default;
 }
