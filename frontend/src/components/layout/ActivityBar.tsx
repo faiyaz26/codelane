@@ -109,24 +109,10 @@ function ActivityIcon(props: { icon: string; class?: string }) {
     case 'code-review':
       return (
         <svg class={props.class} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 5a2 2 0 012-2h2a2 2 0 012 2v0a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 14l2 2 4-4"
-          />
+          <circle cx="5" cy="6" r="3" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+          <path d="M5 9v12" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+          <path d="M15 9l-3-3l3-3" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+          <path d="M12 6h5a2 2 0 0 1 2 2v3m0 4v6m3-3h-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
         </svg>
       );
     case 'extensions':
