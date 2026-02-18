@@ -14,6 +14,7 @@
 
 import { For, Show, createSignal, onMount, onCleanup, createEffect, createMemo } from 'solid-js';
 import { DiffViewer } from '../editor/DiffViewer';
+import { MarkdownRenderer } from '../../lib/markdown/MarkdownRenderer';
 import { debounce } from '../../utils/debounce';
 import { useLazyDiff } from '../../hooks/useLazyDiff';
 import type { FileChangeStats } from '../../types/git';
@@ -23,9 +24,10 @@ interface ReviewFileScrollViewProps {
   workingDir: string;
   sortedFiles: FileChangeStats[];
   fileDiffs: Map<string, string>;
+  perFileFeedback: Map<string, string>;
+  visibleFilePath: string | null;
   onVisibleFileChange: (path: string) => void;
   scrollToPath: string | null; // Reactive prop from store - triggers scroll when set
-  contextPanelHeightPercent?: number; // Height of context panel as percentage (for bottom padding)
 }
 
 export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
@@ -226,13 +228,6 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
     return parts.slice(0, -1).join('/');
   };
 
-  // Memoize bottom padding calculation to stabilize style binding
-  // Impact: Avoid recalculating padding string on every render cycle
-  const bottomPadding = createMemo(() => {
-    const panelPercent = props.contextPanelHeightPercent ?? 33;
-    return `${panelPercent}%`;
-  });
-
   return (
     <div ref={scrollContainerRef} class="flex-1 overflow-y-auto">
       <Show
@@ -243,7 +238,6 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
           </div>
         }
       >
-        <div style={{ 'padding-bottom': bottomPadding() }}>
         <For each={props.sortedFiles}>
           {(file) => {
             // Check if file should render (near viewport)
@@ -330,11 +324,40 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                     </div>
                   </Show>
                 </Show>
+
+                {/* File Context - Sticky at bottom, browser handles transitions automatically */}
+                <Show when={props.perFileFeedback.get(file.path)}>
+                  {(feedback) => (
+                    <div
+                      class="sticky bottom-0 z-10 bg-zed-bg-panel border-t border-zed-border-subtle"
+                      classList={{
+                        'ring-2 ring-purple-500/30': props.visibleFilePath === file.path
+                      }}
+                    >
+                      <div class="px-3 py-2 border-b border-zed-border-subtle flex items-center gap-2 bg-zed-bg-panel">
+                        <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="text-xs font-medium text-zed-text-primary">AI Feedback</span>
+                        <span class={`ml-auto text-xs font-bold ${getStatusColor(file.status)}`}>
+                          {getStatusLetter(file.status)}
+                        </span>
+                        <span class="text-xs text-zed-text-secondary truncate">{getFileName(file.path)}</span>
+                      </div>
+                      <div class="px-3 py-3 max-h-64 overflow-y-auto">
+                        <MarkdownRenderer
+                          markdown={feedback()}
+                          mode="simple"
+                          class="prose prose-sm prose-invert max-w-none text-xs text-zed-text-secondary leading-relaxed [&_h1]:text-sm [&_h1]:text-zed-text-primary [&_h2]:text-xs [&_h2]:text-zed-text-primary [&_h3]:text-xs [&_h3]:text-zed-text-primary [&_strong]:text-zed-text-primary [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:bg-zed-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-zed-accent-blue"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Show>
               </div>
             );
           }}
         </For>
-        </div>
       </Show>
     </div>
   );
