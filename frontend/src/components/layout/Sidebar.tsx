@@ -3,7 +3,7 @@ import { ActivityView } from './ActivityBar';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { SearchPanel } from '../search';
 import { CodeReviewChanges } from './CodeReviewChanges';
-import { CodeReviewFileList } from '../review/CodeReviewFileList';
+import { CodeReviewSidebar } from '../review/CodeReviewSidebar';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -78,8 +78,9 @@ export function Sidebar(props: SidebarProps) {
             />
           </Match>
           <Match when={props.activeView === ActivityView.CodeReview}>
-            <CodeReviewFileList
+            <CodeReviewSidebar
               laneId={props.lane.id}
+              workingDir={props.effectiveWorkingDir}
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>

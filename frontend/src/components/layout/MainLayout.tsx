@@ -10,7 +10,6 @@ import { ResizeHandle } from './ResizeHandle';
 import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
 import { CodeReviewLayout, ReviewErrorBoundary } from '../review';
-import { CodeReviewAgentPanel } from '../review/CodeReviewAgentPanel';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -237,20 +236,12 @@ export function MainLayout(props: MainLayoutProps) {
                 />
               </div>
 
-              {/* Bottom Panel - Show CodeReviewAgentPanel for Code Review, regular BottomPanel otherwise */}
-              <Show
-                when={activeView() === ActivityView.CodeReview}
-                fallback={
-                  <BottomPanel
-                    lanes={props.lanes}
-                    activeLaneId={props.activeLaneId}
-                    initializedLanes={props.initializedLanes}
-                  />
-                }
-              >
-                <CodeReviewAgentPanel
-                  laneId={lane().id}
-                  workingDir={getEffectiveWorkingDir(lane())}
+              {/* Bottom Panel - Don't show for Code Review (terminal is in sidebar) */}
+              <Show when={activeView() !== ActivityView.CodeReview}>
+                <BottomPanel
+                  lanes={props.lanes}
+                  activeLaneId={props.activeLaneId}
+                  initializedLanes={props.initializedLanes}
                 />
               </Show>
             </div>
@@ -268,7 +259,7 @@ export function MainLayout(props: MainLayoutProps) {
         />
       </div>
 
-      <StatusBar />
+      <StatusBar activeView={activeView()} activeLaneId={props.activeLaneId} />
     </div>
   );
 }

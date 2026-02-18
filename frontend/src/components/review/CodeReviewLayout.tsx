@@ -327,31 +327,6 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
           </div>
         </div>
       </Show>
-
-      {/* Keyboard shortcuts hint - overlay in ready state */}
-      <Show when={isReady()}>
-        <div
-          role="complementary"
-          aria-label="Keyboard shortcuts"
-          class="absolute bottom-4 right-4 px-3 py-2 bg-zed-bg-panel/90 backdrop-blur-sm border border-zed-border-subtle rounded-lg text-xs text-zed-text-tertiary shadow-lg"
-        >
-          <div class="flex items-center gap-3">
-            <span class="flex items-center gap-1">
-              <kbd class="px-1.5 py-0.5 bg-zed-bg-hover rounded text-[10px] font-mono">j</kbd> /
-              <kbd class="px-1.5 py-0.5 bg-zed-bg-hover rounded text-[10px] font-mono">k</kbd>
-              <span class="ml-1">Navigate</span>
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="px-1.5 py-0.5 bg-zed-bg-hover rounded text-[10px] font-mono">⌘R</kbd>
-              <span class="ml-1">Regenerate</span>
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="px-1.5 py-0.5 bg-zed-bg-hover rounded text-[10px] font-mono">Esc</kbd>
-              <span class="ml-1">Cancel</span>
-            </span>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }

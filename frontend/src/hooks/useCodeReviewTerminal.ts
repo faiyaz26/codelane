@@ -13,8 +13,9 @@ import { getAgentSettings } from '../lib/settings-api';
 
 export interface CodeReviewTerminalOptions {
   workingDir: string;
-  enabled: boolean; // true when status is 'ready'
+  enabled: Accessor<boolean>; // true when user clicks to enable
   containerRef: Accessor<HTMLElement | undefined>;
+  autoStartAgent?: boolean; // If true, automatically start agent with review context
 }
 
 export interface CodeReviewTerminalReturn {
@@ -35,7 +36,7 @@ export function useCodeReviewTerminal(
   // Initialize when enabled and container is ready
   createEffect(() => {
     const container = options.containerRef();
-    const enabled = options.enabled;
+    const enabled = options.enabled();
 
     if (!enabled || !container || initialized) {
       return;
@@ -94,18 +95,44 @@ export function useCodeReviewTerminal(
 
     term.writeln('\x1b[1;35m━━━ AI Review Assistant ━━━\x1b[0m');
     term.writeln('');
-    term.writeln('\x1b[90mThis terminal is ready for asking questions about your code changes.\x1b[0m');
 
-    try {
-      const settings = await getAgentSettings();
-      const agentCmd = settings.defaultAgent.command || 'claude';
-      term.writeln(`\x1b[90mStart your AI agent to get assistance:\x1b[0m`);
+    if (options.autoStartAgent) {
+      // Auto-start agent with review context
+      try {
+        const settings = await getAgentSettings();
+        const agentCmd = settings.defaultAgent.command || 'claude';
+
+        term.writeln('\x1b[90mStarting AI agent with review context...\x1b[0m');
+        term.writeln('');
+
+        // Send command to start agent
+        const startCommand = `${agentCmd}\r`;
+        pty?.write(startCommand);
+
+        // Wait a bit for agent to start, then send context message
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const contextMessage = `I have generated a code review. Can you help me understand the changes and suggest improvements?\r`;
+        pty?.write(contextMessage);
+      } catch (err) {
+        term.writeln('\x1b[31mFailed to auto-start agent.\x1b[0m');
+        term.writeln('');
+      }
+    } else {
+      // Show manual start instructions
+      term.writeln('\x1b[90mThis terminal is ready for asking questions about your code changes.\x1b[0m');
+
+      try {
+        const settings = await getAgentSettings();
+        const agentCmd = settings.defaultAgent.command || 'claude';
+        term.writeln(`\x1b[90mStart your AI agent to get assistance:\x1b[0m`);
+        term.writeln('');
+        term.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
+      } catch {
+        term.writeln('\x1b[90mStart an AI agent (claude, aider, etc.) to get assistance.\x1b[0m');
+      }
       term.writeln('');
-      term.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
-    } catch {
-      term.writeln('\x1b[90mStart an AI agent (claude, aider, etc.) to get assistance.\x1b[0m');
     }
-    term.writeln('');
   }
 
   const fitTerminal = () => {

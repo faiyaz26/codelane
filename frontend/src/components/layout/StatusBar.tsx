@@ -1,13 +1,49 @@
-import { Show } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 import { resourceManager } from '../../services/ResourceManager';
+import { codeReviewStore } from '../../services/CodeReviewStore';
+import { ActivityView } from './ActivityBar';
 
-export function StatusBar() {
+interface StatusBarProps {
+  activeView?: ActivityView;
+  activeLaneId?: string | null;
+}
+
+export function StatusBar(props: StatusBarProps) {
   // Use centralized resource manager instead of own polling
   const resourceUsage = resourceManager.getAppResources();
+
+  // Check if we should show code review keyboard shortcuts
+  const showCodeReviewShortcuts = createMemo(() => {
+    if (props.activeView !== ActivityView.CodeReview || !props.activeLaneId) {
+      return false;
+    }
+    const reviewState = codeReviewStore.getState(props.activeLaneId);
+    return reviewState()?.status === 'ready';
+  });
+
   return (
     <div class="h-6 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs select-none">
-      {/* Left Section - Empty for now */}
-      <div class="flex items-center gap-3 flex-1" />
+      {/* Left Section - Keyboard shortcuts for Code Review */}
+      <div class="flex items-center gap-3 flex-1">
+        <Show when={showCodeReviewShortcuts()}>
+          <div class="flex items-center gap-3 text-zed-text-tertiary">
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 bg-zed-bg-app border border-zed-border-default rounded text-[10px]">j</kbd>
+              <span>/</span>
+              <kbd class="px-1.5 py-0.5 bg-zed-bg-app border border-zed-border-default rounded text-[10px]">k</kbd>
+              <span class="ml-1">Navigate</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 bg-zed-bg-app border border-zed-border-default rounded text-[10px]">⌘R</kbd>
+              <span class="ml-1">Regenerate</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 bg-zed-bg-app border border-zed-border-default rounded text-[10px]">Esc</kbd>
+              <span class="ml-1">Cancel</span>
+            </span>
+          </div>
+        </Show>
+      </div>
 
       {/* Right Section - Resource Usage Only */}
       <div class="flex items-center gap-3 flex-1 justify-end">

@@ -2,11 +2,19 @@
 
 ## Recent Updates (2026-02-17)
 
-### Performance: Parallel Processing
+### Performance: Parallel Processing & Batching
 - **Configurable Concurrency**: Added `concurrency` setting (default: 4) to control how many files are processed in parallel
 - Users can adjust between 1-8 concurrent file reviews via settings
 - Change location: `CodeReviewSettingsManager` + `ReviewOrchestrator`
 - Previous hardcoded limit: 3 → Now configurable with default: 4
+
+- **Smart Request Batching**: Reduces API calls by grouping multiple files
+  - Batches small files together (up to 30KB per batch)
+  - Large files (>30KB) processed individually
+  - Automatically parses batched responses to extract per-file feedback
+  - **Impact**: Reduces API calls by 3-5x for typical changesets
+  - Example: 15 files → 3-4 API requests instead of 15
+  - Location: `ReviewOrchestrator.batchFilesForReview()`, `parseBatchedReview()`
 
 ### Smart Handling: Diff Truncation & File Filtering
 - **Smart Diff Truncation**: Large diffs (>500 lines or >50KB) are intelligently truncated to save tokens

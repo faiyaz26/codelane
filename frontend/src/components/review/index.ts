@@ -1,5 +1,6 @@
 export { CodeReviewLayout } from './CodeReviewLayout';
 export { CodeReviewFileList } from './CodeReviewFileList';
+export { CodeReviewSidebar } from './CodeReviewSidebar';
 export { CodeReviewAgentPanel } from './CodeReviewAgentPanel';
 export { ReviewSummaryPanel } from './ReviewSummaryPanel';
 export { ReviewChangesPanel } from './ReviewChangesPanel';

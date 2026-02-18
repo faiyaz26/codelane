@@ -24,10 +24,14 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
 
+  // Show terminal when review has been generated or is in progress
+  const shouldShowTerminal = () => reviewState().status !== 'idle';
+
   // Terminal lifecycle managed by hook
+  // Enable terminal once review generation starts (not idle)
   const terminal = useCodeReviewTerminal({
     workingDir: props.workingDir,
-    enabled: reviewState().status === 'ready',
+    enabled: shouldShowTerminal,
     containerRef: terminalContainer,
   });
 
@@ -70,13 +74,12 @@ export function CodeReviewAgentPanel(props: CodeReviewAgentPanelProps) {
     });
   });
 
-  const status = reviewState().status;
   const isCollapsed = collapsed();
   const height = panelHeight();
 
   return (
     <Show
-      when={status === 'ready'}
+      when={shouldShowTerminal()}
       fallback={
         <div class="h-10 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs text-zed-text-tertiary">
           Generate a review to enable AI assistant
