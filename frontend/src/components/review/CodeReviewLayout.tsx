@@ -26,6 +26,8 @@ const LEFT_PANEL_MIN_WIDTH = 250;
 const LEFT_PANEL_MAX_WIDTH_RATIO = 0.6; // 60% of container
 
 export function CodeReviewLayout(props: CodeReviewLayoutProps) {
+  console.log('[CodeReviewLayout] Component mounted/rendered');
+
   const [leftPanelWidth, setLeftPanelWidth] = createSignal(400);
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
@@ -58,13 +60,18 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     const state = reviewState();
     const hasChanges = gitWatcher.hasChanges();
 
+    console.log('[Stale Detection] Review status:', state.status);
+    console.log('[Stale Detection] Has changes:', hasChanges);
+
     // Not ready yet - no staleness to check
     if (state.status !== 'ready') {
+      console.log('[Stale Detection] Review not ready, returning current');
       return { type: 'current' as const };
     }
 
     // Changes were committed/stashed after review
     if (!hasChanges) {
+      console.log('[Stale Detection] No changes, returning committed');
       return { type: 'committed' as const };
     }
 
@@ -79,6 +86,12 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     const currentFiles = gitStatus.changesWithStats;
     const currentChecksum = computeChangesetChecksum(currentFiles);
     const reviewedChecksum = state.changesetChecksum;
+
+    // Debug logging
+    console.log('[Stale Detection] Current files:', currentFiles.map(f => f.path));
+    console.log('[Stale Detection] Current checksum:', currentChecksum);
+    console.log('[Stale Detection] Reviewed checksum:', reviewedChecksum);
+    console.log('[Stale Detection] Checksums match:', checksumsMatch(currentChecksum, reviewedChecksum));
 
     // If checksums don't match, review is stale
     if (!checksumsMatch(currentChecksum, reviewedChecksum)) {
@@ -182,6 +195,20 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     onPrevFile: handlePrevFile,
   });
 
+  // Lightweight polling to detect changes when review is ready
+  // Polls every 3 seconds to check for new/changed files
+  createEffect(() => {
+    const isReady = reviewState().status === 'ready';
+
+    if (isReady) {
+      const pollInterval = setInterval(async () => {
+        // Explicitly refresh git status to detect new/changed files
+        await gitWatcher.refresh();
+      }, 3000); // Poll every 3 seconds
+
+      onCleanup(() => clearInterval(pollInterval));
+    }
+  });
 
   // Cancel review if component unmounts during generation
   onCleanup(() => {

@@ -153,6 +153,19 @@ export class ReviewOrchestrator {
     if (controller) {
       controller.abort();
       this.abortControllers.delete(laneId);
+
+      // Reset state to idle
+      reviewStateManager.setState(laneId, prev => ({
+        ...prev,
+        status: 'idle',
+        error: null,
+        progress: {
+          phase: 'idle',
+          totalFiles: 0,
+          processedFiles: 0,
+          currentFile: null,
+        },
+      }));
     }
   }
 

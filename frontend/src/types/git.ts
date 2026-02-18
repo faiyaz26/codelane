@@ -12,6 +12,7 @@ export interface GitStatusResult {
   staged: FileStatus[];
   unstaged: FileStatus[];
   untracked: string[];
+  changesWithStats?: FileChangeStats[]; // Optional: full stats for change detection
 }
 
 export interface GitCommit {

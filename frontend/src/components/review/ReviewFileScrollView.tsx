@@ -34,6 +34,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
   let scrollContainerRef: HTMLDivElement | undefined;
   const fileRefs = new Map<string, HTMLElement>();
   const [shouldRenderDiff, setShouldRenderDiff] = createSignal<Set<string>>(new Set());
+  const [diffViewMode, setDiffViewMode] = createSignal<'unified' | 'split'>('unified');
   let isManualScrolling = false; // Flag to prevent observer override during manual scroll
 
   // Memoize file path index for O(1) lookup instead of O(n)
@@ -277,9 +278,37 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                         {getFileDir(file.path)}
                       </span>
                     </Show>
-                    <div class="ml-auto flex items-center gap-2 text-xs font-mono flex-shrink-0">
-                      <span class="text-green-400">+{file.additions}</span>
-                      <span class="text-red-400">-{file.deletions}</span>
+                    <div class="ml-auto flex items-center gap-3 text-xs flex-shrink-0">
+                      {/* File stats */}
+                      <div class="flex items-center gap-2 font-mono">
+                        <span class="text-green-400">+{file.additions}</span>
+                        <span class="text-red-400">-{file.deletions}</span>
+                      </div>
+                      {/* View mode toggle */}
+                      <div class="flex items-center gap-0.5 bg-zed-bg-hover rounded p-0.5">
+                        <button
+                          onClick={() => setDiffViewMode('unified')}
+                          class={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                            diffViewMode() === 'unified'
+                              ? 'bg-zed-accent-blue/20 text-zed-accent-blue'
+                              : 'text-zed-text-tertiary hover:text-zed-text-secondary'
+                          }`}
+                          title="Unified view"
+                        >
+                          Unified
+                        </button>
+                        <button
+                          onClick={() => setDiffViewMode('split')}
+                          class={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                            diffViewMode() === 'split'
+                              ? 'bg-zed-accent-blue/20 text-zed-accent-blue'
+                              : 'text-zed-text-tertiary hover:text-zed-text-secondary'
+                          }`}
+                          title="Split view"
+                        >
+                          Split
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -349,6 +378,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                         filePath={file.path}
                         workingDir={props.workingDir}
                         embedded={true}
+                        viewMode={diffViewMode()}
                       />
                     </div>
                   </Show>

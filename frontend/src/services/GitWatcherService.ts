@@ -9,7 +9,7 @@
  */
 
 import { createSignal, createRoot, batch, type Accessor } from 'solid-js';
-import { isGitRepo, getGitStatus } from '../lib/git-api';
+import { isGitRepo, getGitStatus, getChangesWithStats } from '../lib/git-api';
 import { fileWatchService, type FileWatchEvent } from './FileWatchService';
 import { resourceManager } from './ResourceManager';
 import type { GitStatusResult } from '../types/git';
@@ -71,10 +71,21 @@ async function loadGitStatus(entry: LaneWatchEntry): Promise<void> {
     const repoCheck = await isGitRepo(workingDir);
 
     if (repoCheck) {
-      const status = await getGitStatus(workingDir);
+      // Fetch both status and stats in parallel for efficiency
+      const [status, changesWithStats] = await Promise.all([
+        getGitStatus(workingDir),
+        getChangesWithStats(workingDir),
+      ]);
+
+      // Combine into single status object
+      const combinedStatus: GitStatusResult = {
+        ...status,
+        changesWithStats,
+      };
+
       state.set({
         isRepo: true,
-        status,
+        status: combinedStatus,
         isLoading: false,
         error: null,
         lastUpdated: Date.now(),

@@ -9,6 +9,7 @@ import { ActivityView } from './ActivityBar';
 import { editorStateManager } from '../../services/EditorStateManager';
 import { aiReviewService, type AITool } from '../../services/AIReviewService';
 import { codeReviewStore } from '../../services/CodeReviewStore';
+import GitPullRequestCreateArrowIcon from '../icons/GitPullRequestCreateArrowIcon';
 
 interface GitBranchInfo {
   current: string | null;
@@ -270,10 +271,11 @@ export function TopBar(props: TopBarProps) {
               {/* Show "Review Changes" button when NOT in Code Review tab */}
               <Show when={props.activeView !== ActivityView.CodeReview}>
                 <button
-                  class="px-4 py-1.5 text-xs bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-active rounded-md transition-colors"
+                  class="px-4 py-1.5 text-xs bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-active rounded-md transition-colors flex items-center gap-2"
                   onClick={() => props.onNavigateToCodeReview?.()}
                   title="Open Code Review tab"
                 >
+                  <GitPullRequestCreateArrowIcon size={16} color="currentColor" strokeWidth={2} />
                   Review Changes
                 </button>
               </Show>

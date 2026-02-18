@@ -1,5 +1,5 @@
 // DiffViewer using @git-diff-view with Shiki highlighting
-import { createSignal, createEffect, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show, onMount, onCleanup } from 'solid-js';
 import { DiffView, DiffModeEnum } from '@git-diff-view/solid';
 import { DiffFile } from '@git-diff-view/core';
 import { invoke } from '@tauri-apps/api/core';
@@ -18,6 +18,7 @@ interface DiffViewerProps {
   filePath?: string;
   workingDir?: string;
   embedded?: boolean; // If true, don't add overflow-auto (parent handles scrolling)
+  viewMode?: 'unified' | 'split'; // External view mode (overrides internal state)
 }
 
 export function DiffViewer(props: DiffViewerProps) {
@@ -27,6 +28,9 @@ export function DiffViewer(props: DiffViewerProps) {
   const [newContent, setNewContent] = createSignal('');
   const [dataReady, setDataReady] = createSignal(false);
   const [diffFileInstance, setDiffFileInstance] = createSignal<DiffFile | null>(null);
+
+  // Reactive effective view mode: use external prop if provided, otherwise internal state
+  const effectiveViewMode = createMemo(() => props.viewMode ?? viewMode());
 
   // Initialize highlighter on mount
   onMount(async () => {
@@ -167,7 +171,7 @@ export function DiffViewer(props: DiffViewerProps) {
           {(file) => (
             <DiffView
               diffFile={file()}
-              diffViewMode={viewMode() === 'split' ? DiffModeEnum.Split : DiffModeEnum.Unified}
+              diffViewMode={effectiveViewMode() === 'split' ? DiffModeEnum.Split : DiffModeEnum.Unified}
               diffViewWrap={true}
               diffViewHighlight={true}
               diffViewTheme="dark"
