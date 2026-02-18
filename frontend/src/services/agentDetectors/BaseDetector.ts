@@ -214,13 +214,7 @@ export abstract class BaseDetector implements AgentDetector {
 
   protected transitionTo(newStatus: AgentStatus, reason?: string): void {
     if (this.status !== newStatus) {
-      const prev = this.status;
       this.status = newStatus;
-      if (import.meta.env.DEV) {
-        console.log(
-          `[AgentStatus] ${this.agentType}: ${prev} → ${newStatus}${reason ? ` | ${reason}` : ''}`
-        );
-      }
       this.onStatusChangeCb?.(newStatus);
     }
   }
