@@ -361,10 +361,13 @@
   background-color: rgb(var(--zed-bg-surface));
   overflow-x: auto;
   min-height: 100%;
+  user-select: text;
+  cursor: text;
 }
 
 .shiki-container-custom code {
   display: block;
+  user-select: text;
 }
 
 .shiki-container-custom .code-line {
@@ -373,6 +376,8 @@
   height: 20px; /* Must match LINE_HEIGHT in FileViewer.tsx for virtualization */
   padding-right: 16px;
   box-sizing: border-box;
+  user-select: text;
+  cursor: text;
 }
 
 .shiki-container-custom .code-line:hover {
@@ -437,8 +442,13 @@
 .shiki-container-custom .line-content {
   flex: 1;
   white-space: pre;
-  user-select: text;
+  user-select: text !important;
   cursor: text;
+}
+
+/* Ensure all text content inside line-content is selectable */
+.shiki-container-custom .line-content * {
+  user-select: text !important;
 }
 
 /* Fold indicator */
