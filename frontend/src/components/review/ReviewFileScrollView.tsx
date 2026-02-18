@@ -262,23 +262,52 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                 data-file-path={file.path}
                 class="border-b border-zed-border-subtle"
               >
-                {/* Sticky File Header */}
-                <div class="sticky top-0 z-10 px-3 py-2 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center gap-2">
-                  <span class={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ${getStatusColor(file.status)}`}>
-                    {getStatusLetter(file.status)}
-                  </span>
-                  <span class="text-sm font-medium text-zed-text-primary truncate">
-                    {getFileName(file.path)}
-                  </span>
-                  <Show when={getFileDir(file.path)}>
-                    <span class="text-xs text-zed-text-tertiary truncate">
-                      {getFileDir(file.path)}
+                {/* Sticky Header Group - File header + AI feedback stick together */}
+                <div class="sticky top-0 z-10 bg-zed-bg-panel">
+                  {/* File Header Bar */}
+                  <div class="px-3 py-2 border-b border-zed-border-subtle flex items-center gap-2">
+                    <span class={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ${getStatusColor(file.status)}`}>
+                      {getStatusLetter(file.status)}
                     </span>
-                  </Show>
-                  <div class="ml-auto flex items-center gap-2 text-xs font-mono flex-shrink-0">
-                    <span class="text-green-400">+{file.additions}</span>
-                    <span class="text-red-400">-{file.deletions}</span>
+                    <span class="text-sm font-medium text-zed-text-primary truncate">
+                      {getFileName(file.path)}
+                    </span>
+                    <Show when={getFileDir(file.path)}>
+                      <span class="text-xs text-zed-text-tertiary truncate">
+                        {getFileDir(file.path)}
+                      </span>
+                    </Show>
+                    <div class="ml-auto flex items-center gap-2 text-xs font-mono flex-shrink-0">
+                      <span class="text-green-400">+{file.additions}</span>
+                      <span class="text-red-400">-{file.deletions}</span>
+                    </div>
                   </div>
+
+                  {/* AI Feedback - Part of sticky header group */}
+                  <Show when={props.perFileFeedback.get(file.path)}>
+                    {(feedback) => (
+                      <div
+                        class="border-b border-zed-border-subtle"
+                        classList={{
+                          'ring-2 ring-purple-500/30': props.visibleFilePath === file.path
+                        }}
+                      >
+                        <div class="px-3 py-2 border-b border-zed-border-subtle flex items-center gap-2">
+                          <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span class="text-xs font-medium text-zed-text-primary">AI Feedback</span>
+                        </div>
+                        <div class="pl-5 pr-3 py-3 max-h-64 overflow-y-auto">
+                          <MarkdownRenderer
+                            markdown={feedback()}
+                            mode="simple"
+                            class="prose prose-sm prose-invert max-w-none text-xs text-zed-text-secondary leading-relaxed [&_h1]:text-sm [&_h1]:text-zed-text-primary [&_h2]:text-xs [&_h2]:text-zed-text-primary [&_h3]:text-xs [&_h3]:text-zed-text-primary [&_strong]:text-zed-text-primary [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-0.5 [&_code]:bg-zed-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-zed-accent-blue"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </Show>
                 </div>
 
                 {/* Diff Content - Lazy rendered and lazy loaded */}
@@ -323,36 +352,6 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                       />
                     </div>
                   </Show>
-                </Show>
-
-                {/* File Context - Sticky at bottom, browser handles transitions automatically */}
-                <Show when={props.perFileFeedback.get(file.path)}>
-                  {(feedback) => (
-                    <div
-                      class="sticky bottom-0 z-10 bg-zed-bg-panel border-t border-zed-border-subtle"
-                      classList={{
-                        'ring-2 ring-purple-500/30': props.visibleFilePath === file.path
-                      }}
-                    >
-                      <div class="px-3 py-2 border-b border-zed-border-subtle flex items-center gap-2 bg-zed-bg-panel">
-                        <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span class="text-xs font-medium text-zed-text-primary">AI Feedback</span>
-                        <span class={`ml-auto text-xs font-bold ${getStatusColor(file.status)}`}>
-                          {getStatusLetter(file.status)}
-                        </span>
-                        <span class="text-xs text-zed-text-secondary truncate">{getFileName(file.path)}</span>
-                      </div>
-                      <div class="px-3 py-3 max-h-64 overflow-y-auto">
-                        <MarkdownRenderer
-                          markdown={feedback()}
-                          mode="simple"
-                          class="prose prose-sm prose-invert max-w-none text-xs text-zed-text-secondary leading-relaxed [&_h1]:text-sm [&_h1]:text-zed-text-primary [&_h2]:text-xs [&_h2]:text-zed-text-primary [&_h3]:text-xs [&_h3]:text-zed-text-primary [&_strong]:text-zed-text-primary [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:bg-zed-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-zed-accent-blue"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </Show>
               </div>
             );

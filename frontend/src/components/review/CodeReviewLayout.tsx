@@ -73,7 +73,6 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
 
     // If gitStatus hasn't loaded yet, assume current (don't show false positive)
     if (!gitStatus || !gitStatus.changesWithStats) {
-      console.log('[ReviewStatus] Git status not loaded yet, assuming current');
       return { type: 'current' as const };
     }
 
@@ -81,19 +80,11 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     const currentChecksum = computeChangesetChecksum(currentFiles);
     const reviewedChecksum = state.changesetChecksum;
 
-    // Debug logging
-    console.log('[ReviewStatus] Current checksum:', currentChecksum);
-    console.log('[ReviewStatus] Reviewed checksum:', reviewedChecksum);
-    console.log('[ReviewStatus] Current files count:', currentFiles.length);
-    console.log('[ReviewStatus] Reviewed files count:', state.sortedFiles.length);
-
     // If checksums don't match, review is stale
     if (!checksumsMatch(currentChecksum, reviewedChecksum)) {
-      console.log('[ReviewStatus] Checksums DO NOT match - review is stale');
       return { type: 'stale' as const };
     }
 
-    console.log('[ReviewStatus] Checksums match - review is current');
     return { type: 'current' as const };
   });
 
