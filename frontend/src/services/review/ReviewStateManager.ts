@@ -37,6 +37,7 @@ export interface CodeReviewState {
   visibleFilePath: string | null;
   progress: ReviewProgress;
   scrollToPath: string | null; // Path to scroll to (set by sidebar click, consumed by scroll view)
+  changesetChecksum: string | null; // Checksum of file paths to detect stale reviews
 }
 
 function createDefaultState(): CodeReviewState {
@@ -50,6 +51,7 @@ function createDefaultState(): CodeReviewState {
     error: null,
     generatedAt: null,
     visibleFilePath: null,
+    changesetChecksum: null,
     progress: {
       phase: 'idle',
       totalFiles: 0,

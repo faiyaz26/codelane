@@ -14,6 +14,7 @@ import { codeReviewStore } from '../../services/CodeReviewStore';
 import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 import { useGitService } from '../../hooks/useGitService';
 import { useReviewKeyboardShortcuts } from '../../hooks/useReviewKeyboardShortcuts';
+import { computeChangesetChecksum, checksumsMatch } from '../../utils/changesetChecksum';
 
 interface CodeReviewLayoutProps {
   laneId: string;
@@ -51,6 +52,50 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
 
   // Memoize AI tool name for stable reference in multiple renders
   const toolName = createMemo(() => codeReviewSettingsManager.getAITool());
+
+  // Detect if review is stale (changes committed/stashed or new changes)
+  const reviewStatus = createMemo(() => {
+    const state = reviewState();
+    const hasChanges = gitWatcher.hasChanges();
+
+    // Not ready yet - no staleness to check
+    if (state.status !== 'ready') {
+      return { type: 'current' as const };
+    }
+
+    // Changes were committed/stashed after review
+    if (!hasChanges) {
+      return { type: 'committed' as const };
+    }
+
+    // Check if current changeset differs from reviewed changeset using checksum
+    const gitStatus = gitWatcher.gitStatus();
+
+    // If gitStatus hasn't loaded yet, assume current (don't show false positive)
+    if (!gitStatus || !gitStatus.changesWithStats) {
+      console.log('[ReviewStatus] Git status not loaded yet, assuming current');
+      return { type: 'current' as const };
+    }
+
+    const currentFiles = gitStatus.changesWithStats;
+    const currentChecksum = computeChangesetChecksum(currentFiles);
+    const reviewedChecksum = state.changesetChecksum;
+
+    // Debug logging
+    console.log('[ReviewStatus] Current checksum:', currentChecksum);
+    console.log('[ReviewStatus] Reviewed checksum:', reviewedChecksum);
+    console.log('[ReviewStatus] Current files count:', currentFiles.length);
+    console.log('[ReviewStatus] Reviewed files count:', state.sortedFiles.length);
+
+    // If checksums don't match, review is stale
+    if (!checksumsMatch(currentChecksum, reviewedChecksum)) {
+      console.log('[ReviewStatus] Checksums DO NOT match - review is stale');
+      return { type: 'stale' as const };
+    }
+
+    console.log('[ReviewStatus] Checksums match - review is current');
+    return { type: 'current' as const };
+  });
 
   // Screen reader announcements
   const statusAnnouncement = createMemo(() => {
@@ -298,8 +343,51 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
 
       {/* Ready State - Two-pane layout */}
       <Show when={isReady()}>
-        <div id="main-review-content" class="flex-1 flex overflow-hidden">
-          {/* Left: AI Summary */}
+        <div class="flex-1 flex flex-col overflow-hidden">
+          {/* Warning: Changes Committed/Stashed */}
+          <Show when={reviewStatus().type === 'committed'}>
+            <div class="flex-shrink-0 px-4 py-3 bg-yellow-500/10 border-b border-yellow-500/30 flex items-start gap-3">
+              <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.834-1.964-.834-2.732 0L4.082 16c-.77.833.192 3 1.732 3z" />
+              </svg>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-sm font-medium text-yellow-400 mb-1">Changes Committed or Stashed</h4>
+                <p class="text-xs text-zed-text-secondary">
+                  The reviewed changes have been committed or stashed. This review is now outdated.
+                </p>
+              </div>
+              <button
+                onClick={() => codeReviewStore.reset(props.laneId)}
+                class="flex-shrink-0 px-3 py-1.5 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded transition-colors"
+              >
+                Clear Review
+              </button>
+            </div>
+          </Show>
+
+          {/* Warning: Review Stale (New Changes) */}
+          <Show when={reviewStatus().type === 'stale'}>
+            <div class="flex-shrink-0 px-4 py-3 bg-orange-500/10 border-b border-orange-500/30 flex items-start gap-3">
+              <svg class="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-sm font-medium text-orange-400 mb-1">New Changes Detected</h4>
+                <p class="text-xs text-zed-text-secondary">
+                  The working directory has changed since this review was generated. Regenerate to review the latest changes.
+                </p>
+              </div>
+              <button
+                onClick={handleRegenerate}
+                class="flex-shrink-0 px-3 py-1.5 text-xs bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded transition-colors"
+              >
+                Regenerate
+              </button>
+            </div>
+          </Show>
+
+          <div id="main-review-content" class="flex-1 flex overflow-hidden">
+            {/* Left: AI Summary */}
           <div class="flex-shrink-0 overflow-hidden" style={{ width: `${leftPanelWidth()}px` }}>
             <ReviewSummaryPanel
               markdown={reviewState().reviewMarkdown || ''}
@@ -324,6 +412,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
               scrollToPath={reviewState().scrollToPath}
               onVisibleFileChange={handleVisibleFileChange}
             />
+          </div>
           </div>
         </div>
       </Show>

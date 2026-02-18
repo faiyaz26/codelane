@@ -19,6 +19,7 @@ import { aiReviewService } from '../AIReviewService';
 import { codeReviewSettingsManager } from '../CodeReviewSettingsManager';
 import { processDiffsWithTruncation, getTruncationSummary } from '../../utils/diffTruncation';
 import { filterReviewableFiles, getExclusionSummary } from '../../utils/fileFilters';
+import { computeChangesetChecksum } from '../../utils/changesetChecksum';
 import type { ReviewPhase } from './ReviewStateManager';
 
 /**
@@ -212,6 +213,7 @@ export class ReviewOrchestrator {
           sortedFiles: [],
           fileDiffs: new Map(),
           generatedAt: Date.now(),
+          changesetChecksum: '', // Empty checksum for no changes
           progress: {
             phase: 'ready',
             totalFiles: 0,
@@ -330,6 +332,9 @@ export class ReviewOrchestrator {
         ? truncationNote + reviewResult.content
         : `## Error Generating Review\n\n${reviewResult.error || 'Unknown error'}`;
 
+      // Compute checksum of the changeset
+      const changesetChecksum = computeChangesetChecksum(changesWithStats);
+
       // 5. Update state with summary (show layout immediately)
       reviewStateManager.setState(laneId, prev => ({
         ...prev,
@@ -338,6 +343,7 @@ export class ReviewOrchestrator {
         sortedFiles,
         fileDiffs,
         generatedAt: Date.now(),
+        changesetChecksum,
         progress: {
           phase: 'ready',
           totalFiles: changesWithStats.length,
