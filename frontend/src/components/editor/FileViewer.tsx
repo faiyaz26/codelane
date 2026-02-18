@@ -586,6 +586,23 @@ export function FileViewer(props: FileViewerProps) {
     }
   };
 
+  // Handle copy events to work with virtualized content
+  const handleCopy = (e: ClipboardEvent) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    try {
+      // Get the selected text from the DOM
+      const selectedText = selection.toString();
+      if (selectedText) {
+        e.preventDefault();
+        e.clipboardData?.setData('text/plain', selectedText);
+      }
+    } catch (err) {
+      console.warn('Copy failed:', err);
+    }
+  };
+
   // Keyboard handler for global shortcuts
   const handleKeyDown = (e: KeyboardEvent) => {
     // Cmd/Ctrl + F to open search
@@ -618,13 +635,15 @@ export function FileViewer(props: FileViewerProps) {
     }
   };
 
-  // Register keyboard listener
+  // Register keyboard and copy listeners
   onMount(() => {
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('copy', handleCopy);
   });
 
   onCleanup(() => {
     window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('copy', handleCopy);
   });
 
   // Handle scroll for virtualization
