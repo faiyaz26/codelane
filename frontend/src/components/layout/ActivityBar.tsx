@@ -38,14 +38,14 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
     label: 'Search',
   },
   {
-    id: ActivityView.GitManager,
-    icon: 'folder-git',
-    label: 'Git Manager',
-  },
-  {
     id: ActivityView.CodeReview,
     icon: 'code-review',
     label: 'Code Review',
+  },
+  {
+    id: ActivityView.GitManager,
+    icon: 'folder-git',
+    label: 'Git Manager',
   },
 ];
 
