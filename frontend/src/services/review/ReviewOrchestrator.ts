@@ -43,6 +43,104 @@ async function parallelLimit<T>(
   return results;
 }
 
+/**
+ * Batch files for combined API requests
+ * Groups small files together, keeps large files separate
+ */
+interface FileBatch {
+  files: Array<{ path: string; diff: string }>;
+  totalSize: number;
+}
+
+function batchFilesForReview(
+  files: Array<{ path: string; diff: string }>,
+  maxBatchSize: number = 30 * 1024 // 30KB per batch
+): FileBatch[] {
+  const batches: FileBatch[] = [];
+  let currentBatch: FileBatch = { files: [], totalSize: 0 };
+
+  for (const file of files) {
+    const fileSize = new Blob([file.diff]).size;
+
+    // If file alone exceeds batch size, put it in its own batch
+    if (fileSize > maxBatchSize) {
+      if (currentBatch.files.length > 0) {
+        batches.push(currentBatch);
+        currentBatch = { files: [], totalSize: 0 };
+      }
+      batches.push({ files: [file], totalSize: fileSize });
+      continue;
+    }
+
+    // If adding this file would exceed batch size, start new batch
+    if (currentBatch.totalSize + fileSize > maxBatchSize && currentBatch.files.length > 0) {
+      batches.push(currentBatch);
+      currentBatch = { files: [], totalSize: 0 };
+    }
+
+    // Add file to current batch
+    currentBatch.files.push(file);
+    currentBatch.totalSize += fileSize;
+  }
+
+  // Add final batch if not empty
+  if (currentBatch.files.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
+/**
+ * Parse batched review response to extract per-file feedback
+ */
+function parseBatchedReview(response: string, filePaths: string[]): Map<string, string> {
+  const results = new Map<string, string>();
+
+  // Try to split by file markers
+  const fileMarkerRegex = /(?:^|\n)(?:##|###)\s*(?:File:|Review for:)?\s*`?([^`\n]+)`?/gi;
+  const matches = [...response.matchAll(fileMarkerRegex)];
+
+  if (matches.length === 0) {
+    // No clear file markers found, try simpler split
+    // Look for file paths in the response
+    for (const filePath of filePaths) {
+      const fileName = filePath.split('/').pop() || filePath;
+      const escapedFileName = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const fileRegex = new RegExp(`(?:^|\\n).*${escapedFileName}.*?\\n([\\s\\S]*?)(?=\\n.*(?:${filePaths.map(p => p.split('/').pop()).join('|')})|\`\`\`|$)`, 'i');
+      const match = response.match(fileRegex);
+      if (match && match[1]) {
+        results.set(filePath, match[1].trim());
+      }
+    }
+  } else {
+    // Found file markers, extract content between them
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const fileName = match[1].trim();
+      const startIdx = match.index! + match[0].length;
+      const endIdx = i < matches.length - 1 ? matches[i + 1].index! : response.length;
+      const content = response.substring(startIdx, endIdx).trim();
+
+      // Find matching file path
+      const matchingPath = filePaths.find(path =>
+        path.includes(fileName) || fileName.includes(path.split('/').pop() || '')
+      );
+
+      if (matchingPath) {
+        results.set(matchingPath, content);
+      }
+    }
+  }
+
+  // If we couldn't parse individual files and there's only one file, return entire response
+  if (results.size === 0 && filePaths.length === 1) {
+    results.set(filePaths[0], response);
+  }
+
+  return results;
+}
+
 export class ReviewOrchestrator {
   private abortControllers = new Map<string, AbortController>();
 
@@ -286,43 +384,65 @@ export class ReviewOrchestrator {
         },
       }));
 
-      let completedFiles = 0;
-      const tasks = filesToReview.map(file => async () => {
-        // Check before starting each file
-        if (controller.signal.aborted) {
-          return;
-        }
+      // Prepare files with diffs and apply truncation
+      const filesWithDiffs = filesToReview
+        .map(file => {
+          let diff = fileDiffs.get(file.path);
+          if (!diff) return null;
 
-        let diff = fileDiffs.get(file.path);
-        if (!diff) return;
-
-        // Apply truncation if diff is too large
-        if (diff) {
+          // Apply truncation if diff is too large
           const processedDiffs = processDiffsWithTruncation(new Map([[file.path, diff]]), {
             maxLines: 500,
             maxBytes: 50 * 1024,
             linesPerHunk: 5,
           });
           diff = processedDiffs.get(file.path) || diff;
+
+          return { path: file.path, diff };
+        })
+        .filter((f): f is { path: string; diff: string } => f !== null);
+
+      // Batch files for efficient API usage
+      const batches = batchFilesForReview(filesWithDiffs, 30 * 1024); // 30KB per batch
+
+      console.log(
+        `[Review] Batched ${filesWithDiffs.length} files into ${batches.length} API requests`,
+        `(avg ${Math.round(filesWithDiffs.length / batches.length)} files/request)`
+      );
+
+      let completedFiles = 0;
+      const tasks = batches.map(batch => async () => {
+        // Check before starting each batch
+        if (controller.signal.aborted) {
+          return;
         }
 
-        // Update current file being processed
-        reviewStateManager.setState(laneId, prev => ({
-          ...prev,
-          progress: {
-            ...prev.progress,
-            currentFile: file.path,
-          },
-        }));
-
         try {
+          // Format batch content
+          const batchedDiff = batch.files
+            .map(({ path, diff }) => `## File: ${path}\n\`\`\`diff\n${diff}\n\`\`\``)
+            .join('\n\n');
+
+          const batchPrompt = batch.files.length === 1
+            ? filePrompt ? `${filePrompt}\n\nFile: ${batch.files[0].path}` : undefined
+            : `${filePrompt || 'Review the following files and provide feedback for each.'}\n\nProvide feedback for each file separately, starting each with "## File: <path>".`;
+
+          // Update progress with first file in batch
+          reviewStateManager.setState(laneId, prev => ({
+            ...prev,
+            progress: {
+              ...prev.progress,
+              currentFile: batch.files[0].path + (batch.files.length > 1 ? ` (+${batch.files.length - 1} more)` : ''),
+            },
+          }));
+
           const result = await aiReviewService.generateFileReview(
             tool,
-            file.path,
-            diff,
+            batch.files[0].path, // Primary file for context
+            batchedDiff,
             workingDir,
             model,
-            filePrompt ? `${filePrompt}\n\nFile: ${file.path}` : undefined,
+            batchPrompt,
             controller.signal
           );
 
@@ -332,24 +452,44 @@ export class ReviewOrchestrator {
           }
 
           if (result.success && result.content) {
+            // Parse batched response
+            const filePaths = batch.files.map(f => f.path);
+            const parsedFeedback = parseBatchedReview(result.content, filePaths);
+
+            // Update state with all files from this batch
             reviewStateManager.setState(laneId, prev => {
               const newFeedback = new Map(prev.perFileFeedback);
-              newFeedback.set(file.path, result.content);
+
+              // Add feedback for each file in batch
+              for (const { path } of batch.files) {
+                const feedback = parsedFeedback.get(path) || result.content;
+                newFeedback.set(path, feedback);
+              }
+
+              completedFiles += batch.files.length;
+
               return {
                 ...prev,
                 perFileFeedback: newFeedback,
                 progress: {
                   ...prev.progress,
-                  processedFiles: completedFiles + 1,
+                  processedFiles: completedFiles,
                 },
               };
             });
+          } else {
+            completedFiles += batch.files.length;
+            reviewStateManager.setState(laneId, prev => ({
+              ...prev,
+              progress: {
+                ...prev.progress,
+                processedFiles: completedFiles,
+              },
+            }));
           }
-
-          completedFiles++;
         } catch (err) {
-          // Silent failure - continue with other files
-          completedFiles++;
+          // Silent failure - continue with other batches
+          completedFiles += batch.files.length;
           reviewStateManager.setState(laneId, prev => ({
             ...prev,
             progress: {
@@ -360,7 +500,7 @@ export class ReviewOrchestrator {
         }
       });
 
-      // Run per-file reviews with configurable concurrency limit
+      // Run batched reviews with configurable concurrency limit
       await parallelLimit(tasks, concurrency);
 
       // Update state to ready after all per-file feedback is complete
