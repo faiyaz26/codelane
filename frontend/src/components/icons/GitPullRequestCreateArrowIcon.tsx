@@ -46,10 +46,6 @@ function GitPullRequestCreateArrowIcon(props: GitPullRequestCreateArrowIconProps
       height={merged.size}
       viewBox={viewBox()}
       fill="none"
-      stroke={merged.color}
-      stroke-width={merged.strokeWidth}
-      stroke-linecap="round"
-      stroke-linejoin="round"
       style={{
         opacity: merged.opacity,
         transform: transforms(),
@@ -57,7 +53,7 @@ function GitPullRequestCreateArrowIcon(props: GitPullRequestCreateArrowIconProps
         'background-color': merged.background !== 'transparent' ? merged.background : undefined
       }}
     >
-      <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width={merged.strokeWidth}>
+      <g fill="none" stroke={merged.color} stroke-linecap="round" stroke-linejoin="round" stroke-width={merged.strokeWidth}>
         <circle cx="5" cy="6" r="3"/>
         <path d="M5 9v12"/>
         <path d="M15 9l-3-3l3-3"/>
