@@ -2,6 +2,7 @@
 
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './types';
 import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
@@ -587,7 +588,7 @@ export function FileViewer(props: FileViewerProps) {
   };
 
   // Handle copy events to work with virtualized content
-  const handleCopy = (e: ClipboardEvent) => {
+  const handleCopy = async (e: ClipboardEvent) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
@@ -596,7 +597,8 @@ export function FileViewer(props: FileViewerProps) {
       const selectedText = selection.toString();
       if (selectedText) {
         e.preventDefault();
-        e.clipboardData?.setData('text/plain', selectedText);
+        // Use Tauri's clipboard API
+        await writeText(selectedText);
       }
     } catch (err) {
       console.warn('Copy failed:', err);
