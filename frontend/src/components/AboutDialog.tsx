@@ -1,6 +1,8 @@
 // About Dialog - Shows app information and version
 
+import { createSignal, onMount } from 'solid-js';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
+import { getVersion } from '@tauri-apps/api/app';
 import codelaneLogoWhite from '../assets/codelane-logo-white.png';
 import codelaneLogoDark from '../assets/codelane-logo-dark.png';
 import { themeManager } from '../services/ThemeManager';
@@ -13,6 +15,17 @@ interface AboutDialogProps {
 export function AboutDialog(props: AboutDialogProps) {
   const currentTheme = themeManager.getTheme();
   const logoSrc = () => currentTheme() === 'light' ? codelaneLogoDark : codelaneLogoWhite;
+  const [version, setVersion] = createSignal('0.1.0');
+
+  // Get version from Tauri (reads from Cargo.toml)
+  onMount(async () => {
+    try {
+      const appVersion = await getVersion();
+      setVersion(appVersion);
+    } catch (err) {
+      console.warn('Failed to get app version:', err);
+    }
+  });
 
   return (
     <KobalteDialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -31,7 +44,7 @@ export function AboutDialog(props: AboutDialogProps) {
               <h1 class="text-2xl font-bold text-zed-text-primary mb-2">Codelane</h1>
 
               {/* Version */}
-              <p class="text-sm text-zed-text-secondary mb-6">Version 0.1.0</p>
+              <p class="text-sm text-zed-text-secondary mb-6">Version {version()}</p>
 
               {/* Description */}
               <p class="text-sm text-zed-text-secondary mb-6 leading-relaxed">
@@ -75,7 +88,7 @@ export function AboutDialog(props: AboutDialogProps) {
 
               {/* Copyright */}
               <p class="text-xs text-zed-text-disabled mt-6">
-                © 2025 Codelane. MIT License.
+                © 2025 Codelane. AGPL-3.0 License.
               </p>
             </div>
 
