@@ -101,10 +101,17 @@ export async function branchExists(path: string, branch: string): Promise<boolea
 }
 
 /**
- * Create a new branch
+ * Create a new branch, optionally from a specific base branch
  */
-export async function createBranch(path: string, branch: string): Promise<void> {
-  return invoke<void>('git_create_branch', { path, branch });
+export async function createBranch(path: string, branch: string, base?: string): Promise<void> {
+  return invoke<void>('git_create_branch', { path, branch, base });
+}
+
+/**
+ * Get the default branch name (main/master) for a repository
+ */
+export async function getDefaultBranch(path: string): Promise<string> {
+  return invoke<string>('git_default_branch', { path });
 }
 
 /**

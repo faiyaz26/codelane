@@ -1,4 +1,4 @@
-import { Show, For, createMemo } from 'solid-js';
+import { Show, For, createMemo, createEffect } from 'solid-js';
 import { TabPanel } from '../tabs/TabPanel';
 import type { Lane } from '../../types/lane';
 
@@ -9,6 +9,15 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel(props: BottomPanelProps) {
+  // Trigger terminal refit when active lane changes (display:none → contents transition)
+  createEffect((prev: string | null | undefined) => {
+    const current = props.activeLaneId;
+    if (current && prev !== current) {
+      setTimeout(() => window.dispatchEvent(new Event('terminal-resize')), 50);
+    }
+    return current;
+  });
+
   return (
     <For each={Array.from(props.initializedLanes)}>
       {(laneId) => {

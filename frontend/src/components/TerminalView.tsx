@@ -5,7 +5,7 @@ import { spawn, type PtyHandle } from '../services/PortablePty';
 import { getTerminalTheme } from '../theme';
 import { themeManager } from '../services/ThemeManager';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
-import { createTerminal, createFitAddon, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
+import { createTerminal, createFitAddon, loadAddons, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
 import { agentStatusManager } from '../services/AgentStatusManager';
 import type { DetectableAgentType } from '../types/agentStatus';
 import { HookOnboardingModal, shouldShowHookPrompt } from './hooks/HookOnboardingModal';
@@ -49,6 +49,9 @@ export function TerminalView(props: TerminalViewProps) {
 
     // Open terminal in the container
     terminal.open(containerRef);
+
+    // Load rendering + utility addons (must be after open() for WebGL)
+    loadAddons(terminal);
 
     // Fit terminal to container
     fitAddon.fit();
@@ -190,18 +193,36 @@ export function TerminalView(props: TerminalViewProps) {
       // Call ready callback with terminal ID
       props.onTerminalReady?.(pty!.id);
 
+      // Safe fit that guards against zero dimensions and preserves scroll position
+      const safeFitAndResize = () => {
+        if (!fitAddon || !terminal || !pty || !containerRef) return;
+        // Skip if container has no visible dimensions (collapsed/hidden)
+        const rect = containerRef.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return;
+
+        // Check if scrolled to bottom before fit
+        const buffer = terminal.buffer.active;
+        const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
+
+        fitAddon.fit();
+        pty.resize(terminal.cols, terminal.rows);
+
+        // Force full re-render to clear any stale WebGL texture artifacts
+        terminal.refresh(0, terminal.rows - 1);
+
+        // Restore scroll position: stay at bottom if we were at bottom
+        if (isAtBottom) {
+          terminal.scrollToBottom();
+        }
+      };
+
       // Handle resize events with debouncing
       let resizeTimeout: number | undefined;
       const resizeObserver = new ResizeObserver(() => {
         if (resizeTimeout) {
           clearTimeout(resizeTimeout);
         }
-        resizeTimeout = setTimeout(() => {
-          if (fitAddon && terminal && pty) {
-            fitAddon.fit();
-            pty.resize(terminal.cols, terminal.rows);
-          }
-        }, 100) as unknown as number;
+        resizeTimeout = setTimeout(safeFitAndResize, 100) as unknown as number;
       });
 
       if (containerRef) {
@@ -210,27 +231,31 @@ export function TerminalView(props: TerminalViewProps) {
 
       // Initial resize
       setTimeout(() => {
-        if (fitAddon && terminal && pty) {
-          fitAddon.fit();
-          pty.resize(terminal.cols, terminal.rows);
-          // Scroll to bottom after a brief delay to ensure terminal has updated
-          setTimeout(() => terminal.scrollToBottom(), 50);
-        }
+        safeFitAndResize();
+        // Scroll to bottom after initial layout
+        if (terminal) terminal.scrollToBottom();
       }, 100);
 
       // Listen for custom terminal resize events
-      const handleTerminalResize = () => {
-        if (fitAddon && terminal && pty) {
-          fitAddon.fit();
-          pty.resize(terminal.cols, terminal.rows);
+      const handleTerminalResize = () => safeFitAndResize();
+      window.addEventListener('terminal-resize', handleTerminalResize);
+
+      // Focus terminal and refresh rendering when its lane becomes active
+      const handleTerminalFocus = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (detail?.laneId === props.laneId && terminal) {
+          terminal.focus();
+          // Force full re-render to fix stale WebGL texture after being hidden
+          terminal.refresh(0, terminal.rows - 1);
         }
       };
-      window.addEventListener('terminal-resize', handleTerminalResize);
+      window.addEventListener('terminal-focus', handleTerminalFocus);
 
       // Cleanup
       onCleanup(() => {
         resizeObserver.disconnect();
         window.removeEventListener('terminal-resize', handleTerminalResize);
+        window.removeEventListener('terminal-focus', handleTerminalFocus);
       });
     } catch (error) {
       console.error('Failed to create PTY:', error);

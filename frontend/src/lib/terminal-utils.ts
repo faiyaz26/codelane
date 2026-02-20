@@ -4,7 +4,12 @@
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { CanvasAddon } from '@xterm/addon-canvas';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
+import { SearchAddon } from '@xterm/addon-search';
 import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { getTerminalTheme } from '../theme';
 
 /**
@@ -26,6 +31,44 @@ export function createTerminal(): Terminal {
     windowsMode: false,
     fastScrollModifier: 'shift',
   });
+}
+
+/**
+ * Loads rendering and utility addons onto a terminal.
+ * Should be called AFTER terminal.open() since WebGL/Canvas need an attached DOM.
+ *
+ * - WebGL renderer (GPU-accelerated) with automatic Canvas fallback
+ * - Unicode11 for correct CJK/emoji width
+ * - WebLinks for clickable URLs
+ * - Search addon (returned for external use)
+ */
+export function loadAddons(terminal: Terminal): { searchAddon: SearchAddon } {
+  // Unicode11 - correct character widths for CJK and emoji
+  const unicode11 = new Unicode11Addon();
+  terminal.loadAddon(unicode11);
+  terminal.unicode.activeVersion = '11';
+
+  // Web links - clickable URLs in terminal output, opened via Tauri shell
+  terminal.loadAddon(new WebLinksAddon((_event, uri) => {
+    shellOpen(uri).catch((err) => {
+      console.error('[terminal] Failed to open link:', err);
+    });
+  }));
+
+  // Search addon - expose for Ctrl+F terminal search
+  const searchAddon = new SearchAddon();
+  terminal.loadAddon(searchAddon);
+
+  // Canvas renderer — more reliable than WebGL for TUI apps like Claude Code
+  // that do rapid cursor-addressed updates (spinners, status lines, alternate screen).
+  // WebGL can produce rendering artifacts with frequent partial-screen redraws.
+  try {
+    terminal.loadAddon(new CanvasAddon());
+  } catch {
+    // Canvas not available — xterm.js DOM renderer is the final fallback
+  }
+
+  return { searchAddon };
 }
 
 /**

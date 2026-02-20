@@ -52,6 +52,8 @@ export function TabPanel(props: TabPanelProps) {
           console.error('[TabPanel] Failed to create tab on expand:', err);
         });
       }
+      // Trigger terminal refit after expanding (terminals may need dimension recalculation)
+      setTimeout(() => window.dispatchEvent(new Event('terminal-resize')), 100);
     }
     return isCollapsed;
   });
@@ -163,11 +165,19 @@ export function TabPanel(props: TabPanelProps) {
         onTabRename={handleTabRename}
       />
 
-      {/* Tab Content - Hidden when collapsed */}
+      {/* Tab Content - Clipped when collapsed to preserve terminal state */}
       <div
-        class={collapsed() ? 'overflow-hidden h-0' : 'flex-1 overflow-hidden'}
+        class="flex-1 overflow-hidden"
         style={{
-          visibility: collapsed() ? 'hidden' : 'visible',
+          // Use clip instead of h-0/visibility:hidden so xterm.js keeps valid dimensions
+          // and doesn't corrupt its internal state when collapsed
+          ...(collapsed() ? {
+            'clip-path': 'inset(0 0 100% 0)',
+            position: 'absolute' as const,
+            width: '100%',
+            height: '200px',
+            'pointer-events': 'none',
+          } : {}),
         }}
       >
         <TabContent

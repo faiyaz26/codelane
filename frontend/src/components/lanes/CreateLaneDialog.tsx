@@ -1,10 +1,11 @@
-import { createSignal, Show, createEffect, onCleanup } from 'solid-js';
+import { createSignal, Show, For, createEffect, onCleanup } from 'solid-js';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Dialog, Button, TextField } from '../ui';
 import { createLane } from '../../lib/lane-api';
-import { isGitRepo, listWorktrees, removeWorktree } from '../../lib/git-api';
+import { isGitRepo, listWorktrees, removeWorktree, getGitBranch, getDefaultBranch } from '../../lib/git-api';
 import { WorktreeConflictDialog } from '../WorktreeConflictDialog';
 import type { Lane } from '../../types/lane';
+import type { GitBranchInfo } from '../../types/git';
 
 interface WorktreeConflict {
   branch: string;
@@ -43,6 +44,10 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     Math.floor(Math.random() * PLACEHOLDER_EXAMPLES.length)
   );
   const [worktreeConflict, setWorktreeConflict] = createSignal<WorktreeConflict | null>(null);
+  const [branches, setBranches] = createSignal<string[]>([]);
+  const [defaultBranch, setDefaultBranch] = createSignal<string>('main');
+  const [showBranchDropdown, setShowBranchDropdown] = createSignal(false);
+  const [isExistingBranch, setIsExistingBranch] = createSignal(false);
 
   // Rotate placeholder when dialog is open
   createEffect(() => {
@@ -65,19 +70,56 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
         const result = await isGitRepo(dir);
         setIsGitRepoDir(result);
         if (!result) {
-          setBranch(''); // Clear branch if not a git repo
+          setBranch('');
+          setBranches([]);
+          setIsExistingBranch(false);
+        } else {
+          // Fetch branches and default branch in parallel
+          const [branchInfo, defBranch] = await Promise.all([
+            getGitBranch(dir).catch((): GitBranchInfo => ({ current: null, branches: [] })),
+            getDefaultBranch(dir).catch(() => 'main'),
+          ]);
+          setBranches(branchInfo.branches);
+          setDefaultBranch(defBranch);
         }
       } catch (e) {
         setIsGitRepoDir(false);
         setBranch('');
+        setBranches([]);
+        setIsExistingBranch(false);
       } finally {
         setCheckingGitRepo(false);
       }
     } else {
       setIsGitRepoDir(false);
       setBranch('');
+      setBranches([]);
+      setIsExistingBranch(false);
     }
   });
+
+  // Track whether the typed branch is an existing one
+  createEffect(() => {
+    const branchName = branch().trim();
+    const allBranches = branches();
+    setIsExistingBranch(branchName !== '' && allBranches.includes(branchName));
+  });
+
+  // Filtered branches for dropdown (default branch shown first)
+  const filteredBranches = () => {
+    const query = branch().trim().toLowerCase();
+    const allBranches = branches();
+    const defBranch = defaultBranch();
+    const filtered = query
+      ? allBranches.filter(b => b.toLowerCase().includes(query))
+      : allBranches;
+    // Sort: default branch first, then alphabetical
+    return [...filtered].sort((a, b) => {
+      if (a === defBranch) return -1;
+      if (b === defBranch) return 1;
+      return a.localeCompare(b);
+    });
+  };
 
   // Check for worktree conflict
   const checkWorktreeConflict = async (dir: string, branchName: string): Promise<WorktreeConflict | null> => {
@@ -112,6 +154,8 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       setWorkingDir('');
       setBranch('');
       setError(null);
+      setShowBranchDropdown(false);
+      setIsExistingBranch(false);
 
       // Close dialog and notify parent
       props.onOpenChange(false);
@@ -202,6 +246,8 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     setBranch('');
     setError(null);
     setWorktreeConflict(null);
+    setShowBranchDropdown(false);
+    setIsExistingBranch(false);
     props.onOpenChange(false);
   };
 
@@ -230,7 +276,12 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       title="Create New Lane"
       description="Start a new task with a dedicated AI agent and terminal session."
     >
-      <div class="space-y-4">
+      <div class="space-y-4" onClick={(e) => {
+        // Close branch dropdown when clicking outside it
+        if (!(e.target as HTMLElement).closest('.relative')) {
+          setShowBranchDropdown(false);
+        }
+      }}>
         <TextField
           label="Lane Name"
           placeholder={currentPlaceholder()}
@@ -272,16 +323,55 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
               </svg>
               <span class="text-sm font-medium text-zed-accent-green">Git repository detected</span>
             </div>
-            <TextField
-              label="Feature Branch (Optional)"
-              placeholder="feature/add-auth"
-              value={branch()}
-              onChange={setBranch}
-              description=""
-            />
+            <div class="relative">
+              <label class="block text-sm font-medium text-zed-text-primary mb-1.5">
+                Branch
+              </label>
+              <input
+                type="text"
+                class="w-full input"
+                placeholder="Type to search or create a branch..."
+                value={branch()}
+                onInput={(e) => {
+                  setBranch(e.currentTarget.value);
+                  setShowBranchDropdown(true);
+                }}
+                onFocus={() => setShowBranchDropdown(true)}
+              />
+              <Show when={isExistingBranch()}>
+                <span class="absolute right-2 top-[calc(50%+10px)] -translate-y-1/2 text-xs text-zed-accent-green">
+                  existing
+                </span>
+              </Show>
+              <Show when={showBranchDropdown() && filteredBranches().length > 0}>
+                <div
+                  class="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md bg-zed-bg-overlay border border-zed-border-default shadow-lg"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <For each={filteredBranches()}>
+                    {(b) => (
+                      <button
+                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-zed-bg-hover transition-colors flex items-center justify-between"
+                        classList={{ 'text-zed-text-primary': true, 'bg-zed-bg-hover': branch() === b }}
+                        onClick={() => {
+                          setBranch(b);
+                          setShowBranchDropdown(false);
+                        }}
+                      >
+                        <span class="truncate">{b}</span>
+                        <Show when={b === defaultBranch()}>
+                          <span class="text-xs text-zed-text-tertiary ml-2 shrink-0">default</span>
+                        </Show>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
             <p class="text-xs text-zed-text-tertiary mt-2 leading-relaxed">
-              Run multiple AI agents in parallel on different branches. Each lane gets its own isolated worktree —
-              no conflicts, no stashing. Leave empty to work on the current branch.
+              Select an existing branch or type a new name to create one from <strong>{defaultBranch()}</strong>.
+              Each lane gets its own isolated worktree — no conflicts, no stashing.
+              Leave empty to work on the current branch.
             </p>
           </div>
         </Show>

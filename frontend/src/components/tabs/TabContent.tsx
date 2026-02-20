@@ -28,6 +28,15 @@ export function TabContent(props: TabContentProps) {
     }
   });
 
+  // Trigger terminal refit when active tab changes (opacity-hidden terminals need refresh)
+  createEffect((prev: string | undefined) => {
+    const current = props.activeTabId;
+    if (current && prev !== current) {
+      setTimeout(() => window.dispatchEvent(new Event('terminal-resize')), 50);
+    }
+    return current;
+  });
+
   return (
     <div class="w-full h-full overflow-hidden relative">
       <For each={props.tabs}>

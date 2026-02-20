@@ -60,9 +60,12 @@ class DirectWriter {
  *
  * This prevents frame drops during heavy terminal output (e.g., large git logs,
  * build output). Data is collected and flushed at most ~60 times per second.
+ *
+ * Uses Uint8Array chunks to avoid spread operator stack overflow on large outputs.
  */
 class BatchedReader {
-  private buffer: number[] = [];
+  private chunks: Uint8Array[] = [];
+  private totalBytes = 0;
   private callback: ((data: Uint8Array) => void) | null = null;
   private frameScheduled = false;
   private disposed = false;
@@ -74,8 +77,10 @@ class BatchedReader {
   push(data: number[]) {
     if (this.disposed) return;
 
-    // Append to buffer
-    this.buffer.push(...data);
+    // Store as Uint8Array chunk (avoids spread operator stack overflow on large outputs)
+    const chunk = new Uint8Array(data);
+    this.chunks.push(chunk);
+    this.totalBytes += chunk.length;
 
     // Schedule flush on next animation frame (if not already scheduled)
     if (!this.frameScheduled) {
@@ -87,13 +92,26 @@ class BatchedReader {
   private flush() {
     this.frameScheduled = false;
 
-    if (this.disposed || this.buffer.length === 0 || !this.callback) {
+    if (this.disposed || this.totalBytes === 0 || !this.callback) {
       return;
     }
 
-    // Convert buffered data to Uint8Array and send to callback
-    const data = new Uint8Array(this.buffer);
-    this.buffer = [];
+    // Fast path: single chunk, no copy needed
+    let data: Uint8Array;
+    if (this.chunks.length === 1) {
+      data = this.chunks[0];
+    } else {
+      // Concatenate all chunks into a single Uint8Array
+      data = new Uint8Array(this.totalBytes);
+      let offset = 0;
+      for (const chunk of this.chunks) {
+        data.set(chunk, offset);
+        offset += chunk.length;
+      }
+    }
+
+    this.chunks = [];
+    this.totalBytes = 0;
 
     try {
       this.callback(data);
@@ -105,14 +123,8 @@ class BatchedReader {
   dispose() {
     this.disposed = true;
     // Flush any remaining data
-    if (this.buffer.length > 0 && this.callback) {
-      const data = new Uint8Array(this.buffer);
-      this.buffer = [];
-      try {
-        this.callback(data);
-      } catch {
-        // Ignore errors during dispose
-      }
+    if (this.totalBytes > 0 && this.callback) {
+      this.flush();
     }
     this.callback = null;
   }

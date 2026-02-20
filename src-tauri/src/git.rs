@@ -646,14 +646,65 @@ pub async fn git_branch_exists(path: String, branch: String) -> Result<bool, Str
     Ok(output.status.success())
 }
 
-/// Create a new branch from the current HEAD
+/// Create a new branch, optionally from a specific base branch
 #[tauri::command]
-pub async fn git_create_branch(path: String, branch: String) -> Result<(), String> {
+pub async fn git_create_branch(path: String, branch: String, base: Option<String>) -> Result<(), String> {
     let repo_root = find_repo_root(&path)?;
     let work_dir = Path::new(&repo_root);
 
-    run_git(work_dir, &["branch", &branch])?;
+    match base {
+        Some(ref base_branch) => run_git(work_dir, &["branch", &branch, base_branch])?,
+        None => run_git(work_dir, &["branch", &branch])?,
+    };
     Ok(())
+}
+
+/// Get the default branch name (main/master) for a repository
+#[tauri::command]
+pub async fn git_default_branch(path: String) -> Result<String, String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+
+    // Try origin/HEAD symbolic ref first (set by git clone)
+    if let Ok(output) = run_git(work_dir, &["symbolic-ref", "refs/remotes/origin/HEAD"]) {
+        let trimmed = output.trim();
+        if let Some(branch) = trimmed.strip_prefix("refs/remotes/origin/") {
+            if !branch.is_empty() {
+                return Ok(branch.to_string());
+            }
+        }
+    }
+
+    // Fallback: check if "main" branch exists
+    let main_check = Command::new("git")
+        .current_dir(work_dir)
+        .args(["rev-parse", "--verify", "refs/heads/main"])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if main_check.status.success() {
+        return Ok("main".to_string());
+    }
+
+    // Fallback: check if "master" branch exists
+    let master_check = Command::new("git")
+        .current_dir(work_dir)
+        .args(["rev-parse", "--verify", "refs/heads/master"])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if master_check.status.success() {
+        return Ok("master".to_string());
+    }
+
+    // Last resort: return whatever branch we're on
+    let current = run_git(work_dir, &["branch", "--show-current"])?;
+    let current = current.trim();
+    if !current.is_empty() {
+        return Ok(current.to_string());
+    }
+
+    Err("Could not determine default branch".to_string())
 }
 
 /// Compute the global worktree path for a project and branch.

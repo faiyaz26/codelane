@@ -5,7 +5,7 @@
 import { getDatabase } from './db';
 import type { Lane, CreateLaneParams, UpdateLaneParams } from '../types/lane';
 import { v4 as uuidv4 } from 'uuid';
-import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree } from './git-api';
+import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch } from './git-api';
 
 /**
  * Creates a new lane
@@ -33,7 +33,14 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
       // Check if branch exists, create if not
       const exists = await branchExists(params.workingDir, branch);
       if (!exists) {
-        await createBranch(params.workingDir, branch);
+        // Create branch from default branch (main/master) instead of HEAD
+        let baseBranch: string | undefined;
+        try {
+          baseBranch = await getDefaultBranch(params.workingDir);
+        } catch {
+          // Fall back to creating from HEAD if we can't determine default branch
+        }
+        await createBranch(params.workingDir, branch, baseBranch);
       }
 
       // Create worktree - backend computes path in ~/.codelane/worktrees/

@@ -1,4 +1,4 @@
-import { Show, For, createMemo, createSignal } from 'solid-js';
+import { Show, For, createMemo, createSignal, createEffect } from 'solid-js';
 import { TerminalView } from '../TerminalView';
 import { ProcessMonitor } from '../ProcessMonitor';
 import { Dialog, Button } from '../ui';
@@ -31,6 +31,19 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     }
     setShowReloadConfirm(false);
   };
+
+  // Trigger terminal refit when active lane changes (opacity-hidden terminals need refresh)
+  createEffect((prev: string | null | undefined) => {
+    const current = props.activeLaneId;
+    if (current && prev !== current) {
+      // Small delay to let opacity transition start and layout settle
+      setTimeout(() => {
+        window.dispatchEvent(new Event('terminal-resize'));
+        window.dispatchEvent(new CustomEvent('terminal-focus', { detail: { laneId: current } }));
+      }, 50);
+    }
+    return current;
+  });
 
   return (
     <div

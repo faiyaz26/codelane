@@ -8,6 +8,7 @@
 import { createSignal, createEffect, onCleanup, type Accessor } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { loadAddons } from '../lib/terminal-utils';
 import { spawn, type PtyHandle } from '../services/PortablePty';
 import { getAgentSettings } from '../lib/settings-api';
 
@@ -61,6 +62,7 @@ export function useCodeReviewTerminal(
     fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(container);
+    loadAddons(terminal);
     fitAddon.fit();
 
     // Spawn PTY
