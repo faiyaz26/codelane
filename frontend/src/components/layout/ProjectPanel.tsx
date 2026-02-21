@@ -296,12 +296,19 @@ export function ProjectPanel(props: ProjectPanelProps) {
                               </svg>
                             </Show>
                             <div class="flex-1 min-w-0 flex flex-col gap-1">
-                              <span
-                                class="text-sm truncate"
-                                title={lane.worktreePath || lane.workingDir}
-                              >
-                                {lane.name.charAt(0).toUpperCase() + lane.name.slice(1)}
-                              </span>
+                              <div class="flex items-center gap-1.5">
+                                <span
+                                  class="text-sm truncate"
+                                  title={lane.worktreePath || lane.workingDir}
+                                >
+                                  {lane.name.charAt(0).toUpperCase() + lane.name.slice(1)}
+                                </span>
+                                <Show when={lane.laneType === 'pr_review' || lane.prMetadata}>
+                                  <span class="flex-shrink-0 px-1 py-0.5 text-[9px] font-semibold leading-none rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                    PR
+                                  </span>
+                                </Show>
+                              </div>
                               <Show when={getLaneBranch(lane.id) || lane.worktreePath}>
                                 <div class="flex items-center gap-1">
                                   <Show when={getLaneBranch(lane.id)}>

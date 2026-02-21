@@ -115,12 +115,12 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
 export async function listLanes(): Promise<Lane[]> {
   const lanes = await loadLanes();
 
-  // Ensure config defaults
+  // Ensure config defaults and backfill laneType for legacy PR lanes
   return lanes.map(lane => ({
     ...lane,
     worktreePath: lane.worktreePath || undefined,
     branch: lane.branch || undefined,
-    laneType: lane.laneType || undefined,
+    laneType: lane.laneType || (lane.prMetadata ? 'pr_review' : undefined),
     prMetadata: lane.prMetadata || undefined,
     config: {
       agentOverride: lane.config?.agentOverride,
@@ -147,7 +147,7 @@ export async function getLane(laneId: string): Promise<Lane> {
     ...lane,
     worktreePath: lane.worktreePath || undefined,
     branch: lane.branch || undefined,
-    laneType: lane.laneType || undefined,
+    laneType: lane.laneType || (lane.prMetadata ? 'pr_review' : undefined),
     prMetadata: lane.prMetadata || undefined,
     config: {
       agentOverride: lane.config?.agentOverride,

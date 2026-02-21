@@ -43,7 +43,7 @@ export function LaneList(props: LaneListProps) {
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5">
                     <span class="text-sm font-medium truncate">{lane.name}</span>
-                    <Show when={lane.laneType === 'pr_review'}>
+                    <Show when={lane.laneType === 'pr_review' || lane.prMetadata}>
                       <span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium leading-none rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
                         PR
                       </span>
