@@ -4,8 +4,8 @@
  * Provides keyboard shortcuts for common review actions:
  * - Cmd/Ctrl+R: Regenerate review
  * - Escape: Cancel current operation
- * - j/ArrowDown: Navigate to next file
- * - k/ArrowUp: Navigate to previous file
+ * - j / Shift+ArrowDown: Navigate to next file
+ * - k / Shift+ArrowUp: Navigate to previous file
  * - Cmd/Ctrl+B: Toggle sidebar
  */
 
@@ -33,16 +33,18 @@ export function useReviewKeyboardShortcuts(options: ReviewKeyboardShortcutsOptio
     } else if (e.key === 'Escape') {
       e.preventDefault();
       options.onCancel?.();
-    } else if (e.key === 'j' || e.key === 'ArrowDown') {
-      if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        options.onNextFile?.();
-      }
-    } else if (e.key === 'k' || e.key === 'ArrowUp') {
-      if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        options.onPrevFile?.();
-      }
+    } else if (e.key === 'j' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      options.onNextFile?.();
+    } else if (e.key === 'k' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      options.onPrevFile?.();
+    } else if (e.key === 'ArrowDown' && e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      options.onNextFile?.();
+    } else if (e.key === 'ArrowUp' && e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      options.onPrevFile?.();
     } else if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       options.onToggleSidebar?.();

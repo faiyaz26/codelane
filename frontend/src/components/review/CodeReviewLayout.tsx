@@ -25,6 +25,8 @@ import { getDefaultBranch } from '../../lib/git-api';
 import type { Lane } from '../../types/lane';
 import type { ReviewScope } from './ReviewScopeSelector';
 import type { ReviewScopeConfig } from '../../services/review/ReviewOrchestrator';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface CodeReviewLayoutProps {
   lane: Lane;
@@ -308,6 +310,27 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
               by @{prMetadata()!.author} &middot; {prMetadata()!.baseBranch} &larr; {prMetadata()!.headBranch} &middot; {prMetadata()!.filesChanged} files, +{prMetadata()!.additions} -{prMetadata()!.deletions}
             </p>
           </div>
+          <button
+            class="flex-shrink-0 p-1.5 rounded text-purple-400 hover:bg-purple-500/20 transition-colors"
+            title="Copy PR link"
+            onClick={() => writeText(prMetadata()!.prUrl)}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+          <button
+            class="flex-shrink-0 p-1.5 rounded text-purple-400 hover:bg-purple-500/20 transition-colors"
+            title="Open PR on GitHub"
+            onClick={() => shellOpen(prMetadata()!.prUrl)}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
         </div>
       </Show>
 
