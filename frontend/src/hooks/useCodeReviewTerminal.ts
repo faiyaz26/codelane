@@ -57,6 +57,7 @@ export function useCodeReviewTerminal(
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       cursorBlink: true,
+      allowProposedApi: true, // Required for Unicode11 addon
     });
 
     fitAddon = new FitAddon();

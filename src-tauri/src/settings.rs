@@ -119,29 +119,74 @@ pub fn lane_update_agent_config(
 /// Check if a command exists and return its full path
 #[tauri::command]
 pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
-    // Try to find the command using 'which' on Unix or 'where' on Windows
+    use std::env;
+    use std::path::Path;
+
+    // On Unix, enhance PATH with common installation directories
     #[cfg(unix)]
-    let output = Command::new("which")
-        .arg(&command)
-        .output()
-        .map_err(|e| format!("Failed to execute 'which': {}", e))?;
+    {
+        let home = env::var("HOME").unwrap_or_default();
+        let common_paths: Vec<String> = vec![
+            "/usr/local/bin".to_string(),
+            "/opt/homebrew/bin".to_string(),  // Homebrew on Apple Silicon
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            format!("{}/.cargo/bin", home),  // Rust tools
+            format!("{}/.local/bin", home),  // Local user binaries
+            format!("{}/bin", home),         // User bin
+        ];
+
+        // First, try which with enhanced PATH
+        let enhanced_path = env::var("PATH").unwrap_or_default() + ":" + &common_paths.join(":");
+        let output = Command::new("which")
+            .arg(&command)
+            .env("PATH", enhanced_path)
+            .output()
+            .map_err(|e| format!("Failed to execute 'which': {}", e))?;
+
+        if output.status.success() {
+            let path = String::from_utf8(output.stdout)
+                .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
+                .trim()
+                .to_string();
+            return Ok(Some(path));
+        }
+
+        // If which failed, manually check common paths
+        for dir in common_paths {
+            let full_path = format!("{}/{}", dir, command);
+            if Path::new(&full_path).is_file() {
+                // Check if executable
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(metadata) = std::fs::metadata(&full_path) {
+                    if metadata.permissions().mode() & 0o111 != 0 {
+                        return Ok(Some(full_path));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
 
     #[cfg(windows)]
-    let output = Command::new("where")
-        .arg(&command)
-        .output()
-        .map_err(|e| format!("Failed to execute 'where': {}", e))?;
+    {
+        let output = Command::new("where")
+            .arg(&command)
+            .output()
+            .map_err(|e| format!("Failed to execute 'where': {}", e))?;
 
-    if output.status.success() {
-        let path = String::from_utf8(output.stdout)
-            .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
-            .trim()
-            .lines()
-            .next() // Get first line (first match)
-            .map(|s| s.to_string());
-        Ok(path)
-    } else {
-        Ok(None)
+        if output.status.success() {
+            let path = String::from_utf8(output.stdout)
+                .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
+                .trim()
+                .lines()
+                .next()
+                .map(|s| s.to_string());
+            Ok(path)
+        } else {
+            Ok(None)
+        }
     }
 }
 

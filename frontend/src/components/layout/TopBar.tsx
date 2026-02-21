@@ -14,6 +14,7 @@ import GitPullRequestCreateArrowIcon from '../icons/GitPullRequestCreateArrowIco
 interface TopBarProps {
   activeLaneId?: string;
   activeLaneName?: string;
+  workingDir?: string;
   effectiveWorkingDir?: string;
   activeView?: ActivityView;
   onNavigateToCodeReview?: () => void;
@@ -32,18 +33,16 @@ export function TopBar(props: TopBarProps) {
     workingDir: () => props.effectiveWorkingDir,
   });
 
-  // Fetch branch, worktree, and project info when working directory changes
-  createEffect(async () => {
-    const workingDir = props.effectiveWorkingDir;
-    if (!workingDir) {
+  // Extract project name from the original working directory (not worktree path)
+  createEffect(() => {
+    const dir = props.workingDir;
+    if (!dir) {
       setProjectName(null);
       return;
     }
 
-    // Extract project name from path (last segment of main working directory)
-    const pathParts = workingDir.split('/');
+    const pathParts = dir.split('/');
     const rawProjectName = pathParts[pathParts.length - 1];
-    // Capitalize first character
     const capitalizedName = rawProjectName.charAt(0).toUpperCase() + rawProjectName.slice(1);
     setProjectName(capitalizedName);
   });
@@ -176,6 +175,12 @@ export function TopBar(props: TopBarProps) {
         <Show when={props.activeLaneName}>
           <div class="flex items-center gap-2 text-sm" data-tauri-drag-region>
             <span class="font-medium text-zed-text-primary">{props.activeLaneName}</span>
+            <Show when={gitWatcher.gitStatus()?.branch}>
+              <span class="text-zed-text-tertiary">|</span>
+              <span class="text-zed-text-tertiary cursor-default">
+                {gitWatcher.gitStatus()!.branch}
+              </span>
+            </Show>
             <Show when={projectName()}>
               <span class="text-zed-text-tertiary">|</span>
               <span

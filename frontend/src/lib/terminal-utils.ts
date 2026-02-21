@@ -24,6 +24,7 @@ export function createTerminal(): Terminal {
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     fontSize: 13,
     lineHeight: 1.4,
+    allowProposedApi: true, // Required for Unicode11 addon
     allowTransparency: false,
     theme,
     scrollback: 5000,
@@ -44,16 +45,24 @@ export function createTerminal(): Terminal {
  */
 export function loadAddons(terminal: Terminal): { searchAddon: SearchAddon } {
   // Unicode11 - correct character widths for CJK and emoji
-  const unicode11 = new Unicode11Addon();
-  terminal.loadAddon(unicode11);
-  terminal.unicode.activeVersion = '11';
+  try {
+    const unicode11 = new Unicode11Addon();
+    terminal.loadAddon(unicode11);
+    terminal.unicode.activeVersion = '11';
+  } catch (err) {
+    console.warn('[terminal] Unicode11 addon failed to load:', err);
+  }
 
   // Web links - clickable URLs in terminal output, opened via Tauri shell
-  terminal.loadAddon(new WebLinksAddon((_event, uri) => {
-    shellOpen(uri).catch((err) => {
-      console.error('[terminal] Failed to open link:', err);
-    });
-  }));
+  try {
+    terminal.loadAddon(new WebLinksAddon((_event, uri) => {
+      shellOpen(uri).catch((e) => {
+        console.error('[terminal] Failed to open link:', e);
+      });
+    }));
+  } catch (err) {
+    console.warn('[terminal] WebLinks addon failed to load:', err);
+  }
 
   // Search addon - expose for Ctrl+F terminal search
   const searchAddon = new SearchAddon();

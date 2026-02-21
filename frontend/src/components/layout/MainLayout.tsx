@@ -142,6 +142,7 @@ export function MainLayout(props: MainLayoutProps) {
       <TopBar
         activeLaneId={props.activeLaneId ?? undefined}
         activeLaneName={activeLane()?.name}
+        workingDir={activeLane()?.workingDir}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
         activeView={activeView()}
         onNavigateToCodeReview={() => setActiveView(ActivityView.CodeReview)}

@@ -41,7 +41,7 @@ build:
 	pnpm build
 
 release:
-	pnpm tauri build --release
+	pnpm tauri build --features devtools
 
 # Code Quality
 check:

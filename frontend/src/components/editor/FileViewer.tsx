@@ -1,6 +1,6 @@
 // File viewer component - displays file content with Shiki syntax highlighting, code folding, and search
 
-import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, lazy } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { OpenFile } from './types';
@@ -8,7 +8,9 @@ import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './type
 import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
 import { editorStateManager } from '../../services/EditorStateManager';
-import { MarkdownEditor } from './markdown';
+
+// Lazy load MarkdownEditor to avoid circular dependency issues at startup
+const MarkdownEditor = lazy(() => import('./markdown').then(m => ({ default: m.MarkdownEditor })));
 
 // Singleton highlighter instance
 let highlighterPromise: Promise<Highlighter> | null = null;

@@ -65,9 +65,10 @@ export default defineConfig(async () => ({
               return 'vendor-diff';
             }
 
-            // Tiptap editor (if used)
-            if (id.includes('@tiptap/') || id.includes('solid-tiptap')) {
-              return 'vendor-editor';
+            // Tiptap editor - DON'T bundle into vendor chunk to avoid circular dependency
+            // It will stay with the lazy-loaded MarkdownEditor component
+            if (id.includes('@tiptap/') || id.includes('solid-tiptap') || id.includes('tiptap-')) {
+              return undefined; // Don't create a vendor chunk, leave in the lazy component
             }
 
             // Kobalte UI components

@@ -98,7 +98,7 @@ export function TerminalView(props: TerminalViewProps) {
 
               spawnSuccess = true;
             } catch (spawnError) {
-              console.error('Failed to spawn agent:', spawnError);
+              console.error('[TerminalView] Failed to spawn agent:', spawnError);
               spawnSuccess = false;
               // Notify parent that agent failed
               props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
