@@ -1,11 +1,10 @@
 // Main Settings Dialog - Shell that orchestrates settings pages
 
-import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import { Button } from '../ui/Button';
 import { getAgentSettings, updateAgentSettings } from '../../lib/settings-api';
 import type { AgentSettings } from '../../types/agent';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 // Import settings page components
 import { GeneralSettings } from './GeneralSettings';
@@ -35,25 +34,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
     if (props.open) {
       loadSettings();
     }
-  });
-
-  // Add copy support with Cmd+C
-  onMount(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const selectedText = selection.toString();
-          if (selectedText) {
-            e.preventDefault();
-            await writeText(selectedText);
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
   });
 
   const loadSettings = async () => {

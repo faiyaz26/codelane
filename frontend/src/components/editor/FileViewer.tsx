@@ -2,7 +2,6 @@
 
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, lazy } from 'solid-js';
 import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { OpenFile } from './types';
 import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './types';
 import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
@@ -589,25 +588,8 @@ export function FileViewer(props: FileViewerProps) {
     }
   };
 
-  // Keyboard handler for global shortcuts
-  const handleKeyDown = async (e: KeyboardEvent) => {
-    // Cmd/Ctrl + C to copy selected text
-    if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const selectedText = selection.toString();
-        if (selectedText) {
-          e.preventDefault();
-          try {
-            await writeText(selectedText);
-          } catch (err) {
-            console.warn('Copy failed:', err);
-          }
-        }
-      }
-      return;
-    }
-
+  // Keyboard handler for file viewer shortcuts (search)
+  const handleKeyDown = (e: KeyboardEvent) => {
     // Cmd/Ctrl + F to open search
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
       e.preventDefault();

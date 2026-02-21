@@ -1,5 +1,6 @@
 import { createSignal, onMount, onCleanup, Show, createMemo } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
+import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MainLayout } from './components/layout';
 import { CreateLaneDialog } from './components/lanes';
@@ -41,6 +42,65 @@ function App() {
     if (!import.meta.env.DEV) {
       document.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+  });
+
+  // Global clipboard handler (copy/paste/cut) using Tauri clipboard API.
+  // Tauri webviews don't support native clipboard shortcuts, so we handle
+  // them globally here. Terminal has its own clipboard handling via xterm.
+  onMount(() => {
+    const handleClipboard = async (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      // Skip if target is inside a terminal (xterm handles its own clipboard)
+      const target = e.target as HTMLElement;
+      if (target.closest('.xterm')) return;
+
+      if (e.key === 'c' || e.key === 'x') {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const selectedText = selection.toString();
+          if (selectedText) {
+            e.preventDefault();
+            await writeText(selectedText);
+            // For cut, delete the selected content if in an editable field
+            if (e.key === 'x' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+              document.execCommand('delete');
+            }
+          }
+        }
+      } else if (e.key === 'v') {
+        // Only handle paste for non-input elements (inputs get it via execCommand)
+        // For inputs/textareas, insert the clipboard text at cursor position
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+          e.preventDefault();
+          const text = await readText();
+          if (text) {
+            const start = target.selectionStart ?? 0;
+            const end = target.selectionEnd ?? 0;
+            const currentValue = target.value;
+            // Use native input setter to trigger reactive frameworks
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+              target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+              'value'
+            )?.set;
+            nativeInputValueSetter?.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            // Restore cursor position after paste
+            const newPos = start + text.length;
+            target.setSelectionRange(newPos, newPos);
+          }
+        }
+      } else if (e.key === 'a') {
+        // Cmd+A: select all in input fields (ensure it works)
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+          // Let native behavior handle it
+          return;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleClipboard);
+    onCleanup(() => document.removeEventListener('keydown', handleClipboard));
   });
 
   // Check for first launch and show onboarding
