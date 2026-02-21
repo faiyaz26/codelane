@@ -10,7 +10,6 @@ import { OnboardingWizard, type WizardData } from './components/onboarding';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
-import { initDatabase } from './lib/db';
 import { initPlatform } from './lib/platform';
 import type { Lane } from './types/lane';
 import type { AgentSettings } from './types/agent';
@@ -170,16 +169,6 @@ function App() {
     // Initialize platform detection (static, only done once)
     await initPlatform();
 
-    // Initialize database
-    try {
-      await initDatabase();
-      console.log('Database ready');
-    } catch (err) {
-      console.error('Failed to initialize database:', err);
-      setError('Failed to initialize database. Please restart the app.');
-      return;
-    }
-
     // Start centralized resource monitoring
     resourceManager.start();
 
@@ -192,8 +181,8 @@ function App() {
       // Settings will use defaults if this fails
     }
 
-    // Restore active lane from localStorage first
-    const savedActiveLaneId = getActiveLaneId();
+    // Restore active lane from store
+    const savedActiveLaneId = await getActiveLaneId();
     if (savedActiveLaneId) {
       setActiveLaneIdSignal(savedActiveLaneId);
     }
@@ -246,7 +235,7 @@ function App() {
 
   const handleLaneSelect = async (laneId: string) => {
     setActiveLaneIdSignal(laneId);
-    setActiveLaneId(laneId);
+    await setActiveLaneId(laneId);
 
     // Initialize TabManager FIRST (before marking as initialized)
     try {
@@ -273,7 +262,7 @@ function App() {
         await handleLaneSelect(remaining[0].id);
       } else {
         setActiveLaneIdSignal(null);
-        setActiveLaneId(null);
+        await setActiveLaneId(null);
       }
     }
   };

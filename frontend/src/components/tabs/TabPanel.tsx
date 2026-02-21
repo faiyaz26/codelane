@@ -19,11 +19,17 @@ interface TabPanelProps {
 export function TabPanel(props: TabPanelProps) {
   const tabManager = useTabManager();
 
-  // Panel UI state
-  const initialState = getPanelState(props.laneId);
-  const [collapsed, setCollapsed] = createSignal(initialState.collapsed);
-  const [height, setHeight] = createSignal(initialState.height);
+  // Panel UI state (defaults, updated async)
+  const [collapsed, setCollapsed] = createSignal(true);
+  const [height, setHeight] = createSignal(400);
   const [isResizing, setIsResizing] = createSignal(false);
+
+  // Load initial panel state from store
+  onMount(async () => {
+    const initialState = await getPanelState(props.laneId);
+    setCollapsed(initialState.collapsed);
+    setHeight(initialState.height);
+  });
 
   const minHeight = 40;
   const maxHeight = () => window.innerHeight * 0.5; // 50% of viewport height
@@ -33,9 +39,9 @@ export function TabPanel(props: TabPanelProps) {
   const tabs = tabManager.getTabs(props.laneId);
   const activeTabId = tabManager.getActiveTab(props.laneId);
 
-  // Save panel state to localStorage when it changes
+  // Save panel state to store when it changes
   createEffect(() => {
-    setPanelState(props.laneId, {
+    void setPanelState(props.laneId, {
       collapsed: collapsed(),
       height: height(),
     });

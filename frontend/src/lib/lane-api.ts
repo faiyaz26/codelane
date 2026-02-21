@@ -1,17 +1,35 @@
 /**
- * Lane API - SQLite-based lane management
+ * Lane API - Store-based lane management
  */
 
-import { getDatabase } from './db';
-import type { Lane, CreateLaneParams, UpdateLaneParams } from '../types/lane';
+import { getStore } from './store';
+import type { Lane, LaneConfig, CreateLaneParams, UpdateLaneParams } from '../types/lane';
 import { v4 as uuidv4 } from 'uuid';
 import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch } from './git-api';
+
+const LANES_KEY = 'lanes';
+
+/**
+ * Load lanes array from store
+ */
+async function loadLanes(): Promise<Lane[]> {
+  const store = await getStore();
+  return (await store.get<Lane[]>(LANES_KEY)) || [];
+}
+
+/**
+ * Save lanes array to store
+ */
+async function saveLanes(lanes: Lane[]): Promise<void> {
+  const store = await getStore();
+  await store.set(LANES_KEY, lanes);
+  await store.save();
+}
 
 /**
  * Creates a new lane
  */
 export async function createLane(params: CreateLaneParams): Promise<Lane> {
-  const db = await getDatabase();
   const now = Math.floor(Date.now() / 1000);
   const id = uuidv4();
 
@@ -51,21 +69,7 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     }
   }
 
-  // Default config as JSON
-  const defaultConfig = JSON.stringify({
-    env: [],
-    lspServers: [],
-  });
-
-  // Insert lane with config
-  await db.execute(
-    `INSERT INTO lanes (id, name, working_dir, worktree_path, branch, config, created_at, updated_at, last_accessed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, params.name, params.workingDir, worktreePath || null, branch || null, defaultConfig, now, now, now]
-  );
-
-  // Return the created lane
-  return {
+  const lane: Lane = {
     id,
     name: params.name,
     workingDir: params.workingDir,
@@ -78,88 +82,56 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
       lspServers: [],
     },
   };
+
+  const lanes = await loadLanes();
+  lanes.push(lane);
+  await saveLanes(lanes);
+
+  return lane;
 }
 
 /**
  * Lists all lanes, sorted by sort_order (or updated_at if sort_order is null)
  */
 export async function listLanes(): Promise<Lane[]> {
-  const db = await getDatabase();
+  const lanes = await loadLanes();
 
-  const rows = await db.select<Array<{
-    id: string;
-    name: string;
-    working_dir: string;
-    worktree_path: string | null;
-    branch: string | null;
-    config: string;
-    created_at: number;
-    updated_at: number;
-  }>>(
-    `SELECT id, name, working_dir, worktree_path, branch, config, created_at, updated_at
-     FROM lanes
-     ORDER BY COALESCE(sort_order, 999999), updated_at DESC`
-  );
-
-  return rows.map(row => {
-    const config = JSON.parse(row.config || '{}');
-    return {
-      id: row.id,
-      name: row.name,
-      workingDir: row.working_dir,
-      worktreePath: row.worktree_path || undefined,
-      branch: row.branch || undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      config: {
-        agentOverride: config.agentOverride,
-        env: config.env || [],
-        lspServers: config.lspServers || [],
-      },
-    };
-  });
+  // Ensure config defaults
+  return lanes.map(lane => ({
+    ...lane,
+    worktreePath: lane.worktreePath || undefined,
+    branch: lane.branch || undefined,
+    config: {
+      agentOverride: lane.config?.agentOverride,
+      env: lane.config?.env || [],
+      lspServers: lane.config?.lspServers || [],
+      tabs: lane.config?.tabs,
+      activeTabId: lane.config?.activeTabId,
+    },
+  }));
 }
 
 /**
  * Gets a specific lane by ID
  */
 export async function getLane(laneId: string): Promise<Lane> {
-  const db = await getDatabase();
+  const lanes = await loadLanes();
+  const lane = lanes.find(l => l.id === laneId);
 
-  const rows = await db.select<Array<{
-    id: string;
-    name: string;
-    working_dir: string;
-    worktree_path: string | null;
-    branch: string | null;
-    config: string;
-    created_at: number;
-    updated_at: number;
-  }>>(
-    `SELECT id, name, working_dir, worktree_path, branch, config, created_at, updated_at
-     FROM lanes
-     WHERE id = ?`,
-    [laneId]
-  );
-
-  if (rows.length === 0) {
+  if (!lane) {
     throw new Error(`Lane not found: ${laneId}`);
   }
 
-  const row = rows[0];
-  const config = JSON.parse(row.config || '{}');
   return {
-    id: row.id,
-    name: row.name,
-    workingDir: row.working_dir,
-    worktreePath: row.worktree_path || undefined,
-    branch: row.branch || undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    ...lane,
+    worktreePath: lane.worktreePath || undefined,
+    branch: lane.branch || undefined,
     config: {
-      agentOverride: config.agentOverride,
-      env: config.env || [],
-      lspServers: config.lspServers || [],
+      agentOverride: lane.config?.agentOverride,
+      env: lane.config?.env || [],
+      lspServers: lane.config?.lspServers || [],
+      tabs: lane.config?.tabs,
+      activeTabId: lane.config?.activeTabId,
     },
   };
 }
@@ -168,36 +140,23 @@ export async function getLane(laneId: string): Promise<Lane> {
  * Updates a lane
  */
 export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
-  const db = await getDatabase();
   const now = Math.floor(Date.now() / 1000);
+  const lanes = await loadLanes();
+  const index = lanes.findIndex(l => l.id === params.laneId);
 
-  // Build update query dynamically based on provided fields
-  const updates: string[] = [];
-  const values: any[] = [];
+  if (index === -1) {
+    throw new Error(`Lane not found: ${params.laneId}`);
+  }
 
   if (params.name !== undefined) {
-    updates.push('name = ?');
-    values.push(params.name);
+    lanes[index].name = params.name;
   }
-
   if (params.workingDir !== undefined) {
-    updates.push('working_dir = ?');
-    values.push(params.workingDir);
+    lanes[index].workingDir = params.workingDir;
   }
+  lanes[index].updatedAt = now;
 
-  updates.push('updated_at = ?');
-  values.push(now);
-
-  values.push(params.laneId);
-
-  if (updates.length > 0) {
-    await db.execute(
-      `UPDATE lanes SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
-  }
-
-  // Return updated lane
+  await saveLanes(lanes);
   return getLane(params.laneId);
 }
 
@@ -205,70 +164,72 @@ export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
  * Deletes a lane
  */
 export async function deleteLane(laneId: string): Promise<void> {
-  const db = await getDatabase();
+  const lanes = await loadLanes();
+  const lane = lanes.find(l => l.id === laneId);
 
-  // Get lane info first to check for worktree
-  const lanes = await db.select<Array<{
-    working_dir: string;
-    worktree_path: string | null;
-    branch: string | null;
-  }>>(
-    'SELECT working_dir, worktree_path, branch FROM lanes WHERE id = ?',
-    [laneId]
-  );
-
-  if (lanes.length > 0) {
-    const lane = lanes[0];
+  if (lane) {
     // If lane has worktree, try to remove it
-    if (lane.worktree_path && lane.branch) {
+    if (lane.worktreePath && lane.branch) {
       try {
-        await removeWorktree(lane.working_dir, lane.worktree_path);
+        await removeWorktree(lane.workingDir, lane.worktreePath);
       } catch (e) {
         console.warn('Failed to remove worktree:', e);
       }
     }
   }
 
-  await db.execute('DELETE FROM lanes WHERE id = ?', [laneId]);
+  const filtered = lanes.filter(l => l.id !== laneId);
+  await saveLanes(filtered);
 }
 
 /**
  * Update last accessed time for a lane
  */
 export async function touchLane(laneId: string): Promise<void> {
-  const db = await getDatabase();
   const now = Math.floor(Date.now() / 1000);
+  const lanes = await loadLanes();
+  const lane = lanes.find(l => l.id === laneId);
 
-  await db.execute(
-    'UPDATE lanes SET last_accessed = ? WHERE id = ?',
-    [now, laneId]
-  );
+  if (lane) {
+    (lane as Lane & { lastAccessed?: number }).lastAccessed = now;
+    await saveLanes(lanes);
+  }
 }
 
 /**
  * Update sort order for lanes
  */
 export async function updateLaneOrder(laneIds: string[]): Promise<void> {
-  const db = await getDatabase();
+  const lanes = await loadLanes();
 
-  // Update each lane's sort_order based on its position in the array
-  for (let i = 0; i < laneIds.length; i++) {
-    await db.execute(
-      'UPDATE lanes SET sort_order = ? WHERE id = ?',
-      [i, laneIds[i]]
-    );
+  // Sort lanes according to the given order
+  const ordered: Lane[] = [];
+  for (const id of laneIds) {
+    const lane = lanes.find(l => l.id === id);
+    if (lane) ordered.push(lane);
   }
+
+  // Add any lanes not in the order list at the end
+  for (const lane of lanes) {
+    if (!laneIds.includes(lane.id)) {
+      ordered.push(lane);
+    }
+  }
+
+  await saveLanes(ordered);
 }
 
 /**
  * Update lane configuration
  */
-export async function updateLaneConfig(laneId: string, config: Lane['config']): Promise<void> {
-  const db = await getDatabase();
+export async function updateLaneConfig(laneId: string, config: LaneConfig): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
+  const lanes = await loadLanes();
+  const lane = lanes.find(l => l.id === laneId);
 
-  await db.execute(
-    'UPDATE lanes SET config = ?, updated_at = ? WHERE id = ?',
-    [JSON.stringify(config), now, laneId]
-  );
+  if (lane) {
+    lane.config = config;
+    lane.updatedAt = now;
+    await saveLanes(lanes);
+  }
 }

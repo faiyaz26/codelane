@@ -6,7 +6,7 @@
 pub mod lane;
 pub mod paths;
 pub mod settings;
-pub mod db;
+pub mod store;
 pub mod process;
 pub mod terminal;
 pub mod search;
@@ -32,7 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_sql::Builder::default().build())  // SQLite database
+        .plugin(tauri_plugin_store::Builder::default().build())  // JSON store
         .plugin(tauri_plugin_notification::init());
 
     // Add updater plugin on desktop platforms
@@ -54,8 +54,8 @@ pub fn run() {
         .manage(hook_monitor::HookMonitorState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
-            // Database commands
-            db::db_get_path,
+            // Store commands
+            store::get_store_path,
             // Lane commands
             lane::lane_create,
             lane::lane_list,

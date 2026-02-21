@@ -15,19 +15,25 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel(props: BottomPanelProps) {
-  // Load initial state from localStorage
-  const initialState = getPanelState(props.laneId);
-  const [collapsed, setCollapsed] = createSignal(initialState.collapsed);
-  const [height, setHeight] = createSignal(initialState.height);
+  // Default panel state (will be updated async)
+  const [collapsed, setCollapsed] = createSignal(true);
+  const [height, setHeight] = createSignal(400);
   const [isResizing, setIsResizing] = createSignal(false);
+
+  // Load initial state from store asynchronously
+  onMount(async () => {
+    const initialState = await getPanelState(props.laneId);
+    setCollapsed(initialState.collapsed);
+    setHeight(initialState.height);
+  });
   const minHeight = 40;
   const maxHeight = () => window.innerHeight * 0.5; // 50% of viewport height
 
   const panelHeight = () => collapsed() ? minHeight : Math.min(height(), maxHeight());
 
-  // Save to localStorage when state changes
+  // Save to store when state changes
   createEffect(() => {
-    setPanelState(props.laneId, {
+    void setPanelState(props.laneId, {
       collapsed: collapsed(),
       height: height(),
     });

@@ -101,12 +101,6 @@ export const storeActions = {
 
   setActiveLane: (laneId: string | null) => {
     setStore('activeLaneId', laneId);
-    // Save to localStorage
-    if (laneId) {
-      localStorage.setItem('codelane-active-lane', laneId);
-    } else {
-      localStorage.removeItem('codelane-active-lane');
-    }
   },
 
   // Terminal actions

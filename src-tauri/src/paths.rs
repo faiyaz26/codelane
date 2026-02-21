@@ -12,10 +12,6 @@ pub fn data_dir() -> PathBuf {
     codelane_core::paths::data_dir().expect("Failed to resolve codelane data directory")
 }
 
-pub fn db_path() -> PathBuf {
-    codelane_core::paths::db_path().expect("Failed to resolve database path")
-}
-
 pub fn lanes_dir() -> PathBuf {
     codelane_core::paths::lanes_dir().expect("Failed to resolve lanes directory")
 }
@@ -43,13 +39,6 @@ mod tests {
     #[test]
     fn test_data_dir_exists() {
         assert!(data_dir().exists());
-    }
-
-    #[test]
-    fn test_db_path() {
-        let path = db_path();
-        assert!(path.to_string_lossy().ends_with("codelane.db"));
-        assert!(path.to_string_lossy().contains(".codelane/dev"));
     }
 
     #[test]

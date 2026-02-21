@@ -41,6 +41,11 @@ pub fn db_path() -> crate::Result<PathBuf> {
     Ok(data_dir()?.join("codelane.db"))
 }
 
+/// Returns the JSON store file path for the current environment.
+pub fn store_path() -> crate::Result<PathBuf> {
+    Ok(data_dir()?.join("codelane-data.json"))
+}
+
 /// Returns the lanes storage directory for the current environment.
 pub fn lanes_dir() -> crate::Result<PathBuf> {
     let dir = data_dir()?.join("lanes");

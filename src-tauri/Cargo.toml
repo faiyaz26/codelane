@@ -63,7 +63,7 @@ tree-sitter-go = "0.23"
 codelane-terminal = { path = "../crates/codelane-terminal" }
 codelane-git = { path = "../crates/codelane-git" }
 codelane-core = { path = "../crates/codelane-core" }
-tauri-plugin-sql = { version = "2.3.1", features = ["sqlite"] }
+tauri-plugin-store = "2"
 
 [features]
 default = ["custom-protocol"]

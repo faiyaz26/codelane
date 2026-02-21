@@ -23,18 +23,16 @@ export function useFileTree(): UseFileTreeReturn {
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null);
   const [expandedDirs, setExpandedDirs] = createSignal<Set<string>>(new Set());
 
-  const sortAndFilterEntries = (entries: FileEntry[]): FileEntry[] => {
-    return entries
-      .filter((e) => !e.name.startsWith('.'))
-      .sort((a, b) => {
-        if (a.is_dir && !b.is_dir) return -1;
-        if (!a.is_dir && b.is_dir) return 1;
-        return a.name.localeCompare(b.name);
-      });
+  const sortEntries = (entries: FileEntry[]): FileEntry[] => {
+    return [...entries].sort((a, b) => {
+      if (a.is_dir && !b.is_dir) return -1;
+      if (!a.is_dir && b.is_dir) return 1;
+      return a.name.localeCompare(b.name);
+    });
   };
 
   const entriesToNodes = (entries: FileEntry[]): TreeNode[] => {
-    return sortAndFilterEntries(entries).map((entry) => ({
+    return sortEntries(entries).map((entry) => ({
       entry,
       children: [],
       isExpanded: false,
@@ -47,7 +45,7 @@ export function useFileTree(): UseFileTreeReturn {
     setError(null);
 
     try {
-      const entries = await invoke<FileEntry[]>('list_directory', { path });
+      const entries = await invoke<FileEntry[]>('list_directory', { path, includeHidden: true });
       setNodes(entriesToNodes(entries));
     } catch (err) {
       console.error('Failed to load directory:', err);
@@ -59,7 +57,7 @@ export function useFileTree(): UseFileTreeReturn {
 
   const refreshDirectory = async (dirPath: string, workingDir: string) => {
     try {
-      const entries = await invoke<FileEntry[]>('list_directory', { path: dirPath });
+      const entries = await invoke<FileEntry[]>('list_directory', { path: dirPath, includeHidden: true });
       const newNodes = entriesToNodes(entries);
 
       if (dirPath === workingDir) {
@@ -159,7 +157,7 @@ export function useFileTree(): UseFileTreeReturn {
       updateNodeByIndex(path, { isLoading: true, isExpanded: true });
 
       try {
-        const entries = await invoke<FileEntry[]>('list_directory', { path: node.entry.path });
+        const entries = await invoke<FileEntry[]>('list_directory', { path: node.entry.path, includeHidden: true });
         updateNodeByIndex(path, { children: entriesToNodes(entries), isLoading: false });
       } catch (err) {
         console.error('Failed to load directory:', err);

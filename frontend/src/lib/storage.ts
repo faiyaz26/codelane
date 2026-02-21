@@ -1,31 +1,36 @@
 /**
- * Local storage utilities for persisting app state
+ * Storage utilities for persisting app state via Tauri Store
  */
 
-const ACTIVE_LANE_KEY = 'codelane_active_lane_id';
-const PANEL_STATE_KEY = 'codelane_panel_state';
+import { getStore } from './store';
+
+const ACTIVE_LANE_KEY = 'active_lane_id';
+const PANEL_STATE_PREFIX = 'panel_state:';
 
 /**
- * Gets the active lane ID from localStorage
+ * Gets the active lane ID from store
  */
-export function getActiveLaneId(): string | null {
+export async function getActiveLaneId(): Promise<string | null> {
   try {
-    return localStorage.getItem(ACTIVE_LANE_KEY);
+    const store = await getStore();
+    return (await store.get<string>(ACTIVE_LANE_KEY)) || null;
   } catch {
     return null;
   }
 }
 
 /**
- * Sets the active lane ID in localStorage
+ * Sets the active lane ID in store
  */
-export function setActiveLaneId(laneId: string | null): void {
+export async function setActiveLaneId(laneId: string | null): Promise<void> {
   try {
+    const store = await getStore();
     if (laneId === null) {
-      localStorage.removeItem(ACTIVE_LANE_KEY);
+      await store.delete(ACTIVE_LANE_KEY);
     } else {
-      localStorage.setItem(ACTIVE_LANE_KEY, laneId);
+      await store.set(ACTIVE_LANE_KEY, laneId);
     }
+    await store.save();
   } catch (err) {
     console.error('Failed to save active lane ID:', err);
   }
@@ -42,11 +47,12 @@ export interface PanelState {
 /**
  * Gets panel state for a specific lane
  */
-export function getPanelState(laneId: string): PanelState {
+export async function getPanelState(laneId: string): Promise<PanelState> {
   try {
-    const stored = localStorage.getItem(`${PANEL_STATE_KEY}_${laneId}`);
-    if (stored) {
-      return JSON.parse(stored);
+    const store = await getStore();
+    const state = await store.get<PanelState>(`${PANEL_STATE_PREFIX}${laneId}`);
+    if (state) {
+      return state;
     }
   } catch (err) {
     console.error('Failed to load panel state:', err);
@@ -58,9 +64,11 @@ export function getPanelState(laneId: string): PanelState {
 /**
  * Sets panel state for a specific lane
  */
-export function setPanelState(laneId: string, state: PanelState): void {
+export async function setPanelState(laneId: string, state: PanelState): Promise<void> {
   try {
-    localStorage.setItem(`${PANEL_STATE_KEY}_${laneId}`, JSON.stringify(state));
+    const store = await getStore();
+    await store.set(`${PANEL_STATE_PREFIX}${laneId}`, state);
+    await store.save();
   } catch (err) {
     console.error('Failed to save panel state:', err);
   }

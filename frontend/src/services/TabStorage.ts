@@ -1,8 +1,8 @@
 /**
  * TabStorage - Unified persistence for tab and panel state
  *
- * Provides atomic updates to SQLite via lane-api and handles migration
- * from the old localStorage format.
+ * Provides atomic updates to Store via lane-api and handles
+ * panel state (collapsed/height) alongside tab state.
  */
 
 import { getLane, updateLaneConfig } from '../lib/lane-api';
@@ -21,15 +21,15 @@ export interface TabPanelState {
 }
 
 /**
- * Loads tab panel state from SQLite (with localStorage fallback)
+ * Loads tab panel state from Store
  */
 export async function loadTabPanelState(laneId: string): Promise<TabPanelState> {
   try {
-    // Load from SQLite
+    // Load from Store via lane-api
     const lane = await getLane(laneId);
 
-    // Load panel state from localStorage (still used for collapsed/height)
-    const panelState = getPanelState(laneId);
+    // Load panel state from Store
+    const panelState = await getPanelState(laneId);
 
     return {
       laneId,
@@ -60,16 +60,16 @@ export async function saveTabPanelState(
   partial: Partial<Omit<TabPanelState, 'laneId'>>
 ): Promise<void> {
   try {
-    // Save panel state (collapsed/height) to localStorage
+    // Save panel state (collapsed/height) to Store
     if (partial.collapsed !== undefined || partial.height !== undefined) {
-      const currentPanelState = getPanelState(laneId);
-      setPanelState(laneId, {
+      const currentPanelState = await getPanelState(laneId);
+      await setPanelState(laneId, {
         collapsed: partial.collapsed ?? currentPanelState.collapsed,
         height: partial.height ?? currentPanelState.height,
       });
     }
 
-    // Save tabs/activeTabId to SQLite
+    // Save tabs/activeTabId to Store via lane config
     if (partial.tabs !== undefined || partial.activeTabId !== undefined) {
       const lane = await getLane(laneId);
       const updatedConfig = {
