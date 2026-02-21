@@ -18,6 +18,7 @@ mod file_sorter;
 mod import_analyzer;
 mod dependency_graph;
 mod ai;
+mod github;
 
 use tauri::{Emitter, Manager};
 
@@ -95,6 +96,14 @@ pub fn run() {
             git::git_worktree_add,
             git::git_worktree_list,
             git::git_worktree_remove,
+            // Git remote + branch diff commands
+            git::git_fetch_branch,
+            git::git_diff_branch,
+            git::git_branch_changes_with_stats,
+            // GitHub CLI commands
+            github::github_check_status,
+            github::github_fetch_pr,
+            github::github_submit_review,
             // AI code review commands
             ai::ai_generate_review,
             ai::ai_test_tool,

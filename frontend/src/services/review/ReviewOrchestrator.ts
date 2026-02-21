@@ -24,6 +24,17 @@ import { computeChangesetChecksum } from '../../utils/changesetChecksum';
 import type { ReviewPhase } from './ReviewStateManager';
 
 /**
+ * Review scope configuration
+ * Determines the diff source for the review
+ */
+export interface ReviewScopeConfig {
+  /** 'working_changes' = git diff (default), 'branch_diff' = git diff base...HEAD */
+  scope: 'working_changes' | 'branch_diff';
+  /** Base branch for branch_diff scope (e.g., 'main') */
+  baseBranch?: string;
+}
+
+/**
  * Run async tasks with a concurrency limit
  */
 async function parallelLimit<T>(
@@ -172,8 +183,10 @@ export class ReviewOrchestrator {
 
   /**
    * Generate a full code review for a lane
+   * @param scopeConfig - Optional scope for branch/PR diff review. Defaults to working_changes.
    */
-  async generateReview(laneId: string, workingDir: string): Promise<void> {
+  async generateReview(laneId: string, workingDir: string, scopeConfig?: ReviewScopeConfig): Promise<void> {
+    const scope = scopeConfig?.scope || 'working_changes';
     // Cancel any existing review for this lane
     this.cancelReview(laneId);
 
@@ -210,8 +223,10 @@ export class ReviewOrchestrator {
     }, timeoutMs);
 
     try {
-      // 1. Get changed files with stats
-      const changesWithStats = await reviewFileProcessor.fetchChangesWithStats(workingDir);
+      // 1. Get changed files with stats (scope-aware)
+      const changesWithStats = scope === 'branch_diff' && scopeConfig?.baseBranch
+        ? await reviewFileProcessor.fetchBranchChangesWithStats(workingDir, scopeConfig.baseBranch)
+        : await reviewFileProcessor.fetchChangesWithStats(workingDir);
 
       // Check if aborted
       if (controller.signal.aborted) {
@@ -256,11 +271,19 @@ export class ReviewOrchestrator {
       }));
 
       // Fetch only top files for summary (reduces initial load time from O(n) to O(1))
-      const fileDiffs = await reviewFileProcessor.fetchFileDiffs(
-        workingDir,
-        changesWithStats,
-        { eager: true, topN: TOP_FILES_FOR_SUMMARY, signal: controller.signal }
-      );
+      // Use branch diff when scope is branch_diff, otherwise use working tree diff
+      const fileDiffs = scope === 'branch_diff' && scopeConfig?.baseBranch
+        ? await reviewFileProcessor.fetchBranchDiffs(
+            workingDir,
+            changesWithStats,
+            scopeConfig.baseBranch,
+            { topN: TOP_FILES_FOR_SUMMARY, signal: controller.signal }
+          )
+        : await reviewFileProcessor.fetchFileDiffs(
+            workingDir,
+            changesWithStats,
+            { eager: true, topN: TOP_FILES_FOR_SUMMARY, signal: controller.signal }
+          );
 
       // Update progress to reflect actual fetched files
       reviewStateManager.setState(laneId, prev => ({

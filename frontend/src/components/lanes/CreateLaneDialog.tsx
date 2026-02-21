@@ -3,9 +3,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { Dialog, Button, TextField } from '../ui';
 import { createLane } from '../../lib/lane-api';
 import { isGitRepo, listWorktrees, removeWorktree, getGitBranch, getDefaultBranch } from '../../lib/git-api';
+import { checkGhStatus, fetchPrInfo } from '../../lib/github-api';
 import { WorktreeConflictDialog } from '../WorktreeConflictDialog';
-import type { Lane } from '../../types/lane';
+import type { Lane, LaneType, PrMetadata } from '../../types/lane';
 import type { GitBranchInfo } from '../../types/git';
+import type { GhCliStatus } from '../../lib/github-api';
 
 interface WorktreeConflict {
   branch: string;
@@ -33,10 +35,14 @@ interface CreateLaneDialogProps {
 }
 
 export function CreateLaneDialog(props: CreateLaneDialogProps) {
+  // Shared state
+  const [laneType, setLaneType] = createSignal<LaneType>('feature');
   const [name, setName] = createSignal('');
   const [workingDir, setWorkingDir] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [isCreating, setIsCreating] = createSignal(false);
+
+  // Feature lane state
   const [branch, setBranch] = createSignal('');
   const [isGitRepoDir, setIsGitRepoDir] = createSignal(false);
   const [checkingGitRepo, setCheckingGitRepo] = createSignal(false);
@@ -48,6 +54,25 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   const [defaultBranch, setDefaultBranch] = createSignal<string>('main');
   const [showBranchDropdown, setShowBranchDropdown] = createSignal(false);
   const [isExistingBranch, setIsExistingBranch] = createSignal(false);
+
+  // PR review lane state
+  const [prUrl, setPrUrl] = createSignal('');
+  const [ghStatus, setGhStatus] = createSignal<GhCliStatus | null>(null);
+  const [checkingGh, setCheckingGh] = createSignal(false);
+  const [fetchingPr, setFetchingPr] = createSignal(false);
+  const [prMetadata, setPrMetadata] = createSignal<PrMetadata | null>(null);
+  const [prError, setPrError] = createSignal<string | null>(null);
+
+  // Check gh CLI status when switching to PR mode
+  createEffect(() => {
+    if (props.open && laneType() === 'pr_review' && !ghStatus()) {
+      setCheckingGh(true);
+      checkGhStatus()
+        .then((status) => setGhStatus(status))
+        .catch(() => setGhStatus({ installed: false, authenticated: false, user: null, version: null }))
+        .finally(() => setCheckingGh(false));
+    }
+  });
 
   // Rotate placeholder when dialog is open
   createEffect(() => {
@@ -61,10 +86,10 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
 
   const currentPlaceholder = () => PLACEHOLDER_EXAMPLES[placeholderIndex()];
 
-  // Check if working directory is a git repo when it changes
+  // Check if working directory is a git repo when it changes (feature mode)
   createEffect(async () => {
     const dir = workingDir();
-    if (dir && dir.trim()) {
+    if (dir && dir.trim() && laneType() === 'feature') {
       setCheckingGitRepo(true);
       try {
         const result = await isGitRepo(dir);
@@ -74,7 +99,6 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
           setBranches([]);
           setIsExistingBranch(false);
         } else {
-          // Fetch branches and default branch in parallel
           const [branchInfo, defBranch] = await Promise.all([
             getGitBranch(dir).catch((): GitBranchInfo => ({ current: null, branches: [] })),
             getDefaultBranch(dir).catch(() => 'main'),
@@ -90,7 +114,7 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       } finally {
         setCheckingGitRepo(false);
       }
-    } else {
+    } else if (laneType() === 'feature') {
       setIsGitRepoDir(false);
       setBranch('');
       setBranches([]);
@@ -113,12 +137,48 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     const filtered = query
       ? allBranches.filter(b => b.toLowerCase().includes(query))
       : allBranches;
-    // Sort: default branch first, then alphabetical
     return [...filtered].sort((a, b) => {
       if (a === defBranch) return -1;
       if (b === defBranch) return 1;
       return a.localeCompare(b);
     });
+  };
+
+  const ghReady = () => {
+    const s = ghStatus();
+    return s?.installed && s?.authenticated;
+  };
+
+  // Fetch PR info
+  const handleFetchPr = async () => {
+    const url = prUrl().trim();
+    if (!url) {
+      setPrError('Please enter a PR URL');
+      return;
+    }
+
+    // Basic URL validation
+    if (!url.match(/github\.com\/.+\/.+\/pull\/\d+/)) {
+      setPrError('Invalid PR URL. Expected format: https://github.com/owner/repo/pull/123');
+      return;
+    }
+
+    setFetchingPr(true);
+    setPrError(null);
+    setPrMetadata(null);
+
+    try {
+      const info = await fetchPrInfo(url);
+      setPrMetadata(info);
+      // Auto-fill lane name from PR title
+      if (!name().trim()) {
+        setName(`PR #${info.number}: ${info.title}`);
+      }
+    } catch (err) {
+      setPrError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFetchingPr(false);
+    }
   };
 
   // Check for worktree conflict
@@ -133,12 +193,18 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
         };
       }
     } catch {
-      // Ignore errors (e.g., not a git repo)
+      // Ignore errors
     }
     return null;
   };
 
-  const doCreateLane = async (laneName: string, laneWorkingDir: string, laneBranch: string | undefined) => {
+  const doCreateLane = async (
+    laneName: string,
+    laneWorkingDir: string,
+    laneBranch: string | undefined,
+    type?: LaneType,
+    metadata?: PrMetadata,
+  ) => {
     setIsCreating(true);
     setError(null);
 
@@ -147,15 +213,12 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
         name: laneName,
         workingDir: laneWorkingDir,
         branch: laneBranch,
+        laneType: type,
+        prMetadata: metadata,
       });
 
       // Reset form
-      setName('');
-      setWorkingDir('');
-      setBranch('');
-      setError(null);
-      setShowBranchDropdown(false);
-      setIsExistingBranch(false);
+      resetForm();
 
       // Close dialog and notify parent
       props.onOpenChange(false);
@@ -168,16 +231,21 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
   };
 
   const handleCreate = async () => {
+    if (laneType() === 'pr_review') {
+      return handleCreatePrLane();
+    }
+    return handleCreateFeatureLane();
+  };
+
+  const handleCreateFeatureLane = async () => {
     const laneName = name().trim();
     const laneWorkingDir = workingDir().trim();
     const laneBranch = branch().trim();
 
-    // Validation
     if (!laneName) {
       setError('Lane name is required');
       return;
     }
-
     if (!laneWorkingDir) {
       setError('Working directory is required');
       return;
@@ -197,13 +265,51 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     await doCreateLane(laneName, laneWorkingDir, laneBranch || undefined);
   };
 
+  const handleCreatePrLane = async () => {
+    const laneName = name().trim();
+    const laneWorkingDir = workingDir().trim();
+    const metadata = prMetadata();
+
+    if (!laneName) {
+      setError('Lane name is required');
+      return;
+    }
+    if (!laneWorkingDir) {
+      setError('Working directory is required');
+      return;
+    }
+    if (!metadata) {
+      setError('Please fetch the PR first');
+      return;
+    }
+
+    setError(null);
+
+    // Use the PR head branch for the worktree
+    const prBranch = metadata.headBranch;
+
+    // Check for worktree conflict
+    const conflict = await checkWorktreeConflict(laneWorkingDir, prBranch);
+    if (conflict) {
+      setWorktreeConflict(conflict);
+      return;
+    }
+
+    await doCreateLane(laneName, laneWorkingDir, prBranch, 'pr_review', metadata);
+  };
+
   const handleUseExistingWorktree = async () => {
     const conflict = worktreeConflict();
     if (!conflict) return;
 
     setWorktreeConflict(null);
-    // Create lane - createLane will detect existing worktree and handle it
-    await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+
+    if (laneType() === 'pr_review') {
+      const metadata = prMetadata();
+      await doCreateLane(name().trim(), workingDir().trim(), conflict.branch, 'pr_review', metadata || undefined);
+    } else {
+      await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+    }
   };
 
   const handleRemoveAndCreate = async () => {
@@ -215,10 +321,13 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     setError(null);
 
     try {
-      // Remove existing worktree
       await removeWorktree(workingDir().trim(), conflict.existingPath);
-      // Now create the lane (which will create a new worktree)
-      await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+      if (laneType() === 'pr_review') {
+        const metadata = prMetadata();
+        await doCreateLane(name().trim(), workingDir().trim(), conflict.branch, 'pr_review', metadata || undefined);
+      } else {
+        await doCreateLane(name().trim(), workingDir().trim(), conflict.branch);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setIsCreating(false);
@@ -229,18 +338,16 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     setWorktreeConflict(null);
     setBranch(newBranch);
 
-    // Check if new branch also has a conflict
     const conflict = await checkWorktreeConflict(workingDir().trim(), newBranch);
     if (conflict) {
       setWorktreeConflict(conflict);
       return;
     }
 
-    // No conflict, proceed with creation
     await doCreateLane(name().trim(), workingDir().trim(), newBranch);
   };
 
-  const handleCancel = () => {
+  const resetForm = () => {
     setName('');
     setWorkingDir('');
     setBranch('');
@@ -248,6 +355,13 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
     setWorktreeConflict(null);
     setShowBranchDropdown(false);
     setIsExistingBranch(false);
+    setPrUrl('');
+    setPrMetadata(null);
+    setPrError(null);
+  };
+
+  const handleCancel = () => {
+    resetForm();
     props.onOpenChange(false);
   };
 
@@ -274,22 +388,151 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
       open={props.open && !worktreeConflict()}
       onOpenChange={props.onOpenChange}
       title="Create New Lane"
-      description="Start a new task with a dedicated AI agent and terminal session."
+      description={laneType() === 'pr_review'
+        ? 'Review a GitHub Pull Request with AI-powered code review.'
+        : 'Start a new task with a dedicated AI agent and terminal session.'}
     >
       <div class="space-y-4" onClick={(e) => {
-        // Close branch dropdown when clicking outside it
         if (!(e.target as HTMLElement).closest('.relative')) {
           setShowBranchDropdown(false);
         }
       }}>
+        {/* Lane type toggle */}
+        <div class="flex rounded-lg bg-zed-bg-surface border border-zed-border-subtle p-0.5">
+          <button
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+            classList={{
+              'bg-zed-bg-hover text-zed-text-primary shadow-sm': laneType() === 'feature',
+              'text-zed-text-tertiary hover:text-zed-text-secondary': laneType() !== 'feature',
+            }}
+            onClick={() => setLaneType('feature')}
+          >
+            Feature
+          </button>
+          <button
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+            classList={{
+              'bg-zed-bg-hover text-zed-text-primary shadow-sm': laneType() === 'pr_review',
+              'text-zed-text-tertiary hover:text-zed-text-secondary': laneType() !== 'pr_review',
+            }}
+            onClick={() => setLaneType('pr_review')}
+          >
+            PR Review
+          </button>
+        </div>
+
+        {/* PR Review mode */}
+        <Show when={laneType() === 'pr_review'}>
+          {/* gh CLI status */}
+          <Show when={checkingGh()}>
+            <div class="p-3 rounded-lg bg-zed-bg-surface border border-zed-border-subtle">
+              <span class="text-xs text-zed-text-tertiary">Checking GitHub CLI...</span>
+            </div>
+          </Show>
+
+          <Show when={!checkingGh() && ghStatus() && !ghReady()}>
+            <div class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span class="text-sm font-medium text-amber-400">GitHub CLI Required</span>
+              </div>
+              <Show when={!ghStatus()?.installed}>
+                <p class="text-xs text-zed-text-secondary leading-relaxed">
+                  The <code class="px-1 py-0.5 bg-zed-bg-hover rounded text-zed-text-primary">gh</code> CLI is not installed.
+                  Install it from <a href="https://cli.github.com" class="text-purple-400 hover:underline" target="_blank">cli.github.com</a>.
+                </p>
+              </Show>
+              <Show when={ghStatus()?.installed && !ghStatus()?.authenticated}>
+                <p class="text-xs text-zed-text-secondary leading-relaxed">
+                  The <code class="px-1 py-0.5 bg-zed-bg-hover rounded text-zed-text-primary">gh</code> CLI is installed but not authenticated.
+                  Run <code class="px-1 py-0.5 bg-zed-bg-hover rounded text-zed-text-primary">gh auth login</code> to authenticate.
+                </p>
+              </Show>
+            </div>
+          </Show>
+
+          <Show when={ghReady()}>
+            <div class="flex items-center gap-2 text-xs text-zed-text-tertiary">
+              <svg class="w-3.5 h-3.5 text-zed-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Signed in as <strong class="text-zed-text-secondary">{ghStatus()?.user}</strong></span>
+            </div>
+
+            {/* PR URL input */}
+            <div>
+              <label class="block text-sm font-medium text-zed-text-primary mb-1.5">
+                Pull Request URL
+              </label>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  class="flex-1 input"
+                  placeholder="https://github.com/owner/repo/pull/123"
+                  value={prUrl()}
+                  onInput={(e) => {
+                    setPrUrl(e.currentTarget.value);
+                    setPrError(null);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleFetchPr(); }}
+                  disabled={fetchingPr()}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={handleFetchPr}
+                  disabled={fetchingPr() || !prUrl().trim()}
+                >
+                  {fetchingPr() ? 'Fetching...' : 'Fetch'}
+                </Button>
+              </div>
+              <Show when={prError()}>
+                <p class="text-xs text-zed-accent-red mt-1">{prError()}</p>
+              </Show>
+            </div>
+
+            {/* PR preview card */}
+            <Show when={prMetadata()}>
+              {(meta) => (
+                <div class="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20 space-y-2">
+                  <div class="flex items-start gap-2">
+                    <svg class="w-4 h-4 text-purple-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-zed-text-primary truncate">
+                        #{meta().number} {meta().title}
+                      </p>
+                      <p class="text-xs text-zed-text-tertiary mt-0.5">
+                        by {meta().author} &middot; {meta().repoName}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 text-xs text-zed-text-tertiary">
+                    <span>{meta().baseBranch} &larr; {meta().headBranch}</span>
+                    <span class="text-zed-accent-green">+{meta().additions}</span>
+                    <span class="text-zed-accent-red">-{meta().deletions}</span>
+                    <span>{meta().filesChanged} files</span>
+                  </div>
+                </div>
+              )}
+            </Show>
+          </Show>
+        </Show>
+
+        {/* Lane name - shown for both modes */}
         <TextField
           label="Lane Name"
-          placeholder={currentPlaceholder()}
+          placeholder={laneType() === 'pr_review' ? 'Auto-filled from PR title' : currentPlaceholder()}
           value={name()}
           onChange={setName}
-          description="What are you working on? e.g., feature name, bug fix, or task"
+          description={laneType() === 'pr_review'
+            ? 'Name for this review lane (auto-filled from PR)'
+            : 'What are you working on? e.g., feature name, bug fix, or task'}
         />
 
+        {/* Working directory - shown for both modes */}
         <div>
           <label class="block text-sm font-medium text-zed-text-primary mb-2">
             Working Directory
@@ -311,11 +554,14 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
             </Button>
           </div>
           <p class="text-xs text-zed-text-tertiary mt-1">
-            Absolute path to your project directory
+            {laneType() === 'pr_review'
+              ? 'Local path to the repository (must be a git repo)'
+              : 'Absolute path to your project directory'}
           </p>
         </div>
 
-        <Show when={isGitRepoDir()}>
+        {/* Git branch section - feature mode only */}
+        <Show when={laneType() === 'feature' && isGitRepoDir()}>
           <div class="p-3 rounded-lg bg-zed-accent-green/5 border border-zed-accent-green/20">
             <div class="flex items-center gap-2 mb-3">
               <svg class="w-4 h-4 text-zed-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -393,9 +639,13 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
           <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={isCreating()}
+            disabled={isCreating() || (laneType() === 'pr_review' && !ghReady())}
           >
-            {isCreating() ? 'Creating...' : 'Create Lane'}
+            {isCreating()
+              ? 'Creating...'
+              : laneType() === 'pr_review'
+                ? 'Create Review Lane'
+                : 'Create Lane'}
           </Button>
         </div>
       </div>

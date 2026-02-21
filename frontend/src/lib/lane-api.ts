@@ -5,7 +5,7 @@
 import { getStore } from './store';
 import type { Lane, LaneConfig, CreateLaneParams, UpdateLaneParams } from '../types/lane';
 import { v4 as uuidv4 } from 'uuid';
-import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch } from './git-api';
+import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch, fetchBranch } from './git-api';
 
 const LANES_KEY = 'lanes';
 
@@ -48,6 +48,23 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     // Check if directory is a git repo
     const isRepo = await isGitRepo(params.workingDir);
     if (isRepo) {
+      // For PR review lanes, fetch the remote branch first so we get the actual PR commits
+      if (params.laneType === 'pr_review') {
+        try {
+          await fetchBranch(params.workingDir, branch);
+        } catch (e) {
+          console.warn('Failed to fetch remote branch, continuing with local:', e);
+        }
+        // Also fetch the base branch to ensure diff works correctly
+        if (params.prMetadata?.baseBranch) {
+          try {
+            await fetchBranch(params.workingDir, params.prMetadata.baseBranch);
+          } catch {
+            // Base branch is likely already available locally
+          }
+        }
+      }
+
       // Check if branch exists, create if not
       const exists = await branchExists(params.workingDir, branch);
       if (!exists) {
@@ -75,6 +92,8 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     workingDir: params.workingDir,
     worktreePath,
     branch,
+    ...(params.laneType && { laneType: params.laneType }),
+    ...(params.prMetadata && { prMetadata: params.prMetadata }),
     createdAt: now,
     updatedAt: now,
     config: {
@@ -101,6 +120,8 @@ export async function listLanes(): Promise<Lane[]> {
     ...lane,
     worktreePath: lane.worktreePath || undefined,
     branch: lane.branch || undefined,
+    laneType: lane.laneType || undefined,
+    prMetadata: lane.prMetadata || undefined,
     config: {
       agentOverride: lane.config?.agentOverride,
       env: lane.config?.env || [],
@@ -126,6 +147,8 @@ export async function getLane(laneId: string): Promise<Lane> {
     ...lane,
     worktreePath: lane.worktreePath || undefined,
     branch: lane.branch || undefined,
+    laneType: lane.laneType || undefined,
+    prMetadata: lane.prMetadata || undefined,
     config: {
       agentOverride: lane.config?.agentOverride,
       env: lane.config?.env || [],
@@ -162,24 +185,22 @@ export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
 
 /**
  * Deletes a lane
+ * Removes the lane from the store immediately, then cleans up worktree in the background.
  */
 export async function deleteLane(laneId: string): Promise<void> {
   const lanes = await loadLanes();
   const lane = lanes.find(l => l.id === laneId);
 
-  if (lane) {
-    // If lane has worktree, try to remove it
-    if (lane.worktreePath && lane.branch) {
-      try {
-        await removeWorktree(lane.workingDir, lane.worktreePath);
-      } catch (e) {
-        console.warn('Failed to remove worktree:', e);
-      }
-    }
-  }
-
+  // Remove from store immediately so the UI updates fast
   const filtered = lanes.filter(l => l.id !== laneId);
   await saveLanes(filtered);
+
+  // Clean up worktree in the background (don't block UI)
+  if (lane?.worktreePath && lane?.branch) {
+    removeWorktree(lane.workingDir, lane.worktreePath).catch((e) => {
+      console.warn('Failed to remove worktree:', e);
+    });
+  }
 }
 
 /**

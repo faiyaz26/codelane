@@ -33,8 +33,7 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
   onMount(async () => {
     try {
       const settings = await getAgentSettings();
-      const cmd = settings.defaultAgent.command || 'claude';
-      setAgentName(cmd);
+      setAgentName(settings.defaultAgent.agentType || 'claude');
     } catch {
       setAgentName('claude');
     }
@@ -62,7 +61,12 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
   };
 
   const handleToggleCollapse = () => {
-    setTerminalCollapsed(!terminalCollapsed());
+    const wasCollapsed = terminalCollapsed();
+    setTerminalCollapsed(!wasCollapsed);
+    // Re-fit terminal after expanding
+    if (wasCollapsed) {
+      requestAnimationFrame(() => terminal.fitTerminal());
+    }
   };
 
   // Fit terminal on resize
@@ -132,21 +136,21 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
         <Show
           when={terminalActive()}
           fallback={
-            <div class="flex-shrink-0 border-t border-zed-border-default p-4 bg-zed-bg-panel">
+            <div class="flex-shrink-0 border-t border-zed-border-default p-2 bg-zed-bg-panel flex justify-center">
               <button
                 onClick={handleStartAgent}
-                class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                title={`Ask ${agentName()} about the changes`}
+                class="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                 </svg>
-                Ask {agentName()} more about the changes
               </button>
             </div>
           }
         >
           <div
-            class="flex-shrink-0 border-t border-zed-border-default flex flex-col bg-zed-bg-panel"
+            class="flex-shrink-0 border-t border-zed-border-default flex flex-col bg-zed-bg-panel min-w-0 overflow-hidden"
             style={{ height: terminalCollapsed() ? '40px' : `${terminalHeight()}px` }}
           >
             {/* Resize Handle */}
@@ -184,7 +188,7 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
             {/* Terminal Container */}
             <div
               ref={setTerminalContainer}
-              class="flex-1 overflow-hidden"
+              class="flex-1 overflow-hidden w-full min-w-0"
               style={{ display: terminalCollapsed() ? 'none' : 'block' }}
             />
           </div>

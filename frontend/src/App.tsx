@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, Show, createMemo } from 'solid-js';
+import { createSignal, onMount, onCleanup, Show, createMemo, batch } from 'solid-js';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -249,21 +249,30 @@ function App() {
   };
 
   const handleLaneDeleted = async (laneId: string) => {
-    // Update local state (deletion already happened in ProjectPanel)
-    setLanes((prev) => prev.filter((l) => l.id !== laneId));
+    const wasActive = activeLaneId() === laneId;
+
+    // Batch all signal updates to avoid stale <Show> accessor access during teardown
+    batch(() => {
+      // Switch active lane FIRST so <Show when={activeLane()}> transitions cleanly
+      if (wasActive) {
+        const remaining = lanes().filter((l) => l.id !== laneId);
+        if (remaining.length > 0) {
+          setActiveLaneIdSignal(remaining[0].id);
+        } else {
+          setActiveLaneIdSignal(null);
+        }
+      }
+
+      // Now safe to remove from the list
+      setLanes((prev) => prev.filter((l) => l.id !== laneId));
+    });
 
     // Dispose TabManager for this lane
     tabManager.disposeLane(laneId);
 
-    // If the deleted lane was active, switch to another lane
-    if (activeLaneId() === laneId) {
-      const remaining = lanes().filter((l) => l.id !== laneId);
-      if (remaining.length > 0) {
-        await handleLaneSelect(remaining[0].id);
-      } else {
-        setActiveLaneIdSignal(null);
-        await setActiveLaneId(null);
-      }
+    // Persist the active lane change
+    if (wasActive) {
+      await setActiveLaneId(activeLaneId());
     }
   };
 

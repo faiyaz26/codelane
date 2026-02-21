@@ -56,7 +56,12 @@ export function MainLayout(props: MainLayoutProps) {
   const activeView = createMemo(() => {
     const laneId = props.activeLaneId;
     if (!laneId) return ActivityView.Explorer;
-    return laneActiveViews().get(laneId) || ActivityView.Explorer;
+    const view = laneActiveViews().get(laneId);
+    if (view) return view;
+    // Default to Code Review for PR review lanes
+    const lane = props.lanes.find(l => l.id === laneId);
+    if (lane?.laneType === 'pr_review') return ActivityView.CodeReview;
+    return ActivityView.Explorer;
   });
 
   const selectedFile = createMemo(() => {
@@ -183,6 +188,7 @@ export function MainLayout(props: MainLayoutProps) {
                 <Show when={activeView() === ActivityView.CodeReview}>
                   <ReviewErrorBoundary>
                     <CodeReviewLayout
+                      lane={lane()}
                       laneId={lane().id}
                       workingDir={getEffectiveWorkingDir(lane())}
                     />

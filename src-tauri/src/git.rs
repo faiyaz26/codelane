@@ -835,6 +835,112 @@ pub async fn git_worktree_remove(path: String, worktree_path: String) -> Result<
     Ok(())
 }
 
+// ============================================================================
+// Remote Fetch Commands
+// ============================================================================
+
+/// Fetch a specific branch from a remote (default: origin)
+/// This ensures the local repo has up-to-date refs for the branch.
+/// Uses refspec to create/update the local branch to match the remote.
+#[tauri::command]
+pub async fn git_fetch_branch(
+    path: String,
+    branch: String,
+    remote: Option<String>,
+) -> Result<(), String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+    let remote = remote.unwrap_or_else(|| "origin".to_string());
+
+    // Try fetching with refspec first (creates/updates local branch)
+    // This may fail if the branch is already checked out somewhere
+    let refspec = format!("+refs/heads/{}:refs/heads/{}", branch, branch);
+    let result = run_git(work_dir, &["fetch", &remote, &refspec]);
+
+    if result.is_err() {
+        // Fallback: just fetch the remote tracking ref
+        run_git(work_dir, &["fetch", &remote, &branch])?;
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Branch Diff Commands
+// ============================================================================
+
+/// Get the diff between a base branch and HEAD (or another branch)
+/// Used for "Branch vs main" review scope and PR review
+#[tauri::command]
+pub async fn git_diff_branch(
+    path: String,
+    base_branch: String,
+    file: Option<String>,
+) -> Result<String, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    let range = format!("{}...HEAD", base_branch);
+    let mut args = vec!["diff", "--color=never", &range];
+
+    if let Some(ref file_path) = file {
+        args.push("--");
+        args.push(file_path);
+    }
+
+    run_git(work_dir, &args)
+}
+
+/// Get all changed files between a base branch and HEAD with line statistics
+/// Used for "Branch vs main" review scope and PR review
+#[tauri::command]
+pub async fn git_branch_changes_with_stats(
+    path: String,
+    base_branch: String,
+) -> Result<Vec<FileChangeStats>, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    let range = format!("{}...HEAD", base_branch);
+    let output = run_git(work_dir, &["diff", "--numstat", &range])?;
+
+    let mut changes = Vec::new();
+
+    for line in output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Format: <additions>\t<deletions>\t<filename>
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() != 3 {
+            continue;
+        }
+
+        // Binary files show "-" instead of numbers
+        let additions = parts[0].parse::<u32>().unwrap_or(0);
+        let deletions = parts[1].parse::<u32>().unwrap_or(0);
+        let file_path = parts[2].to_string();
+
+        let status = if additions > 0 && deletions == 0 {
+            "added"
+        } else if additions == 0 && deletions > 0 {
+            "deleted"
+        } else {
+            "modified"
+        };
+
+        changes.push(FileChangeStats {
+            path: file_path,
+            status: status.to_string(),
+            additions,
+            deletions,
+        });
+    }
+
+    Ok(changes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

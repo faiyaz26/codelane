@@ -16,6 +16,7 @@ import { reviewOrchestrator } from './review/ReviewOrchestrator';
 import { reviewScrollCoordinator } from './review/ReviewScrollCoordinator';
 import type { Accessor } from 'solid-js';
 import type { CodeReviewState } from './review/ReviewStateManager';
+import type { ReviewScopeConfig } from './review/ReviewOrchestrator';
 
 export const codeReviewStore = {
   /**
@@ -27,9 +28,10 @@ export const codeReviewStore = {
 
   /**
    * Generate a full code review for a lane
+   * @param scopeConfig - Optional scope config for branch/PR diff review
    */
-  async generateReview(laneId: string, workingDir: string): Promise<void> {
-    return reviewOrchestrator.generateReview(laneId, workingDir);
+  async generateReview(laneId: string, workingDir: string, scopeConfig?: ReviewScopeConfig): Promise<void> {
+    return reviewOrchestrator.generateReview(laneId, workingDir, scopeConfig);
   },
 
   /**

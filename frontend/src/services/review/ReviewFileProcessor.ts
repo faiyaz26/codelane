@@ -9,7 +9,7 @@
  * Pure async functions with no state management.
  */
 
-import { getChangesWithStats, getGitDiff } from '../../lib/git-api';
+import { getChangesWithStats, getGitDiff, getBranchChangesWithStats, getBranchDiff } from '../../lib/git-api';
 import { reviewAPI } from '../api/provider';
 import type { FileChangeStats } from '../../types/git';
 
@@ -85,6 +85,58 @@ export class ReviewFileProcessor {
       // Fallback to original order if sorting fails
       return files;
     }
+  }
+
+  /**
+   * Fetch changed files between a base branch and HEAD with line statistics
+   */
+  async fetchBranchChangesWithStats(
+    workingDir: string,
+    baseBranch: string,
+  ): Promise<FileChangeStats[]> {
+    return getBranchChangesWithStats(workingDir, baseBranch);
+  }
+
+  /**
+   * Fetch diff for a specific file between a base branch and HEAD
+   */
+  async fetchBranchFileDiff(
+    workingDir: string,
+    baseBranch: string,
+    file: string,
+  ): Promise<string> {
+    return getBranchDiff(workingDir, baseBranch, file);
+  }
+
+  /**
+   * Fetch diffs for branch changes (base...HEAD)
+   */
+  async fetchBranchDiffs(
+    workingDir: string,
+    files: FileChangeStats[],
+    baseBranch: string,
+    options?: { topN?: number; signal?: AbortSignal },
+  ): Promise<Map<string, string>> {
+    const fileDiffs = new Map<string, string>();
+
+    const filesToFetch = options?.topN ? files.slice(0, options.topN) : files;
+
+    for (const file of filesToFetch) {
+      if (options?.signal?.aborted) {
+        break;
+      }
+
+      try {
+        const diff = await getBranchDiff(workingDir, baseBranch, file.path);
+        if (diff && diff.trim()) {
+          fileDiffs.set(file.path, diff);
+        }
+      } catch {
+        // Skip files that can't be diffed
+      }
+    }
+
+    return fileDiffs;
   }
 }
 

@@ -145,3 +145,34 @@ export async function listWorktrees(path: string): Promise<WorktreeInfo[]> {
 export async function removeWorktree(path: string, worktreePath: string): Promise<void> {
   return invoke<void>('git_worktree_remove', { path, worktreePath });
 }
+
+/**
+ * Fetch a specific branch from a remote
+ * Ensures the local repo has the latest refs for the branch
+ */
+export async function fetchBranch(path: string, branch: string, remote?: string): Promise<void> {
+  return invoke<void>('git_fetch_branch', { path, branch, remote });
+}
+
+/**
+ * Get diff between a base branch and HEAD (or a specific file)
+ * Used for "Branch vs main" review scope and PR review
+ */
+export async function getBranchDiff(
+  path: string,
+  baseBranch: string,
+  file?: string,
+): Promise<string> {
+  return invoke<string>('git_diff_branch', { path, baseBranch, file });
+}
+
+/**
+ * Get all changed files between a base branch and HEAD with line statistics
+ * Used for "Branch vs main" review scope and PR review
+ */
+export async function getBranchChangesWithStats(
+  path: string,
+  baseBranch: string,
+): Promise<FileChangeStats[]> {
+  return invoke<FileChangeStats[]>('git_branch_changes_with_stats', { path, baseBranch });
+}

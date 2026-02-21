@@ -28,6 +28,30 @@ export interface LaneConfig {
 }
 
 /**
+ * Lane type classification
+ */
+export type LaneType = 'feature' | 'pr_review';
+
+/**
+ * Pull request metadata stored on PR review lanes
+ */
+export interface PrMetadata {
+  number: number;
+  title: string;
+  author: string;
+  baseBranch: string;
+  headBranch: string;
+  headSha: string;
+  prUrl: string;
+  repoName: string;
+  body: string;
+  state: string;
+  filesChanged: number;
+  additions: number;
+  deletions: number;
+}
+
+/**
  * Lane type - represents a project workspace with its own terminal and AI agents
  */
 export interface Lane {
@@ -36,6 +60,8 @@ export interface Lane {
   workingDir: string;
   worktreePath?: string;  // Worktree path (if branch specified)
   branch?: string;        // Branch name (if using worktree)
+  laneType?: LaneType;    // Defaults to 'feature' for backward compat
+  prMetadata?: PrMetadata; // Only for pr_review lanes
   createdAt: number;
   updatedAt: number;
   config?: LaneConfig;
@@ -47,7 +73,9 @@ export interface Lane {
 export interface CreateLaneParams {
   name: string;
   workingDir: string;
-  branch?: string;  // Optional branch for worktree
+  branch?: string;       // Optional branch for worktree
+  laneType?: LaneType;   // Defaults to 'feature'
+  prMetadata?: PrMetadata; // For PR review lanes
 }
 
 /**

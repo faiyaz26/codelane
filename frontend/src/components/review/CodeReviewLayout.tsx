@@ -4,19 +4,30 @@
  * Replaces the editor area when Code Review is active.
  * Manages states: idle → loading → ready → error
  * In ready state: horizontal split with ReviewSummaryPanel (left) and ReviewChangesPanel (right)
+ *
+ * Supports two modes:
+ * - Feature lanes: Scope selector (Working Changes | Branch vs main)
+ * - PR review lanes: Fixed to branch diff with PR info banner + review actions
  */
 
 import { createSignal, createEffect, Show, onCleanup, onMount, createMemo } from 'solid-js';
 import { ReviewSummaryPanel } from './ReviewSummaryPanel';
 import { ReviewChangesPanel } from './ReviewChangesPanel';
+import { ReviewScopeSelector } from './ReviewScopeSelector';
+import { PRReviewActions } from './PRReviewActions';
 import { ResizeHandle } from '../layout/ResizeHandle';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { useGitService } from '../../hooks/useGitService';
 import { useReviewKeyboardShortcuts } from '../../hooks/useReviewKeyboardShortcuts';
 import { computeChangesetChecksum, checksumsMatch } from '../../utils/changesetChecksum';
 import { getReviewTool } from '../../lib/settings-api';
+import { getDefaultBranch } from '../../lib/git-api';
+import type { Lane } from '../../types/lane';
+import type { ReviewScope } from './ReviewScopeSelector';
+import type { ReviewScopeConfig } from '../../services/review/ReviewOrchestrator';
 
 interface CodeReviewLayoutProps {
+  lane: Lane;
   laneId: string;
   workingDir: string;
 }
@@ -30,18 +41,51 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
 
   const reviewState = () => codeReviewStore.getState(props.laneId)();
 
-  // Watch for git changes
+  // Lane type helpers
+  const isPrReview = () => props.lane.laneType === 'pr_review';
+  const prMetadata = () => props.lane.prMetadata;
+
+  // Review scope state (only used for feature lanes)
+  const [reviewScope, setReviewScope] = createSignal<ReviewScope>('working_changes');
+  const [baseBranch, setBaseBranch] = createSignal('main');
+
+  // Fetch default branch on mount for feature lanes
+  onMount(async () => {
+    if (!isPrReview()) {
+      try {
+        const branch = await getDefaultBranch(props.workingDir);
+        setBaseBranch(branch);
+      } catch {
+        // Default to 'main' if we can't detect
+      }
+    }
+    setToolName(await getReviewTool());
+  });
+
+  // Build scope config based on lane type and selected scope
+  const getScopeConfig = (): ReviewScopeConfig | undefined => {
+    if (isPrReview() && prMetadata()) {
+      return { scope: 'branch_diff', baseBranch: prMetadata()!.baseBranch };
+    }
+    if (reviewScope() === 'branch_diff') {
+      return { scope: 'branch_diff', baseBranch: baseBranch() };
+    }
+    return undefined; // working_changes (default behavior)
+  };
+
+  // Watch for git changes (only meaningful for working_changes scope)
   const gitWatcher = useGitService({
     laneId: () => props.laneId,
     workingDir: () => props.workingDir,
   });
 
-  // Memoize derived state to stabilize reactive values used in Show conditions
-  // Impact: Reduces number of comparisons and prevents unnecessary Show/condition reevaluations
-  const hasChanges = createMemo(() => gitWatcher.hasChanges());
+  // For PR lanes and branch_diff scope, "hasChanges" is always true (branch has commits)
+  const hasChanges = createMemo(() => {
+    if (isPrReview() || reviewScope() === 'branch_diff') return true;
+    return gitWatcher.hasChanges();
+  });
 
-  // Memoize status checks used in multiple conditions throughout render
-  // Impact: Avoids rechecking status string multiple times in Show conditions (lines 72, 103, 164, 189)
+  // Memoize status checks
   const isIdle = createMemo(() => reviewState().status === 'idle');
   const isReady = createMemo(() => reviewState().status === 'ready');
   const isError = createMemo(() => reviewState().status === 'error');
@@ -52,29 +96,27 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
 
   // Resolve AI tool name from main agent config
   const [toolName, setToolName] = createSignal('claude');
-  onMount(async () => {
-    setToolName(await getReviewTool());
-  });
 
-  // Detect if review is stale (changes committed/stashed or new changes)
+  // Detect if review is stale (only for working_changes scope)
   const reviewStatus = createMemo(() => {
     const state = reviewState();
-    const hasChanges = gitWatcher.hasChanges();
 
-    // Not ready yet - no staleness to check
     if (state.status !== 'ready') {
       return { type: 'current' as const };
     }
 
-    // Changes were committed/stashed after review
+    // Staleness detection only applies to working changes scope
+    if (isPrReview() || reviewScope() === 'branch_diff') {
+      return { type: 'current' as const };
+    }
+
+    const hasChanges = gitWatcher.hasChanges();
+
     if (!hasChanges) {
       return { type: 'committed' as const };
     }
 
-    // Check if current changeset differs from reviewed changeset using checksum
     const gitStatus = gitWatcher.gitStatus();
-
-    // If gitStatus hasn't loaded yet, assume current (don't show false positive)
     if (!gitStatus || !gitStatus.changesWithStats) {
       return { type: 'current' as const };
     }
@@ -83,7 +125,6 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     const currentChecksum = computeChangesetChecksum(currentFiles);
     const reviewedChecksum = state.changesetChecksum;
 
-    // If checksums don't match, review is stale
     if (!checksumsMatch(currentChecksum, reviewedChecksum)) {
       return { type: 'stale' as const };
     }
@@ -117,12 +158,18 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   });
 
   const handleGenerate = () => {
-    codeReviewStore.generateReview(props.laneId, props.workingDir);
+    codeReviewStore.generateReview(props.laneId, props.workingDir, getScopeConfig());
   };
 
   const handleRegenerate = () => {
     codeReviewStore.reset(props.laneId);
-    codeReviewStore.generateReview(props.laneId, props.workingDir);
+    codeReviewStore.generateReview(props.laneId, props.workingDir, getScopeConfig());
+  };
+
+  const handleScopeChange = (scope: ReviewScope) => {
+    setReviewScope(scope);
+    // Reset and regenerate with new scope
+    codeReviewStore.reset(props.laneId);
   };
 
   const handleVisibleFileChange = (path: string) => {
@@ -185,16 +232,14 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     onPrevFile: handlePrevFile,
   });
 
-  // Lightweight polling to detect changes when review is ready
-  // Polls every 3 seconds to check for new/changed files
+  // Lightweight polling to detect changes when review is ready (working_changes only)
   createEffect(() => {
-    const isReady = reviewState().status === 'ready';
+    const ready = reviewState().status === 'ready';
 
-    if (isReady) {
+    if (ready && !isPrReview() && reviewScope() === 'working_changes') {
       const pollInterval = setInterval(async () => {
-        // Explicitly refresh git status to detect new/changed files
         await gitWatcher.refresh();
-      }, 3000); // Poll every 3 seconds
+      }, 3000);
 
       onCleanup(() => clearInterval(pollInterval));
     }
@@ -207,6 +252,24 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       codeReviewStore.cancelReview(props.laneId);
     }
   });
+
+  // Idle state description varies by lane type
+  const idleDescription = () => {
+    if (isPrReview() && prMetadata()) {
+      return `Review PR #${prMetadata()!.number} changes (${prMetadata()!.baseBranch} \u2190 ${prMetadata()!.headBranch}).`;
+    }
+    if (reviewScope() === 'branch_diff') {
+      return `Review all committed changes on this branch compared to ${baseBranch()}.`;
+    }
+    return 'Generate an AI-powered summary and review of your uncommitted changes. Each file will be analyzed for quality, bugs, and improvements.';
+  };
+
+  const idleButtonText = () => {
+    if (!hasChanges()) return 'No Changes to Review';
+    if (isPrReview()) return 'Generate PR Review';
+    if (reviewScope() === 'branch_diff') return 'Generate Branch Review';
+    return 'Generate AI Summary & Review';
+  };
 
   return (
     <div id="code-review-layout" class="flex-1 flex flex-col overflow-hidden">
@@ -228,6 +291,35 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
         Skip to review content
       </a>
 
+      {/* PR Info Banner (PR review lanes only) */}
+      <Show when={isPrReview() && prMetadata()}>
+        <div class="flex-shrink-0 px-4 py-3 bg-purple-500/10 border-b border-purple-500/30 flex items-center gap-3">
+          <svg class="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="5" cy="6" r="3" stroke-width="1.5" />
+            <path d="M5 9v12" stroke-width="1.5" />
+            <path d="M15 9l-3-3l3-3" stroke-width="1.5" />
+            <path d="M12 6h5a2 2 0 0 1 2 2v3m0 4v6m3-3h-6" stroke-width="1.5" />
+          </svg>
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-medium text-purple-400 truncate">
+              PR #{prMetadata()!.number}: {prMetadata()!.title}
+            </h4>
+            <p class="text-xs text-zed-text-tertiary mt-0.5">
+              by @{prMetadata()!.author} &middot; {prMetadata()!.baseBranch} &larr; {prMetadata()!.headBranch} &middot; {prMetadata()!.filesChanged} files, +{prMetadata()!.additions} -{prMetadata()!.deletions}
+            </p>
+          </div>
+        </div>
+      </Show>
+
+      {/* Scope Selector (feature lanes only, not shown for PR review) */}
+      <Show when={!isPrReview()}>
+        <ReviewScopeSelector
+          currentScope={reviewScope()}
+          baseBranch={baseBranch()}
+          onScopeChange={handleScopeChange}
+        />
+      </Show>
+
       {/* Idle State */}
       <Show when={isIdle()}>
         <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
@@ -238,8 +330,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
           </svg>
           <h2 class="text-xl font-semibold text-zed-text-primary mb-2">Code Review</h2>
           <p class="text-sm text-zed-text-secondary mb-6 max-w-md">
-            Generate an AI-powered summary and review of your uncommitted changes.
-            Each file will be analyzed for quality, bugs, and improvements.
+            {idleDescription()}
           </p>
           <button
             onClick={handleGenerate}
@@ -250,7 +341,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            {hasChanges() ? 'Generate AI Summary & Review' : 'No Changes to Review'}
+            {idleButtonText()}
           </button>
           <Show when={hasChanges()}>
             <p class="text-xs text-zed-text-tertiary mt-3">
@@ -352,7 +443,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       {/* Ready State - Two-pane layout */}
       <Show when={isReady()}>
         <div class="flex-1 flex flex-col overflow-hidden">
-          {/* Warning: Changes Committed/Stashed */}
+          {/* Warning: Changes Committed/Stashed (working_changes only) */}
           <Show when={reviewStatus().type === 'committed'}>
             <div class="flex-shrink-0 px-4 py-3 bg-yellow-500/10 border-b border-yellow-500/30 flex items-start gap-3">
               <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,14 +486,20 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
           </Show>
 
           <div id="main-review-content" class="flex-1 flex overflow-hidden">
-            {/* Left: AI Summary */}
-          <div class="flex-shrink-0 overflow-hidden" style={{ width: `${leftPanelWidth()}px` }}>
-            <ReviewSummaryPanel
-              markdown={reviewState().reviewMarkdown || ''}
-              generatedAt={reviewState().generatedAt}
-              isLoading={false}
-              onRegenerate={handleRegenerate}
-            />
+            {/* Left: AI Summary + PR Actions */}
+          <div class="flex-shrink-0 overflow-hidden flex flex-col" style={{ width: `${leftPanelWidth()}px` }}>
+            <div class="flex-1 overflow-hidden">
+              <ReviewSummaryPanel
+                markdown={reviewState().reviewMarkdown || ''}
+                generatedAt={reviewState().generatedAt}
+                isLoading={false}
+                onRegenerate={handleRegenerate}
+              />
+            </div>
+            {/* PR Review Actions (PR lanes only) */}
+            <Show when={isPrReview() && prMetadata()}>
+              <PRReviewActions prUrl={prMetadata()!.prUrl} />
+            </Show>
           </div>
 
           {/* Resize Handle */}
