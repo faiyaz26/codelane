@@ -81,6 +81,7 @@ export function Sidebar(props: SidebarProps) {
             <CodeReviewSidebar
               laneId={props.lane.id}
               workingDir={props.effectiveWorkingDir}
+              isPrReview={props.lane.laneType === 'pr_review' || !!props.lane.prMetadata}
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>

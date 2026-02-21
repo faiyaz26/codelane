@@ -12,6 +12,7 @@ import { getReviewTool } from '../../lib/settings-api';
 import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import GitPullRequestCreateArrowIcon from '../icons/GitPullRequestCreateArrowIcon';
+import type { Lane } from '../../types/lane';
 
 interface TopBarProps {
   activeLaneId?: string;
@@ -19,8 +20,10 @@ interface TopBarProps {
   workingDir?: string;
   effectiveWorkingDir?: string;
   activeView?: ActivityView;
+  activeLane?: Lane;
   onNavigateToCodeReview?: () => void;
   onRefreshCodeReview?: () => void;
+  onPullPrChanges?: () => void;
 }
 
 export function TopBar(props: TopBarProps) {
@@ -216,7 +219,23 @@ export function TopBar(props: TopBarProps) {
             <Show
               when={gitWatcher.hasChanges()}
               fallback={
-                <span class="px-4 py-1.5 text-xs text-zed-text-tertiary">No changes yet</span>
+                <Show
+                  when={props.activeLane?.laneType === 'pr_review' || props.activeLane?.prMetadata}
+                  fallback={
+                    <span class="px-4 py-1.5 text-xs text-zed-text-tertiary">No changes yet</span>
+                  }
+                >
+                  <button
+                    class="px-4 py-1.5 text-xs bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-active rounded-md transition-colors flex items-center gap-1.5"
+                    onClick={() => props.onPullPrChanges?.()}
+                    title="Pull latest changes for this PR"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Pull Changes
+                  </button>
+                </Show>
               }
             >
               {/* Show "Review Changes" button when NOT in Code Review tab */}

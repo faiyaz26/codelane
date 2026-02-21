@@ -17,6 +17,7 @@ import '@xterm/xterm/css/xterm.css';
 interface CodeReviewSidebarProps {
   laneId: string;
   workingDir: string;
+  isPrReview?: boolean;
 }
 
 export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
@@ -131,8 +132,8 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
         <CodeReviewFileList laneId={props.laneId} />
       </div>
 
-      {/* Agent Button or Terminal - Bottom Section */}
-      <Show when={isReviewReady()}>
+      {/* Agent Button or Terminal - Bottom Section (hidden for PR review lanes) */}
+      <Show when={isReviewReady() && !props.isPrReview}>
         <Show
           when={terminalActive()}
           fallback={

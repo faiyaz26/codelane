@@ -20,6 +20,7 @@ import { codeReviewStore } from '../../services/CodeReviewStore';
 import { useGitService } from '../../hooks/useGitService';
 import { useReviewKeyboardShortcuts } from '../../hooks/useReviewKeyboardShortcuts';
 import { computeChangesetChecksum, checksumsMatch } from '../../utils/changesetChecksum';
+import { getBranchChangesWithStats } from '../../lib/git-api';
 import { getReviewTool } from '../../lib/settings-api';
 import { getDefaultBranch } from '../../lib/git-api';
 import type { Lane } from '../../types/lane';
@@ -99,8 +100,9 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   // Resolve AI tool name from main agent config
   const [toolName, setToolName] = createSignal('claude');
   const [copied, setCopied] = createSignal(false);
+  const [prBranchChecksum, setPrBranchChecksum] = createSignal<string | null>(null);
 
-  // Detect if review is stale (only for working_changes scope)
+  // Detect if review is stale
   const reviewStatus = createMemo(() => {
     const state = reviewState();
 
@@ -108,8 +110,13 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       return { type: 'current' as const };
     }
 
-    // Staleness detection only applies to working changes scope
+    // PR review and branch_diff: compare branch checksum
     if (isPrReview() || reviewScope() === 'branch_diff') {
+      const current = prBranchChecksum();
+      const reviewed = state.changesetChecksum;
+      if (current !== null && !checksumsMatch(current, reviewed)) {
+        return { type: 'stale' as const };
+      }
       return { type: 'current' as const };
     }
 
@@ -247,6 +254,33 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       onCleanup(() => clearInterval(pollInterval));
     }
   });
+
+  // Polling to detect branch changes for PR/branch-diff reviews after pull
+  createEffect(() => {
+    const ready = reviewState().status === 'ready';
+    const prReview = isPrReview();
+    const branchDiff = reviewScope() === 'branch_diff';
+
+    if (ready && (prReview || branchDiff)) {
+      const base = prReview ? prMetadata()?.baseBranch : baseBranch();
+      if (!base) return;
+
+      // Do an initial check immediately
+      refreshBranchChecksum(base);
+
+      const pollInterval = setInterval(() => refreshBranchChecksum(base), 5000);
+      onCleanup(() => clearInterval(pollInterval));
+    }
+  });
+
+  async function refreshBranchChecksum(base: string) {
+    try {
+      const changes = await getBranchChangesWithStats(props.workingDir, base);
+      setPrBranchChecksum(computeChangesetChecksum(changes));
+    } catch {
+      // Ignore errors during polling
+    }
+  }
 
   // Cancel review if component unmounts during generation
   onCleanup(() => {

@@ -1,7 +1,7 @@
 import { createSignal, createMemo, For, Show, onMount } from 'solid-js';
 import { invoke } from '@tauri-apps/api/core';
 import { Dialog, Button, TextField } from '../ui';
-import { updateLane, deleteLane } from '../../lib/lane-api';
+import { updateLane, deleteLane, convertToFeatureLane } from '../../lib/lane-api';
 import { agentStatusManager } from '../../services/AgentStatusManager';
 import type { Lane } from '../../types/lane';
 
@@ -177,6 +177,16 @@ export function ProjectPanel(props: ProjectPanelProps) {
       console.error('Failed to delete lane:', err);
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleConvertToFeature = async (lane: Lane) => {
+    closeMenu();
+    try {
+      const updated = await convertToFeatureLane(lane.id);
+      props.onLaneRenamed(updated); // Reuse existing callback to update lane in state
+    } catch (err) {
+      console.error('Failed to convert lane:', err);
     }
   };
 
@@ -370,6 +380,17 @@ export function ProjectPanel(props: ProjectPanelProps) {
                                 </svg>
                                 Rename
                               </button>
+                              <Show when={lane.laneType === 'pr_review' || lane.prMetadata}>
+                                <button
+                                  class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover transition-colors flex items-center gap-2"
+                                  onClick={() => handleConvertToFeature(lane)}
+                                >
+                                  <svg class="w-4 h-4 text-zed-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                  </svg>
+                                  Convert to Feature
+                                </button>
+                              </Show>
                               <button
                                 class="w-full px-3 py-1.5 text-left text-sm text-zed-accent-red hover:bg-zed-bg-hover transition-colors flex items-center gap-2"
                                 onClick={() => openDeleteModal(lane)}

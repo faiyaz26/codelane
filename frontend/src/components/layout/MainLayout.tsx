@@ -12,6 +12,8 @@ import { EditorPanel } from '../editor';
 import { CodeReviewLayout, ReviewErrorBoundary } from '../review';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
+import { fetchBranch } from '../../lib/git-api';
+import { codeReviewStore } from '../../services/CodeReviewStore';
 
 interface MainLayoutProps {
   lanes: Lane[];
@@ -125,6 +127,20 @@ export function MainLayout(props: MainLayoutProps) {
     }
   });
 
+  // Auto-collapse sidebar when code review is idle, expand when ready
+  createEffect(() => {
+    const view = activeView();
+    const laneId = props.activeLaneId;
+    if (view !== ActivityView.CodeReview || !laneId) return;
+
+    const status = codeReviewStore.getState(laneId)().status;
+    if (status === 'idle') {
+      setSidebarCollapsed(true);
+    } else if (status === 'ready') {
+      setSidebarCollapsed(false);
+    }
+  });
+
   // Resize handlers
   const handleProjectPanelResize = (delta: number) => {
     const newWidth = Math.max(PROJECT_PANEL_MIN_WIDTH, Math.min(PROJECT_PANEL_MAX_WIDTH, projectPanelWidth() + delta));
@@ -142,6 +158,19 @@ export function MainLayout(props: MainLayoutProps) {
     setAgentPanelWidth(newWidth);
   };
 
+  const handlePullPrChanges = async () => {
+    const lane = activeLane();
+    if (!lane?.prMetadata?.headBranch) return;
+    try {
+      await fetchBranch(lane.workingDir, lane.prMetadata.headBranch);
+      if (lane.prMetadata.baseBranch) {
+        await fetchBranch(lane.workingDir, lane.prMetadata.baseBranch).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to pull PR changes:', err);
+    }
+  };
+
   return (
     <div class="h-screen w-screen flex flex-col bg-zed-bg-app text-zed-text-primary">
       <TopBar
@@ -150,7 +179,9 @@ export function MainLayout(props: MainLayoutProps) {
         workingDir={activeLane()?.workingDir}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
         activeView={activeView()}
+        activeLane={activeLane()}
         onNavigateToCodeReview={() => setActiveView(ActivityView.CodeReview)}
+        onPullPrChanges={handlePullPrChanges}
       />
 
       <div class="flex-1 flex overflow-hidden">

@@ -24,6 +24,7 @@ const mockCreateBranch = vi.fn();
 const mockCreateWorktree = vi.fn();
 const mockRemoveWorktree = vi.fn();
 const mockGetDefaultBranch = vi.fn();
+const mockFetchBranch = vi.fn();
 vi.mock('../git-api', () => ({
   isGitRepo: (...args: unknown[]) => mockIsGitRepo(...args),
   branchExists: (...args: unknown[]) => mockBranchExists(...args),
@@ -31,6 +32,7 @@ vi.mock('../git-api', () => ({
   createWorktree: (...args: unknown[]) => mockCreateWorktree(...args),
   removeWorktree: (...args: unknown[]) => mockRemoveWorktree(...args),
   getDefaultBranch: (...args: unknown[]) => mockGetDefaultBranch(...args),
+  fetchBranch: (...args: unknown[]) => mockFetchBranch(...args),
 }));
 
 let createLane: typeof import('../lane-api')['createLane'];
@@ -41,6 +43,7 @@ let deleteLane: typeof import('../lane-api')['deleteLane'];
 let touchLane: typeof import('../lane-api')['touchLane'];
 let updateLaneOrder: typeof import('../lane-api')['updateLaneOrder'];
 let updateLaneConfig: typeof import('../lane-api')['updateLaneConfig'];
+let convertToFeatureLane: typeof import('../lane-api')['convertToFeatureLane'];
 
 beforeEach(async () => {
   mockStoreGet.mockReset();
@@ -52,6 +55,8 @@ beforeEach(async () => {
   mockCreateWorktree.mockReset();
   mockRemoveWorktree.mockReset();
   mockGetDefaultBranch.mockReset();
+  mockFetchBranch.mockReset();
+  mockFetchBranch.mockResolvedValue(undefined);
 
   // Default: empty lanes
   mockStoreGet.mockResolvedValue([]);
@@ -68,6 +73,7 @@ beforeEach(async () => {
   touchLane = mod.touchLane;
   updateLaneOrder = mod.updateLaneOrder;
   updateLaneConfig = mod.updateLaneConfig;
+  convertToFeatureLane = mod.convertToFeatureLane;
 });
 
 describe('lane-api', () => {
@@ -363,6 +369,102 @@ describe('lane-api', () => {
         expect.objectContaining({ id: 'lane-1', config }),
       ]));
       expect(mockStoreSave).toHaveBeenCalled();
+    });
+  });
+
+  describe('convertToFeatureLane', () => {
+    it('removes laneType and prMetadata from a PR review lane', async () => {
+      mockStoreGet.mockResolvedValue([{
+        id: 'lane-1',
+        name: 'Fix auth bug',
+        workingDir: '/repo',
+        branch: 'fix/auth-bug',
+        worktreePath: '/worktree/fix-auth-bug',
+        laneType: 'pr_review',
+        prMetadata: {
+          number: 42,
+          title: 'Fix auth bug',
+          author: 'testuser',
+          baseBranch: 'main',
+          headBranch: 'fix/auth-bug',
+          headSha: 'abc123',
+          prUrl: 'https://github.com/org/repo/pull/42',
+          repoName: 'org/repo',
+          body: 'Fixes the auth bug',
+          state: 'open',
+          filesChanged: 3,
+          additions: 10,
+          deletions: 5,
+        },
+        config: { env: [] },
+        createdAt: 1000,
+        updatedAt: 2000,
+      }]);
+
+      const lane = await convertToFeatureLane('lane-1');
+
+      expect(lane.laneType).toBeUndefined();
+      expect(lane.prMetadata).toBeUndefined();
+      expect(lane.branch).toBe('fix/auth-bug');
+      expect(lane.worktreePath).toBe('/worktree/fix-auth-bug');
+      expect(lane.name).toBe('Fix auth bug');
+      expect(mockStoreSave).toHaveBeenCalled();
+    });
+
+    it('throws when lane not found', async () => {
+      mockStoreGet.mockResolvedValue([]);
+
+      await expect(convertToFeatureLane('nonexistent')).rejects.toThrow('Lane not found: nonexistent');
+    });
+  });
+
+  describe('listLanes laneType backfill', () => {
+    it('backfills laneType for lanes with prMetadata but no laneType', async () => {
+      mockStoreGet.mockResolvedValue([{
+        id: 'lane-1',
+        name: 'Legacy PR Lane',
+        workingDir: '/repo',
+        branch: 'fix/bug',
+        prMetadata: {
+          number: 1,
+          title: 'Fix bug',
+          author: 'user',
+          baseBranch: 'main',
+          headBranch: 'fix/bug',
+          headSha: 'abc',
+          prUrl: 'https://github.com/org/repo/pull/1',
+          repoName: 'org/repo',
+          body: '',
+          state: 'open',
+          filesChanged: 1,
+          additions: 1,
+          deletions: 0,
+        },
+        // Note: no laneType field (legacy lane)
+        config: { env: [] },
+        createdAt: 1000,
+        updatedAt: 2000,
+      }]);
+
+      const lanes = await listLanes();
+
+      expect(lanes[0].laneType).toBe('pr_review');
+      expect(lanes[0].prMetadata).toBeDefined();
+    });
+
+    it('does not set laneType for lanes without prMetadata', async () => {
+      mockStoreGet.mockResolvedValue([{
+        id: 'lane-1',
+        name: 'Feature Lane',
+        workingDir: '/repo',
+        config: { env: [] },
+        createdAt: 1000,
+        updatedAt: 2000,
+      }]);
+
+      const lanes = await listLanes();
+
+      expect(lanes[0].laneType).toBeUndefined();
     });
   });
 });

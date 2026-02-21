@@ -243,6 +243,29 @@ export async function updateLaneOrder(laneIds: string[]): Promise<void> {
 /**
  * Update lane configuration
  */
+/**
+ * Convert a PR review lane to a feature lane (keeps branch/worktree, removes PR metadata)
+ */
+export async function convertToFeatureLane(laneId: string): Promise<Lane> {
+  const now = Math.floor(Date.now() / 1000);
+  const lanes = await loadLanes();
+  const lane = lanes.find(l => l.id === laneId);
+
+  if (!lane) {
+    throw new Error(`Lane not found: ${laneId}`);
+  }
+
+  delete lane.laneType;
+  delete lane.prMetadata;
+  lane.updatedAt = now;
+  await saveLanes(lanes);
+
+  return getLane(laneId);
+}
+
+/**
+ * Update lane configuration
+ */
 export async function updateLaneConfig(laneId: string, config: LaneConfig): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const lanes = await loadLanes();
