@@ -26,6 +26,7 @@ export function TerminalView(props: TerminalViewProps) {
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
   let pty: PtyHandle | undefined;
+  let autoScroll = true;
 
   const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
   const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
@@ -162,11 +163,23 @@ export function TerminalView(props: TerminalViewProps) {
       // Attach custom key handlers (Shift+Enter, etc.)
       attachKeyHandlers(terminal, (data) => pty!.write(data));
 
+      // Sticky scroll: detect user scroll via wheel events
+      const updateAutoScroll = () => {
+        if (!terminal) return;
+        const buffer = terminal.buffer.active;
+        autoScroll = buffer.baseY + terminal.rows >= buffer.length;
+      };
+      containerRef.addEventListener('wheel', () => requestAnimationFrame(updateAutoScroll));
+      terminal.onScroll(updateAutoScroll);
+
       // Set up event-based data flow (low latency!)
-      // PTY output → terminal
+      // PTY output → terminal (with sticky scroll)
       await pty!.onData((data) => {
         if (terminal) {
           terminal.write(data);
+          if (autoScroll) {
+            terminal.scrollToBottom();
+          }
         }
         // Feed output to agent status detector
         agentStatusManager.feedOutput(props.laneId, data);

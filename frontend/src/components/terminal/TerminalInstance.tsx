@@ -45,6 +45,14 @@ export function TerminalInstance(props: TerminalInstanceProps) {
     // Focus the terminal
     terminal.focus();
 
+    // Sticky scroll: detect user scroll via wheel events
+    const updateAutoScroll = () => {
+      const buffer = terminal.buffer.active;
+      props.handle.autoScroll = buffer.baseY + terminal.rows >= buffer.length;
+    };
+    containerRef.addEventListener('wheel', () => requestAnimationFrame(updateAutoScroll));
+    terminal.onScroll(updateAutoScroll);
+
     // Safe fit that guards against zero dimensions and preserves scroll position
     const safeFitAndResize = () => {
       if (!containerRef) return;

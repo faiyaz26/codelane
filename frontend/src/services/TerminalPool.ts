@@ -193,13 +193,26 @@ class TerminalPool {
 
     status = 'ready';
 
+    const handle: TerminalHandle = {
+      id: config.id,
+      pty,
+      terminal,
+      fitAddon,
+      status,
+      createdAt: Date.now(),
+      autoScroll: true,
+    };
+
     // Attach custom key handlers (Shift+Enter, etc.)
     attachKeyHandlers(terminal, (data) => pty!.write(data));
 
-    // Set up event-based data flow (low latency!)
+    // Set up event-based data flow (low latency!) with sticky scroll
     // PTY output → terminal
     await pty.onData((data) => {
       terminal.write(data);
+      if (handle.autoScroll) {
+        terminal.scrollToBottom();
+      }
     });
 
     // Terminal input → PTY
@@ -210,17 +223,10 @@ class TerminalPool {
     // Handle PTY exit
     await pty.onExit(() => {
       terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
-      status = 'exited';
+      handle.status = 'exited';
     });
 
-    return {
-      id: config.id,
-      pty,
-      terminal,
-      fitAddon,
-      status,
-      createdAt: Date.now(),
-    };
+    return handle;
   }
 }
 

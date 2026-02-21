@@ -31,6 +31,8 @@ export interface TerminalHandle {
   fitAddon: FitAddon;
   status: TerminalStatus;
   createdAt: number;
+  /** When true, terminal auto-scrolls to bottom on new output. Set to false when user scrolls up. */
+  autoScroll: boolean;
 }
 
 /**
