@@ -1,12 +1,11 @@
 /**
  * Code Review Settings Manager
  *
- * Handles persistence of code review preferences (AI tool, model, prompts).
- * Follows EditorSettingsManager pattern: localStorage + reactive SolidJS signals.
+ * Handles persistence of code review preferences (prompts, concurrency, file exclusions).
+ * The AI tool is derived from the main agent configured in Settings > Agents.
  */
 
 import { createSignal, createRoot, type Accessor } from 'solid-js';
-import type { AITool } from './AIReviewService';
 
 export interface FileExclusionCategories {
   documentation: boolean;     // .md, .txt, .rst, .adoc
@@ -17,26 +16,51 @@ export interface FileExclusionCategories {
   configFiles: boolean;       // tsconfig.json, .eslintrc, etc.
 }
 
+export const DEFAULT_REVIEW_PROMPT = `You are an expert code analyst performing a thorough code review. Analyze these changes and provide a structured review.
+
+## Output Format (use exact headings)
+
+### Summary
+Brief overview of what changed and why (2-3 sentences).
+
+### Key Changes
+- Bullet points of the main modifications across all files
+
+### Concerns
+- Potential issues, bugs, security vulnerabilities, or areas needing attention
+- Include severity (low/medium/high) for each concern
+
+### Suggestions
+- Specific, actionable improvements or recommendations
+- Reference file paths and line numbers when possible
+
+### Positive Notes
+- What was done well, good patterns observed
+
+Be concise but thorough. Focus on actionable, specific feedback rather than generic advice.`;
+
+export const DEFAULT_FILE_PROMPT = `Analyze the changes in this file and provide brief, focused feedback.
+
+Include:
+1. What changed and why (1-2 sentences)
+2. Any concerns (bugs, security, performance)
+3. Specific suggestions for improvement
+
+Be very concise — aim for 3-5 bullet points total. No preamble.`;
+
 export interface CodeReviewSettings {
-  aiTool: AITool;
-  aiModel: Record<AITool, string>;
-  reviewPrompt: string | null;  // null = use default
-  filePrompt: string | null;    // null = use default
+  reviewModel: string | null;   // null = use tool's default model
+  reviewPrompt: string;         // Always populated with the prompt to use
+  filePrompt: string;           // Always populated with the prompt to use
   concurrency: number;           // Number of files to process in parallel (1-8)
   excludeCategories: FileExclusionCategories; // File categories to exclude from review
   customExcludePatterns: string[]; // Custom glob patterns to exclude (e.g., "*.generated.ts")
 }
 
 const DEFAULT_SETTINGS: CodeReviewSettings = {
-  aiTool: 'claude',
-  aiModel: {
-    claude: 'haiku',
-    aider: 'gpt-4o-mini',
-    opencode: 'gpt-4o-mini',
-    gemini: 'gemini-2.0-flash-exp',
-  },
-  reviewPrompt: null,
-  filePrompt: null,
+  reviewModel: null,
+  reviewPrompt: DEFAULT_REVIEW_PROMPT,
+  filePrompt: DEFAULT_FILE_PROMPT,
   concurrency: 4,
   excludeCategories: {
     documentation: true,
@@ -51,57 +75,20 @@ const DEFAULT_SETTINGS: CodeReviewSettings = {
 
 const STORAGE_KEY = 'codelane-code-review-settings';
 
-// Legacy keys to migrate from
-const LEGACY_AI_TOOL_KEY = 'codelane:aiTool';
-const LEGACY_AI_MODEL_PREFIX = 'codelane:aiModel:';
-
 const { settings, setSettings } = createRoot(() => {
   const [settings, setSettings] = createSignal<CodeReviewSettings>(DEFAULT_SETTINGS);
   return { settings, setSettings };
 });
-
-function migrateLegacyKeys(): Partial<CodeReviewSettings> {
-  const migrated: Partial<CodeReviewSettings> = {};
-
-  try {
-    const legacyTool = localStorage.getItem(LEGACY_AI_TOOL_KEY);
-    if (legacyTool && ['claude', 'aider', 'opencode', 'gemini'].includes(legacyTool)) {
-      migrated.aiTool = legacyTool as AITool;
-    }
-
-    const tools: AITool[] = ['claude', 'aider', 'opencode', 'gemini'];
-    const models: Record<string, string> = {};
-    let hasModels = false;
-    for (const tool of tools) {
-      const model = localStorage.getItem(`${LEGACY_AI_MODEL_PREFIX}${tool}`);
-      if (model) {
-        models[tool] = model;
-        hasModels = true;
-      }
-    }
-    if (hasModels) {
-      migrated.aiModel = { ...DEFAULT_SETTINGS.aiModel, ...models } as Record<AITool, string>;
-    }
-  } catch (e) {
-    console.warn('Failed to migrate legacy AI settings:', e);
-  }
-
-  return migrated;
-}
 
 function loadSettings(): CodeReviewSettings {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_SETTINGS, ...parsed };
-    }
-
-    // Try migrating from legacy keys
-    const migrated = migrateLegacyKeys();
-    if (Object.keys(migrated).length > 0) {
-      const merged = { ...DEFAULT_SETTINGS, ...migrated };
-      saveSettings(merged);
+      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      // Migrate: fill in prompts that were previously null
+      if (!merged.reviewPrompt) merged.reviewPrompt = DEFAULT_REVIEW_PROMPT;
+      if (!merged.filePrompt) merged.filePrompt = DEFAULT_FILE_PROMPT;
       return merged;
     }
   } catch (e) {
@@ -133,37 +120,27 @@ export const codeReviewSettingsManager = {
     return settings;
   },
 
-  getAITool(): AITool {
-    return settings().aiTool;
+  getReviewModel(): string | null {
+    return settings().reviewModel;
   },
 
-  setAITool(tool: AITool) {
-    updateSettings({ aiTool: tool });
+  setReviewModel(model: string | null) {
+    updateSettings({ reviewModel: model });
   },
 
-  getAIModel(tool?: AITool): string {
-    const t = tool || settings().aiTool;
-    return settings().aiModel[t];
-  },
-
-  setAIModel(tool: AITool, model: string) {
-    const current = settings().aiModel;
-    updateSettings({ aiModel: { ...current, [tool]: model } });
-  },
-
-  getReviewPrompt(): string | null {
+  getReviewPrompt(): string {
     return settings().reviewPrompt;
   },
 
-  setReviewPrompt(prompt: string | null) {
+  setReviewPrompt(prompt: string) {
     updateSettings({ reviewPrompt: prompt });
   },
 
-  getFilePrompt(): string | null {
+  getFilePrompt(): string {
     return settings().filePrompt;
   },
 
-  setFilePrompt(prompt: string | null) {
+  setFilePrompt(prompt: string) {
     updateSettings({ filePrompt: prompt });
   },
 
@@ -172,7 +149,6 @@ export const codeReviewSettingsManager = {
   },
 
   setConcurrency(concurrency: number) {
-    // Clamp between 1 and 8 for safety
     const clamped = Math.max(1, Math.min(8, concurrency));
     updateSettings({ concurrency: clamped });
   },

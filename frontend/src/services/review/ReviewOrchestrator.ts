@@ -17,6 +17,7 @@ import { reviewStateManager } from './ReviewStateManager';
 import { reviewFileProcessor } from './ReviewFileProcessor';
 import { aiReviewService } from '../AIReviewService';
 import { codeReviewSettingsManager } from '../CodeReviewSettingsManager';
+import { getReviewTool } from '../../lib/settings-api';
 import { processDiffsWithTruncation, getTruncationSummary } from '../../utils/diffTruncation';
 import { filterReviewableFiles, getExclusionSummary } from '../../utils/fileFilters';
 import { computeChangesetChecksum } from '../../utils/changesetChecksum';
@@ -296,8 +297,8 @@ export class ReviewOrchestrator {
 
       // 4. Generate overall AI summary
       const settings = codeReviewSettingsManager.getSettings()();
-      const tool = settings.aiTool;
-      const model = settings.aiModel[tool];
+      const tool = await getReviewTool();
+      const model = settings.reviewModel || undefined;
       const customReviewPrompt = settings.reviewPrompt;
 
       reviewStateManager.setState(laneId, prev => ({
@@ -331,7 +332,7 @@ export class ReviewOrchestrator {
         tool,
         diffContent,
         workingDir,
-        customPrompt: customReviewPrompt || aiReviewService.getEnhancedReviewPrompt(),
+        customPrompt: customReviewPrompt,
         model,
         signal: controller.signal,
       });
@@ -367,7 +368,7 @@ export class ReviewOrchestrator {
       }));
 
       // 6. Generate per-file feedback in parallel (non-blocking)
-      const filePrompt = settings.filePrompt || aiReviewService.getDefaultFilePrompt();
+      const filePrompt = settings.filePrompt;
       const concurrency = settings.concurrency || 4; // Get configurable concurrency limit
 
       // Filter out files that shouldn't be reviewed (based on user settings)

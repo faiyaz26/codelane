@@ -7,7 +7,9 @@ import { useGitService } from '../../hooks/useGitService';
 import { CommitDialog } from '../git';
 import { ActivityView } from './ActivityBar';
 import { editorStateManager } from '../../services/EditorStateManager';
-import { aiReviewService, type AITool } from '../../services/AIReviewService';
+import { aiReviewService } from '../../services/AIReviewService';
+import { getReviewTool } from '../../lib/settings-api';
+import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import GitPullRequestCreateArrowIcon from '../icons/GitPullRequestCreateArrowIcon';
 
@@ -76,9 +78,8 @@ export function TopBar(props: TopBarProps) {
     setIsGeneratingReview(true);
 
     try {
-      // Get AI tool and model from localStorage
-      const tool = (localStorage.getItem('codelane:aiTool') || 'claude') as AITool;
-      const model = localStorage.getItem(`codelane:aiModel:${tool}`) || undefined;
+      // Use the same AI tool as the main coding agent
+      const tool = await getReviewTool();
 
       // Get list of changed files
       const status = gitWatcher.gitStatus();
@@ -108,7 +109,8 @@ export function TopBar(props: TopBarProps) {
         }
       }
 
-      // Generate review with selected model
+      // Generate review
+      const model = codeReviewSettingsManager.getReviewModel() || undefined;
       const result = await aiReviewService.generateReview({
         tool,
         diffContent,

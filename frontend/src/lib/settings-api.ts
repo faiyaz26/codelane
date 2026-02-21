@@ -4,9 +4,10 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { getStore } from './store';
-import type { AgentConfig, AgentSettings } from '../types/agent';
+import type { AgentConfig, AgentSettings, AgentType } from '../types/agent';
 import { getDefaultAgentSettings } from '../types/agent';
 import { getLane } from './lane-api';
+import type { AITool } from '../services/AIReviewService';
 
 const AGENT_SETTINGS_KEY = 'agent_settings';
 
@@ -48,6 +49,28 @@ export async function getLaneAgentConfig(laneId: string): Promise<AgentConfig> {
   // Otherwise use global default
   const settings = await getAgentSettings();
   return settings.defaultAgent;
+}
+
+/**
+ * Map AgentType to the AITool used for code review / commit summaries.
+ * Agents without a direct mapping fall back to 'claude'.
+ */
+const AGENT_TO_AI_TOOL: Record<AgentType, AITool> = {
+  claude: 'claude',
+  aider: 'aider',
+  opencode: 'opencode',
+  gemini: 'gemini',
+  codex: 'claude',
+  cursor: 'claude',
+  shell: 'claude',
+};
+
+/**
+ * Get the AITool that matches the user's configured default agent.
+ */
+export async function getReviewTool(): Promise<AITool> {
+  const settings = await getAgentSettings();
+  return AGENT_TO_AI_TOOL[settings.defaultAgent.agentType] ?? 'claude';
 }
 
 /**

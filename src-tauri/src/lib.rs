@@ -126,7 +126,7 @@ pub fn run() {
         // Window setup
         .setup(|app| {
             // Create application menu
-            use tauri::menu::{Menu, MenuItem, Submenu};
+            use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
             let menu = Menu::new(app)?;
 
@@ -136,12 +136,28 @@ pub fn run() {
                 let submenu = Submenu::new(app, "Codelane", true)?;
                 let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
                 submenu.append(&about_item)?;
+                submenu.append(&PredefinedMenuItem::separator(app)?)?;
+                submenu.append(&PredefinedMenuItem::quit(app, Some("Quit Codelane"))?)?;
                 submenu
             };
 
             #[cfg(not(target_os = "macos"))]
             let app_menu = {
                 let submenu = Submenu::new(app, "Help", true)?;
+                submenu
+            };
+
+            // Edit menu — provides native keyboard shortcuts (Cmd+A, Cmd+C, etc.)
+            // Without this, macOS webviews don't wire standard text editing shortcuts.
+            let edit_menu = {
+                let submenu = Submenu::new(app, "Edit", true)?;
+                submenu.append(&PredefinedMenuItem::undo(app, None)?)?;
+                submenu.append(&PredefinedMenuItem::redo(app, None)?)?;
+                submenu.append(&PredefinedMenuItem::separator(app)?)?;
+                submenu.append(&PredefinedMenuItem::cut(app, None)?)?;
+                submenu.append(&PredefinedMenuItem::copy(app, None)?)?;
+                submenu.append(&PredefinedMenuItem::paste(app, None)?)?;
+                submenu.append(&PredefinedMenuItem::select_all(app, None)?)?;
                 submenu
             };
 
@@ -154,7 +170,6 @@ pub fn run() {
                 // Add About to Help menu on non-macOS platforms
                 #[cfg(not(target_os = "macos"))]
                 {
-                    use tauri::menu::PredefinedMenuItem;
                     let separator = PredefinedMenuItem::separator(app)?;
                     submenu.append(&separator)?;
                     let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
@@ -165,11 +180,17 @@ pub fn run() {
             };
 
             #[cfg(target_os = "macos")]
-            menu.append(&app_menu)?;
-            menu.append(&help_menu)?;
+            {
+                menu.append(&app_menu)?;
+                menu.append(&edit_menu)?;
+                menu.append(&help_menu)?;
+            }
 
             #[cfg(not(target_os = "macos"))]
-            menu.append(&help_menu)?;
+            {
+                menu.append(&edit_menu)?;
+                menu.append(&help_menu)?;
+            }
 
             app.set_menu(menu)?;
 

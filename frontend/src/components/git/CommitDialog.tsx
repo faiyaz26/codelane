@@ -7,7 +7,9 @@ import { useGitService } from '../../hooks/useGitService';
 import type { GitStatusResult } from '../../types/git';
 import { isMacOS } from '../../lib/platform';
 import { invoke } from '@tauri-apps/api/core';
-import { aiReviewService, type AITool } from '../../services/AIReviewService';
+import { aiReviewService } from '../../services/AIReviewService';
+import { getReviewTool } from '../../lib/settings-api';
+import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 
 interface CommitDialogProps {
   open: boolean;
@@ -245,9 +247,8 @@ export function CommitDialog(props: CommitDialogProps) {
     setError(null);
 
     try {
-      // Get AI tool and model from localStorage
-      const tool = (localStorage.getItem('codelane:aiTool') || 'claude') as AITool;
-      const model = localStorage.getItem(`codelane:aiModel:${tool}`) || undefined;
+      // Use the same AI tool as the main coding agent
+      const tool = await getReviewTool();
 
       // Get diffs for selected files
       let diffContent = '';
@@ -269,12 +270,13 @@ export function CommitDialog(props: CommitDialogProps) {
         return;
       }
 
-      // Generate commit message with selected model
+      // Generate commit message
+      const model = codeReviewSettingsManager.getReviewModel() || undefined;
       const result = await aiReviewService.generateCommitSummary(
         tool,
         diffContent,
         props.workingDir,
-        model
+        model,
       );
 
       if (result.success) {

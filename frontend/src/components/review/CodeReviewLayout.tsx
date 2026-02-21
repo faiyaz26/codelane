@@ -6,15 +6,15 @@
  * In ready state: horizontal split with ReviewSummaryPanel (left) and ReviewChangesPanel (right)
  */
 
-import { createSignal, createEffect, Show, onCleanup, createMemo } from 'solid-js';
+import { createSignal, createEffect, Show, onCleanup, onMount, createMemo } from 'solid-js';
 import { ReviewSummaryPanel } from './ReviewSummaryPanel';
 import { ReviewChangesPanel } from './ReviewChangesPanel';
 import { ResizeHandle } from '../layout/ResizeHandle';
 import { codeReviewStore } from '../../services/CodeReviewStore';
-import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 import { useGitService } from '../../hooks/useGitService';
 import { useReviewKeyboardShortcuts } from '../../hooks/useReviewKeyboardShortcuts';
 import { computeChangesetChecksum, checksumsMatch } from '../../utils/changesetChecksum';
+import { getReviewTool } from '../../lib/settings-api';
 
 interface CodeReviewLayoutProps {
   laneId: string;
@@ -50,8 +50,11 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
     return status !== 'idle' && status !== 'ready' && status !== 'error';
   });
 
-  // Memoize AI tool name for stable reference in multiple renders
-  const toolName = createMemo(() => codeReviewSettingsManager.getAITool());
+  // Resolve AI tool name from main agent config
+  const [toolName, setToolName] = createSignal('claude');
+  onMount(async () => {
+    setToolName(await getReviewTool());
+  });
 
   // Detect if review is stale (changes committed/stashed or new changes)
   const reviewStatus = createMemo(() => {
