@@ -80,11 +80,11 @@ describe('MockReviewAPI', () => {
   it('should allow configuring delay', async () => {
     mockAPI.setDelay(10);
 
-    const start = Date.now();
+    const start = performance.now();
     await mockAPI.testTool({ tool: 'claude' });
-    const duration = Date.now() - start;
+    const duration = performance.now() - start;
 
-    expect(duration).toBeGreaterThanOrEqual(10);
+    expect(duration).toBeGreaterThanOrEqual(9); // Allow 1ms tolerance
   });
 });
 

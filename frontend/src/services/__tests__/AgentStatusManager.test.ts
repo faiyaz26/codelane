@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AgentStatusChange } from '../../types/agentStatus';
 
+// Mock Tauri event API (HookService uses listen at module init)
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async () => () => {}),
+  emit: vi.fn(),
+}));
+
 // Mock localStorage for node environment
 const localStorageMap = new Map<string, string>();
 vi.stubGlobal('localStorage', {

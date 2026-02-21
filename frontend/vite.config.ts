@@ -8,8 +8,16 @@ export default defineConfig(async () => ({
 
   // Vitest configuration
   test: {
-    environment: "node",
+    environment: "jsdom",
     globals: true,
+    setupFiles: ['./src/test-utils/setup.ts'],
+    deps: {
+      optimizer: {
+        web: {
+          include: ['solid-js', '@solidjs/testing-library', '@kobalte/core'],
+        },
+      },
+    },
   },
 
   // Vite options tailored for Tauri development
