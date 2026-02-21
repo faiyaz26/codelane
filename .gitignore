@@ -25,6 +25,9 @@ pnpm-lock.yaml
 /frontend/dist
 /assets/tailwind.css
 
+# Test coverage
+coverage/
+
 # Temporary files
 *.tmp
 .cache/
