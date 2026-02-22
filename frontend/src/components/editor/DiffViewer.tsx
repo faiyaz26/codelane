@@ -1,13 +1,14 @@
 // DiffViewer using @git-diff-view with Shiki highlighting
-import { createSignal, createEffect, createMemo, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show, For, onMount, onCleanup } from 'solid-js';
 import { DiffView, DiffModeEnum } from '@git-diff-view/solid';
-import { DiffFile } from '@git-diff-view/core';
+import { DiffFile, SplitSide } from '@git-diff-view/core';
 import { invoke } from '@tauri-apps/api/core';
 import { initDiffHighlighter, getDiffHighlighter } from './diff/shikiHighlighter';
 import { getFileAtRevision } from '../../lib/git-api';
 import { detectLanguage, getShikiLanguage } from './types';
 import { editorSettingsManager } from '../../services/EditorSettingsManager';
 import type { DiffViewMode } from './diff/types';
+import type { InlineAnnotation } from '../../types/review';
 
 // Import styles
 import '@git-diff-view/solid/styles/diff-view.css';
@@ -19,6 +20,7 @@ interface DiffViewerProps {
   workingDir?: string;
   embedded?: boolean; // If true, don't add overflow-auto (parent handles scrolling)
   viewMode?: 'unified' | 'split'; // External view mode (overrides internal state)
+  annotations?: InlineAnnotation[];
 }
 
 export function DiffViewer(props: DiffViewerProps) {
@@ -112,6 +114,70 @@ export function DiffViewer(props: DiffViewerProps) {
     onCleanup(() => file.clear());
   });
 
+  // Build extendData for inline annotations
+  const extendData = createMemo(() => {
+    const annotations = props.annotations;
+    if (!annotations || annotations.length === 0) return undefined;
+
+    const newFile: Record<string, { data: InlineAnnotation[] } | undefined> = {};
+    for (const annotation of annotations) {
+      const key = String(annotation.line);
+      if (newFile[key]) {
+        newFile[key]!.data.push(annotation);
+      } else {
+        newFile[key] = { data: [annotation] };
+      }
+    }
+
+    return { newFile };
+  });
+
+  // Inline styles needed because @git-diff-view resets `color: initial` on
+  // .diff-line-extend-wrapper * and .diff-line-widget-wrapper *, overriding Tailwind classes.
+  const severityInlineStyles: Record<string, { border: string; background: string; color: string }> = {
+    info: { border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.15)', color: '#93c5fd' },
+    warning: { border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.15)', color: '#fbbf24' },
+    error: { border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.15)', color: '#fca5a5' },
+  };
+
+  const severityIcons: Record<string, string> = {
+    info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    warning: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z',
+    error: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
+  };
+
+  const renderExtendLine = (renderProps: {
+    lineNumber: number;
+    side: SplitSide;
+    data: InlineAnnotation[];
+    diffFile: DiffFile;
+    onUpdate: () => void;
+  }) => {
+    return (
+      <div class="py-1 px-2">
+        <For each={renderProps.data}>
+          {(annotation) => {
+            const severity = annotation.severity || 'info';
+            const styles = severityInlineStyles[severity];
+            return (
+              <div
+                class="px-3 py-1.5 my-0.5 rounded text-xs"
+                style={{ border: styles.border, background: styles.background, color: styles.color }}
+              >
+                <div class="flex items-start gap-2">
+                  <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke={styles.color} viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={severityIcons[severity]} />
+                  </svg>
+                  <span class="leading-relaxed" style={{ color: 'rgb(230,230,230)' }}>{annotation.comment}</span>
+                </div>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    );
+  };
+
   return (
     <div class={`w-full bg-zed-bg-app ${props.embedded ? '' : 'h-full overflow-auto'}`}>
       <Show
@@ -176,6 +242,8 @@ export function DiffViewer(props: DiffViewerProps) {
               diffViewHighlight={true}
               diffViewTheme="dark"
               diffViewFontSize={14}
+              extendData={extendData()}
+              renderExtendLine={extendData() ? renderExtendLine : undefined}
             />
           )}
         </Show>
