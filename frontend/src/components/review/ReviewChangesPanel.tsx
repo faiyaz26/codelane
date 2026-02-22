@@ -8,6 +8,7 @@
 import { createMemo } from 'solid-js';
 import { ReviewFileScrollView } from './ReviewFileScrollView';
 import type { FileChangeStats } from '../../types/git';
+import type { InlineAnnotation } from '../../types/review';
 
 interface ReviewChangesPanelProps {
   laneId: string;
@@ -15,6 +16,7 @@ interface ReviewChangesPanelProps {
   sortedFiles: FileChangeStats[];
   fileDiffs: Map<string, string>;
   perFileFeedback: Map<string, string>;
+  perFileAnnotations: Map<string, InlineAnnotation[]>;
   visibleFilePath: string | null;
   scrollToPath: string | null;
   onVisibleFileChange: (path: string) => void;
@@ -33,6 +35,7 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
         sortedFiles={props.sortedFiles}
         fileDiffs={props.fileDiffs}
         perFileFeedback={props.perFileFeedback}
+        perFileAnnotations={props.perFileAnnotations}
         visibleFilePath={props.visibleFilePath}
         onVisibleFileChange={props.onVisibleFileChange}
         scrollToPath={props.scrollToPath}

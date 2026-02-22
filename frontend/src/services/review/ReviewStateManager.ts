@@ -8,6 +8,7 @@
 
 import { createSignal, createRoot, type Accessor } from 'solid-js';
 import type { FileChangeStats } from '../../types/git';
+import type { InlineAnnotation } from '../../types/review';
 
 export type ReviewPhase =
   | 'idle'
@@ -30,6 +31,7 @@ export interface CodeReviewState {
   status: ReviewPhase;
   reviewMarkdown: string | null;
   perFileFeedback: Map<string, string>;
+  perFileAnnotations: Map<string, InlineAnnotation[]>;
   sortedFiles: FileChangeStats[];
   fileDiffs: Map<string, string>;
   error: string | null;
@@ -45,6 +47,7 @@ function createDefaultState(): CodeReviewState {
     status: 'idle',
     reviewMarkdown: null,
     perFileFeedback: new Map(),
+    perFileAnnotations: new Map(),
     sortedFiles: [],
     scrollToPath: null,
     fileDiffs: new Map(),

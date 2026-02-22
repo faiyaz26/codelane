@@ -18,6 +18,7 @@ import { MarkdownRenderer } from '../../lib/markdown/MarkdownRenderer';
 import { debounce } from '../../utils/debounce';
 import { useLazyDiff } from '../../hooks/useLazyDiff';
 import type { FileChangeStats } from '../../types/git';
+import type { InlineAnnotation } from '../../types/review';
 
 interface ReviewFileScrollViewProps {
   laneId: string;
@@ -25,6 +26,7 @@ interface ReviewFileScrollViewProps {
   sortedFiles: FileChangeStats[];
   fileDiffs: Map<string, string>;
   perFileFeedback: Map<string, string>;
+  perFileAnnotations: Map<string, InlineAnnotation[]>;
   visibleFilePath: string | null;
   onVisibleFileChange: (path: string) => void;
   scrollToPath: string | null; // Reactive prop from store - triggers scroll when set
@@ -379,6 +381,7 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                         workingDir={props.workingDir}
                         embedded={true}
                         viewMode={diffViewMode()}
+                        annotations={props.perFileAnnotations.get(file.path)}
                       />
                     </div>
                   </Show>

@@ -46,7 +46,18 @@ Include:
 2. Any concerns (bugs, security, performance)
 3. Specific suggestions for improvement
 
-Be very concise — aim for 3-5 bullet points total. No preamble.`;
+Be very concise — aim for 3-5 bullet points total. No preamble.
+
+## Line Annotations
+
+After your general feedback, add line-specific annotations for important issues.
+Use this exact format, one per line (referencing NEW file line numbers from the diff):
+
+[L<line_number>]: <concise comment>
+[L<line_number>:warning]: <comment for warnings>
+[L<line_number>:error]: <comment for errors/bugs>
+
+Only annotate lines with genuine issues — focus on the 2-5 most important ones.`;
 
 export interface CodeReviewSettings {
   reviewModel: string | null;   // null = use tool's default model

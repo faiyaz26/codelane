@@ -581,6 +581,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
               sortedFiles={reviewState().sortedFiles}
               fileDiffs={reviewState().fileDiffs}
               perFileFeedback={reviewState().perFileFeedback}
+              perFileAnnotations={reviewState().perFileAnnotations}
               visibleFilePath={reviewState().visibleFilePath}
               scrollToPath={reviewState().scrollToPath}
               onVisibleFileChange={handleVisibleFileChange}

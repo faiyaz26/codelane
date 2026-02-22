@@ -18,6 +18,7 @@ import { reviewFileProcessor } from './ReviewFileProcessor';
 import { aiReviewService } from '../AIReviewService';
 import { codeReviewSettingsManager } from '../CodeReviewSettingsManager';
 import { getReviewTool } from '../../lib/settings-api';
+import { parseBatchedReviewWithAnnotations } from './annotationParser';
 import { processDiffsWithTruncation, getTruncationSummary } from '../../utils/diffTruncation';
 import { filterReviewableFiles, getExclusionSummary } from '../../utils/fileFilters';
 import { computeChangesetChecksum } from '../../utils/changesetChecksum';
@@ -495,18 +496,25 @@ export class ReviewOrchestrator {
           }
 
           if (result.success && result.content) {
-            // Parse batched response
+            // Parse batched response with annotation extraction
             const filePaths = batch.files.map(f => f.path);
-            const parsedFeedback = parseBatchedReview(result.content, filePaths);
+            const parsedResults = parseBatchedReviewWithAnnotations(result.content, filePaths);
 
-            // Update state with all files from this batch
+            // Update state with feedback and annotations from this batch
             reviewStateManager.setState(laneId, prev => {
               const newFeedback = new Map(prev.perFileFeedback);
+              const newAnnotations = new Map(prev.perFileAnnotations);
 
-              // Add feedback for each file in batch
               for (const { path } of batch.files) {
-                const feedback = parsedFeedback.get(path) || result.content;
-                newFeedback.set(path, feedback);
+                const parsed = parsedResults.get(path);
+                if (parsed) {
+                  newFeedback.set(path, parsed.generalFeedback);
+                  if (parsed.annotations.length > 0) {
+                    newAnnotations.set(path, parsed.annotations);
+                  }
+                } else {
+                  newFeedback.set(path, result.content);
+                }
               }
 
               completedFiles += batch.files.length;
@@ -514,6 +522,7 @@ export class ReviewOrchestrator {
               return {
                 ...prev,
                 perFileFeedback: newFeedback,
+                perFileAnnotations: newAnnotations,
                 progress: {
                   ...prev.progress,
                   processedFiles: completedFiles,

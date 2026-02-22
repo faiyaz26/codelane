@@ -200,8 +200,8 @@ export function MainLayout(props: MainLayoutProps) {
             <div class="flex-1 flex flex-col overflow-hidden min-w-0">
               {/* Main content row */}
               <div class="flex-1 flex overflow-hidden">
-                {/* Agent Terminal - Always rendered, hidden in Git Manager and Code Review views */}
-                <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview) ? 'none' : 'contents' }}>
+                {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, and PR review lanes */}
+                <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || lane().laneType === 'pr_review' || !!lane().prMetadata) ? 'none' : 'contents' }}>
                   <AgentTerminalPanel
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
@@ -239,8 +239,8 @@ export function MainLayout(props: MainLayoutProps) {
                   </div>
                 </Show>
 
-                {/* Empty state for Git Manager when no file is selected */}
-                <Show when={activeView() === ActivityView.GitManager && !(showEditor() && props.activeLaneId)}>
+                {/* Empty state for Git Manager or PR lanes when no file is selected */}
+                <Show when={(activeView() === ActivityView.GitManager || ((lane().laneType === 'pr_review' || !!lane().prMetadata) && activeView() !== ActivityView.CodeReview)) && !(showEditor() && props.activeLaneId)}>
                   <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
                     <svg class="w-16 h-16 mb-4 text-zed-text-tertiary opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
