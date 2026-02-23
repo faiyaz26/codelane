@@ -90,6 +90,9 @@ export function AgentSelector(props: AgentSelectorProps) {
         >
           <option value="shell">Shell (Traditional Terminal)</option>
           <option value="claude">Claude Code CLI</option>
+          <option value="gemini">Gemini CLI</option>
+          <option value="codex">OpenAI Codex CLI</option>
+          <option value="opencode">Opencode CLI</option>
           <option value="cursor">Cursor CLI</option>
           <option value="aider">Aider CLI</option>
         </select>
