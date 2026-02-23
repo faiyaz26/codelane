@@ -108,8 +108,46 @@ function App() {
       }
     };
 
+    // Intercept native paste events (from Edit menu, context menu, execCommand)
+    // to prevent WebKit's NSPasteboard access which can crash on macOS.
+    const handleNativePaste = async (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      // Skip terminals (xterm handles its own clipboard)
+      if (target.closest('.xterm')) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Get text from the clipboard event data if available, otherwise use Tauri API
+      let text = e.clipboardData?.getData('text/plain');
+      if (!text) {
+        text = await readText();
+      }
+      if (!text) return;
+
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        const start = target.selectionStart ?? 0;
+        const end = target.selectionEnd ?? 0;
+        const currentValue = target.value;
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+          'value'
+        )?.set;
+        nativeInputValueSetter?.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        const newPos = start + text.length;
+        target.setSelectionRange(newPos, newPos);
+      } else if (target.isContentEditable) {
+        document.execCommand('insertText', false, text);
+      }
+    };
+
     document.addEventListener('keydown', handleClipboard);
-    onCleanup(() => document.removeEventListener('keydown', handleClipboard));
+    document.addEventListener('paste', handleNativePaste, true); // capture phase
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleClipboard);
+      document.removeEventListener('paste', handleNativePaste, true);
+    });
   });
 
   // Check for first launch and show onboarding

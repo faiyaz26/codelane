@@ -65,7 +65,8 @@ function ReviewErrorFallback(props: ReviewErrorFallbackProps) {
 
   const handleCopyError = async () => {
     try {
-      await navigator.clipboard.writeText(technicalDetails());
+      const { writeText } = await import('@tauri-apps/plugin-clipboard-manager');
+      await writeText(technicalDetails());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
