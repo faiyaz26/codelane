@@ -2,39 +2,12 @@ import { createSignal, onMount } from 'solid-js';
 import { AgentSelector } from '../../AgentSelector';
 import type { WizardData } from '../OnboardingWizard';
 import type { AgentConfig } from '../../../types/agent';
+import { defaultAgentSettings } from '../../../types/agent';
 
 interface AgentSetupStepProps {
   data: WizardData;
   onDataChange: (updates: Partial<WizardData>) => void;
 }
-
-// Default agent presets
-const AGENT_PRESETS: Record<string, AgentConfig> = {
-  shell: {
-    agentType: 'shell',
-    command: '/bin/zsh',
-    args: [],
-    env: {},
-  },
-  claude: {
-    agentType: 'claude',
-    command: 'claude',
-    args: [],
-    env: {},
-  },
-  cursor: {
-    agentType: 'cursor',
-    command: 'cursor',
-    args: [],
-    env: {},
-  },
-  aider: {
-    agentType: 'aider',
-    command: 'aider',
-    args: [],
-    env: {},
-  },
-};
 
 export function AgentSetupStep(props: AgentSetupStepProps) {
   const [isValid, setIsValid] = createSignal(false);
@@ -42,7 +15,7 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
   // Initialize with Claude Code as default if no agent selected
   onMount(() => {
     if (!props.data.agent) {
-      props.onDataChange({ agent: AGENT_PRESETS.claude });
+      props.onDataChange({ agent: defaultAgentSettings.presets.claude });
     }
   });
 
@@ -62,9 +35,9 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
       {/* Agent Selector */}
       <div class="mb-6">
         <AgentSelector
-          value={props.data.agent || AGENT_PRESETS.claude}
+          value={props.data.agent || defaultAgentSettings.presets.claude}
           onChange={handleAgentChange}
-          presets={AGENT_PRESETS}
+          presets={defaultAgentSettings.presets}
           onValidationChange={setIsValid}
         />
       </div>

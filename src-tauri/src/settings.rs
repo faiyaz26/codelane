@@ -135,20 +135,61 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
             format!("{}/bin", home),         // User bin
         ];
 
-        // First, try which with enhanced PATH
+        // In production macOS/Linux app bundles, the environment PATH is very minimal.
+        // Try using interactive login shells to discover the tool,
+        // which loads dotfiles (.zshrc, .bashrc) configuring nvm, pyenv, cargo, etc.
+        // Many dotfiles skip initialization if not interactive (-i).
+        
+        let shell_cmd = format!("command -v {}", command);
+        let current_shell = env::var("SHELL").unwrap_or_default();
+        
+        // Build a list of shells to try. Start with the user's SHELL env var if present,
+        // then try standard macOS/Linux default shells.
+        let mut shells_to_try = vec![];
+        if !current_shell.is_empty() && current_shell != "/bin/sh" {
+            shells_to_try.push(current_shell);
+        }
+        shells_to_try.push("/bin/zsh".to_string());
+        shells_to_try.push("/bin/bash".to_string());
+
+        for shell in shells_to_try {
+            let shell_output = Command::new(&shell)
+                .arg("-lic")
+                .arg(&shell_cmd)
+                .output();
+
+            if let Ok(out) = shell_output {
+                if out.status.success() {
+                    let output_str = String::from_utf8(out.stdout).unwrap_or_default();
+                    
+                    // .zshrc/.bashrc can be noisy. The actual path is usually the last valid file path printed.
+                    // We iterate in reverse to find the command output while ignoring initialization noise.
+                    for line in output_str.lines().rev() {
+                        let path = line.trim();
+                        if !path.is_empty() && !path.contains("not found") && Path::new(path).is_file() {
+                            return Ok(Some(path.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback: try which with enhanced PATH
         let enhanced_path = env::var("PATH").unwrap_or_default() + ":" + &common_paths.join(":");
-        let output = Command::new("which")
+        if let Ok(output) = Command::new("which")
             .arg(command)
             .env("PATH", enhanced_path)
-            .output()
-            .map_err(|e| format!("Failed to execute 'which': {}", e))?;
-
-        if output.status.success() {
-            let path = String::from_utf8(output.stdout)
-                .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
-                .trim()
-                .to_string();
-            return Ok(Some(path));
+            .output() 
+        {
+            if output.status.success() {
+                let output_str = String::from_utf8(output.stdout).unwrap_or_default();
+                for line in output_str.lines() {
+                    let path = line.trim();
+                    if !path.is_empty() && Path::new(path).is_file() {
+                        return Ok(Some(path.to_string()));
+                    }
+                }
+            }
         }
 
         // If which failed, manually check common paths
@@ -170,22 +211,27 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
 
     #[cfg(windows)]
     {
-        let output = Command::new("where")
-            .arg(command)
-            .output()
-            .map_err(|e| format!("Failed to execute 'where': {}", e))?;
-
-        if output.status.success() {
-            let path = String::from_utf8(output.stdout)
-                .map_err(|e| format!("Invalid UTF-8 in command output: {}", e))?
-                .trim()
-                .lines()
-                .next()
-                .map(|s| s.to_string());
-            Ok(path)
-        } else {
-            Ok(None)
+        // On Windows, 'where' is the standard way to find executables in PATH
+        if let Ok(output) = Command::new("where").arg(command).output() {
+            if output.status.success() {
+                let output_str = String::from_utf8(output.stdout).unwrap_or_default();
+                
+                // 'where' returns one match per line. Find the first valid file.
+                for line in output_str.lines() {
+                    let path = line.trim();
+                    if !path.is_empty() && Path::new(path).is_file() {
+                        return Ok(Some(path.to_string()));
+                    }
+                }
+            }
         }
+        
+        // Fallback for Windows: check if the command itself is an absolute path
+        if Path::new(command).is_file() {
+            return Ok(Some(command.to_string()));
+        }
+
+        Ok(None)
     }
 }
 
