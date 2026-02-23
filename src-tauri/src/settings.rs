@@ -117,8 +117,7 @@ pub fn lane_update_agent_config(
 }
 
 /// Check if a command exists and return its full path
-#[tauri::command]
-pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
+pub fn command_exists(command: &str) -> Result<Option<String>, String> {
     use std::env;
     use std::path::Path;
 
@@ -139,7 +138,7 @@ pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
         // First, try which with enhanced PATH
         let enhanced_path = env::var("PATH").unwrap_or_default() + ":" + &common_paths.join(":");
         let output = Command::new("which")
-            .arg(&command)
+            .arg(command)
             .env("PATH", enhanced_path)
             .output()
             .map_err(|e| format!("Failed to execute 'which': {}", e))?;
@@ -172,7 +171,7 @@ pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
     #[cfg(windows)]
     {
         let output = Command::new("where")
-            .arg(&command)
+            .arg(command)
             .output()
             .map_err(|e| format!("Failed to execute 'where': {}", e))?;
 
@@ -188,6 +187,12 @@ pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
             Ok(None)
         }
     }
+}
+
+/// Check if a command exists and return its full path (Tauri command)
+#[tauri::command]
+pub fn check_command_exists(command: String) -> Result<Option<String>, String> {
+    command_exists(&command)
 }
 
 #[cfg(test)]

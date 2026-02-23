@@ -6,12 +6,14 @@
 use serde::Serialize;
 use std::process::{Command, Stdio};
 use std::io::Write;
+use crate::settings::command_exists;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AIReviewResult {
     pub success: bool,
     pub content: String,
     pub error: Option<String>,
+    pub error_type: Option<String>,
 }
 
 /// Generate a code changes summary with feedback using the configured AI tool
@@ -43,215 +45,149 @@ pub async fn ai_generate_review(
             success: true,
             content: output,
             error: None,
+            error_type: None,
         }),
-        Err(e) => Ok(AIReviewResult {
-            success: false,
-            content: String::new(),
-            error: Some(e),
-        }),
+        Err(e) => {
+            let error_type = if e.contains("ModelNotFoundError") || e.contains("requested model") || e.contains("not found") && e.contains("model") {
+                Some("model_not_found".to_string())
+            } else if e.contains("not found") && (e.contains("command") || e.contains("installed")) {
+                Some("tool_not_found".to_string())
+            } else if e.contains("quota") || e.contains("rate limit") {
+                Some("rate_limit".to_string())
+            } else {
+                Some("unknown".to_string())
+            };
+
+            Ok(AIReviewResult {
+                success: false,
+                content: String::new(),
+                error: Some(e),
+                error_type,
+            })
+        },
     }
 }
 
-/// Check if a command exists in PATH
-fn command_exists(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+/// Run a command, optionally wrapping it in a login shell to ensure environment is loaded
+fn run_command(
+    cmd_name: &str,
+    args: Vec<String>,
+    prompt: Option<&str>,
+    working_dir: &str,
+) -> Result<String, String> {
+    let cmd_path = command_exists(cmd_name)?
+        .ok_or_else(|| format!("{} not found. Please ensure it is installed and in your PATH.", cmd_name))?;
+
+    let mut command = if cfg!(unix) {
+        // Use login shell to ensure .zshrc/.bashrc is sourced
+        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        
+        let mut full_cmd = format!("'{}'", cmd_path);
+        for arg in args {
+            // Escape single quotes for shell safety
+            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+        }
+
+        let mut cmd = Command::new(login_shell);
+        cmd.arg("-l").arg("-c").arg(full_cmd);
+        cmd
+    } else {
+        let mut cmd = Command::new(cmd_path);
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
+    };
+
+    command
+        .current_dir(working_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn {}: {}", cmd_name, e))?;
+
+    // Write prompt to stdin if provided
+    if let Some(p) = prompt {
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(p.as_bytes())
+                .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+            drop(stdin);
+        }
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for {}: {}", cmd_name, e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{} error: {}", cmd_name, stderr))
+    }
 }
 
 /// Execute Claude Code CLI
 fn execute_claude(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
-    eprintln!("[AI] Executing Claude with model: {:?}, prompt length: {}", model, prompt.len());
-
-    if !command_exists("claude") {
-        return Err("Claude Code CLI not found. Install: npm install -g @anthropic-ai/claude-code".to_string());
-    }
-
-    // Write prompt to temp file
-    let temp_dir = std::env::temp_dir();
-    let prompt_file = temp_dir.join(format!("codelane_prompt_{}.txt", std::process::id()));
-    std::fs::write(&prompt_file, prompt)
-        .map_err(|e| format!("Failed to write prompt file: {}", e))?;
-
-    let mut command = Command::new("claude");
-    command
-        .current_dir(working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    // Add model selection if provided
+    let mut args = Vec::new();
     if let Some(model_name) = model {
-        command.arg("--model").arg(model_name);
+        args.push("--model".to_string());
+        args.push(model_name.to_string());
     }
 
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
-
-    // Write prompt to stdin
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        drop(stdin);
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to wait for output: {}", e))?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(prompt_file);
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        eprintln!("[AI] Claude completed successfully, output length: {}", stdout.len());
-        Ok(stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[AI] Claude failed with exit code: {:?}", output.status.code());
-        eprintln!("[AI] Claude stderr: {}", stderr);
-        Err(format!("Claude error: {}", stderr))
-    }
+    // Claude can take prompt from stdin
+    run_command("claude", args, Some(prompt), working_dir)
 }
 
 /// Execute Aider CLI
 fn execute_aider(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
-    eprintln!("[AI] Executing Aider with model: {:?}, prompt length: {}", model, prompt.len());
+    let mut args = vec![
+        "--yes".to_string(),
+        "--no-auto-commits".to_string(),
+        "--message".to_string(),
+        prompt.to_string(),
+    ];
 
-    if !command_exists("aider") {
-        return Err("Aider not found. Install: pip install aider-chat".to_string());
-    }
-
-    let mut command = Command::new("aider");
-    command
-        .arg("--yes")
-        .arg("--no-auto-commits")
-        .arg("--message")
-        .arg(prompt)
-        .current_dir(working_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    // Add model selection if provided
     if let Some(model_name) = model {
-        command.arg("--model").arg(model_name);
+        args.push("--model".to_string());
+        args.push(model_name.to_string());
     }
 
-    let output = command
-        .output()
-        .map_err(|e| format!("Failed to execute aider: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        eprintln!("[AI] Aider completed successfully, output length: {}", stdout.len());
-        Ok(stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[AI] Aider failed with exit code: {:?}", output.status.code());
-        eprintln!("[AI] Aider stderr: {}", stderr);
-        Err(format!("Aider error: {}", stderr))
-    }
+    // Aider handles message via flag, doesn't strictly need stdin for this
+    run_command("aider", args, None, working_dir)
 }
 
 /// Execute OpenCode CLI
 fn execute_opencode(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
-    eprintln!("[AI] Executing OpenCode with model: {:?}, prompt length: {}", model, prompt.len());
-
-    if !command_exists("opencode") {
-        return Err("OpenCode not found. Install: npm install -g opencode".to_string());
-    }
-
-    let mut command = Command::new("opencode");
-    command
-        .current_dir(working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    // Add model selection if provided (opencode uses --model flag)
+    let mut args = Vec::new();
     if let Some(model_name) = model {
-        command.arg("--model").arg(model_name);
+        args.push("--model".to_string());
+        args.push(model_name.to_string());
     }
 
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn opencode: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        drop(stdin);
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to wait for output: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        eprintln!("[AI] OpenCode completed successfully, output length: {}", stdout.len());
-        Ok(stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[AI] OpenCode failed with exit code: {:?}", output.status.code());
-        eprintln!("[AI] OpenCode stderr: {}", stderr);
-        Err(format!("OpenCode error: {}", stderr))
-    }
+    // OpenCode can take prompt from stdin
+    run_command("opencode", args, Some(prompt), working_dir)
 }
 
 /// Execute Gemini CLI
 fn execute_gemini(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
-    eprintln!("[AI] Executing Gemini with model: {:?}, prompt length: {}", model, prompt.len());
-
-    if !command_exists("gemini") {
-        return Err("Gemini CLI not found. Install: npm install -g @google/generative-ai-cli".to_string());
-    }
-
-    let mut command = Command::new("gemini");
-    command
-        .arg("chat")
-        .current_dir(working_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    // Add model selection if provided
+    let mut args = Vec::new();
+    
     if let Some(model_name) = model {
-        command.arg("--model").arg(model_name);
+        args.push("-m".to_string());
+        args.push(model_name.to_string());
     }
+    
+    // Use --prompt for non-interactive mode
+    args.push("--prompt".to_string());
+    args.push(prompt.to_string());
 
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn gemini: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        drop(stdin);
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to wait for output: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        eprintln!("[AI] Gemini completed successfully, output length: {}", stdout.len());
-        Ok(stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[AI] Gemini failed with exit code: {:?}", output.status.code());
-        eprintln!("[AI] Gemini stderr: {}", stderr);
-        Err(format!("Gemini error: {}", stderr))
-    }
+    // Gemini CLI uses --prompt for non-interactive, doesn't strictly need stdin
+    run_command("gemini", args, None, working_dir)
 }
 
 /// Test if an AI tool is available
@@ -265,18 +201,20 @@ pub async fn ai_test_tool(tool: String) -> Result<bool, String> {
         _ => return Err(format!("Unknown tool: {}", tool)),
     };
 
-    Ok(command_exists(cmd_name))
+    Ok(command_exists(cmd_name)?.is_some())
 }
 
 /// Get available AI tools (those that are installed)
 #[tauri::command]
 pub async fn ai_get_available_tools() -> Result<Vec<String>, String> {
     let tools = vec!["claude", "aider", "opencode", "gemini"];
-    let available: Vec<String> = tools
-        .into_iter()
-        .filter(|tool| command_exists(tool))
-        .map(|s| s.to_string())
-        .collect();
+    let mut available = Vec::new();
+    
+    for tool in tools {
+        if command_exists(tool)?.is_some() {
+            available.push(tool.to_string());
+        }
+    }
 
     Ok(available)
 }

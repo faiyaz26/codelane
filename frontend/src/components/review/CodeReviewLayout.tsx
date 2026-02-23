@@ -485,25 +485,59 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       {/* Error State */}
       <Show when={isError()}>
         <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app" role="alert">
-          <svg class="w-16 h-16 mb-4 text-red-400 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="w-16 h-16 mb-6 text-red-400 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.834-1.964-.834-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
-          <h3 class="text-lg font-medium text-zed-text-primary mb-2">Review Failed</h3>
-          <p class="text-sm text-red-400 mb-4 max-w-md">{reviewState().error}</p>
-          <div class="flex items-center gap-3">
+          <h3 class="text-xl font-semibold text-zed-text-primary mb-3">Review Generation Failed</h3>
+          
+          <div class="w-full max-w-lg mb-6 bg-red-400/5 border border-red-400/20 rounded-lg p-4 flex flex-col items-center">
+            <p class="text-sm text-red-400/90 mb-3 line-clamp-3">
+              {reviewState().error}
+            </p>
+            <button
+              onClick={async () => {
+                const error = reviewState().error;
+                if (error) {
+                  await writeText(error);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }
+              }}
+              class="text-[10px] uppercase tracking-wider font-bold text-zed-text-tertiary hover:text-zed-text-primary transition-colors flex items-center gap-1.5"
+            >
+              <Show when={copied()} fallback={
+                <>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  Copy Full Error Report
+                </>
+              }>
+                <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" stroke-width="2" />
+                </svg>
+                <span class="text-green-400">Error Copied!</span>
+              </Show>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-4">
             <button
               onClick={handleGenerate}
               aria-label="Retry review generation"
-              class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm"
+              class="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm flex items-center gap-2"
             >
-              Retry
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Retry Generation
             </button>
             <button
               onClick={() => codeReviewStore.reset(props.laneId)}
               aria-label="Cancel and reset review"
-              class="px-4 py-2 bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary rounded-md transition-colors text-sm"
+              class="px-6 py-2.5 bg-zed-bg-hover text-zed-text-secondary hover:text-zed-text-primary rounded-lg transition-colors font-medium text-sm border border-zed-border-default"
             >
-              Cancel
+              Back to Start
             </button>
           </div>
         </div>

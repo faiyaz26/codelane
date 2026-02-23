@@ -13,6 +13,7 @@ export interface AIReviewResult {
   success: boolean;
   content: string;
   error?: string;
+  errorType?: string;
 }
 
 export interface AIReviewRequest {
@@ -41,7 +42,7 @@ export const AI_MODELS: Record<AITool, Array<{ value: string; label: string; des
     { value: 'gpt-4o', label: 'GPT-4o', description: 'More capable' },
   ],
   gemini: [
-    { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash', description: 'Fast and efficient (Recommended)' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Fast and efficient (Recommended)' },
     { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Most capable' },
     { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Faster' },
   ],

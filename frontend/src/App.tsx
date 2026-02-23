@@ -68,12 +68,13 @@ function App() {
           }
         }
       } else if (e.key === 'v') {
-        // Only handle paste for non-input elements (inputs get it via execCommand)
-        // For inputs/textareas, insert the clipboard text at cursor position
-        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-          e.preventDefault();
-          const text = await readText();
-          if (text) {
+        // Always intercept paste to use Tauri clipboard API.
+        // This prevents WebKit's native NSPasteboard access which can crash
+        // due to a macOS bug with stale clipboard type cache pointers.
+        e.preventDefault();
+        const text = await readText();
+        if (text) {
+          if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
             const start = target.selectionStart ?? 0;
             const end = target.selectionEnd ?? 0;
             const currentValue = target.value;
@@ -87,6 +88,13 @@ function App() {
             // Restore cursor position after paste
             const newPos = start + text.length;
             target.setSelectionRange(newPos, newPos);
+          } else if (target.isContentEditable) {
+            // Handle contenteditable elements (e.g., code editors)
+            document.execCommand('insertText', false, text);
+          } else {
+            // For any other focusable element, dispatch a paste-like event
+            // so downstream handlers can pick it up if needed
+            target.dispatchEvent(new CustomEvent('tauri-paste', { detail: text, bubbles: true }));
           }
         }
       } else if (e.key === 'a') {
