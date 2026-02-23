@@ -90,7 +90,7 @@
     },
     "fs": {},
     "updater": {
-      "pubkey": "",
+      "pubkey": "RWTPayAigdQz0wSER3i6qgIHVWkZHHhoRV2GqHBE+ThlmLmRdg1TPr1Y",
       "endpoints": [
         "https://github.com/faiyaz26/codelane/releases/latest/download/latest.json"
       ]
