@@ -132,8 +132,8 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
         <CodeReviewFileList laneId={props.laneId} />
       </div>
 
-      {/* Agent Button or Terminal - Bottom Section (hidden for PR review lanes) */}
-      <Show when={isReviewReady() && !props.isPrReview}>
+      {/* Agent Button or Terminal - Bottom Section */}
+      <Show when={isReviewReady()}>
         <Show
           when={terminalActive()}
           fallback={

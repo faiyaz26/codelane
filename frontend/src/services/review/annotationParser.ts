@@ -33,8 +33,11 @@ export function parseFileReviewWithAnnotations(response: string): ParsedFileRevi
     }
   }
 
+  // Strip trailing horizontal rules (---, ***, ___) and surrounding whitespace
+  const feedback = feedbackLines.join('\n').trim().replace(/(\n\s*[-*_]{3,}\s*)+$/, '').trim();
+
   return {
-    generalFeedback: feedbackLines.join('\n').trim(),
+    generalFeedback: feedback,
     annotations,
   };
 }
