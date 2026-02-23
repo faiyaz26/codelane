@@ -209,8 +209,16 @@ class TerminalPool {
     // Set up event-based data flow (low latency!) with sticky scroll
     // PTY output → terminal
     await pty.onData((data) => {
+      // Check if we're at the bottom BEFORE writing. If the user has scrolled up,
+      // we should respect that and not force a scroll to bottom.
+      const buffer = terminal.buffer.active;
+      const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
+
       terminal.write(data);
-      if (handle.autoScroll) {
+
+      // Only force scroll to bottom if we were already at the bottom and autoScroll is enabled.
+      // This ensures we don't "jump" to bottom while the user is scrolling up to read history.
+      if (handle.autoScroll && isAtBottom) {
         terminal.scrollToBottom();
       }
     });

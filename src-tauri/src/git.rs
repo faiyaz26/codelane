@@ -1345,6 +1345,7 @@ mod tests {
         let result = rt.block_on(git_create_branch(
             temp.path().to_str().unwrap().to_string(),
             "new-branch".to_string(),
+            None,
         ));
         assert!(result.is_ok());
 

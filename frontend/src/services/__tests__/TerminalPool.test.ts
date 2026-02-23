@@ -164,6 +164,25 @@ describe('TerminalPool', () => {
       ptyDataCallback!(new TextEncoder().encode('line 2'));
       expect(scrollToBottom).toHaveBeenCalledTimes(1);
     });
+
+    it('does NOT call scrollToBottom if user is scrolled up even if autoScroll is true', async () => {
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const { terminal, scrollToBottom } = mockTerminals[0];
+
+      expect(handle.autoScroll).toBe(true);
+
+      // Simulate user being scrolled up (baseY is 0, length is 100)
+      terminal.buffer.active.baseY = 0;
+      terminal.buffer.active.length = 100;
+      // 0 + 24 < 100, so we're scrolled up
+
+      // Simulate PTY output
+      const data = new TextEncoder().encode('new output');
+      ptyDataCallback!(data);
+
+      // Should not scroll because isAtBottom was false before the write
+      expect(scrollToBottom).not.toHaveBeenCalled();
+    });
   });
 
   describe('scroll position detection', () => {

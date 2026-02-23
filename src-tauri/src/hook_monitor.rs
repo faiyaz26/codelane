@@ -6,7 +6,6 @@
 use codelane_core::hooks::HookEvent;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::mpsc;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};

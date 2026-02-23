@@ -106,24 +106,27 @@ LANE_ID="${{CODELANE_LANE_ID}}"
 HOOK_DIR="{}"
 
 if [ -z "$LANE_ID" ]; then
+    echo '{{}}'
     exit 0
 fi
 
 EVENT_DIR="$HOOK_DIR/$LANE_ID"
-mkdir -p "$EVENT_DIR"
+mkdir -p "$EVENT_DIR" > /dev/null 2>&1
 
 TIMESTAMP=$(date +%s%N)
 EVENT_FILE="$EVENT_DIR/event-$TIMESTAMP.json"
 
 # Write JSON event
-cat > "$EVENT_FILE" <<EOF
+cat > "$EVENT_FILE" <<EOF > /dev/null 2>&1
 {{
   "laneId": "$LANE_ID",
   "agentType": "gemini",
-  "eventType": "waiting_for_input",
+  "eventType": "${{1:-waiting_for_input}}",
   "timestamp": $(date +%s)
 }}
 EOF
+
+echo '{{}}'
 "#,
         hook_events_dir
     )
@@ -238,24 +241,41 @@ fn update_codex_config(hook_script_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Update Gemini hooks.yaml to enable hooks
+/// Update Gemini hooks in settings.json to enable hooks
 fn update_gemini_config(hook_script_path: &Path) -> Result<(), String> {
     let home = std::env::var("HOME")
         .map_err(|_| "Could not determine home directory".to_string())?;
-    let hooks_path = PathBuf::from(home).join(".gemini/hooks.yaml");
+    let settings_path = PathBuf::from(home).join(".gemini/settings.json");
 
-    // Create hooks.yaml with Codelane hook
-    let yaml_content = format!(
-        r#"hooks:
-  Notification:
-    - matcher: ".*"
-      command: {}
-"#,
-        hook_script_path.to_string_lossy()
-    );
+    // Read existing settings or create new
+    let mut settings: serde_json::Value = if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read Gemini settings: {}", e))?;
+        serde_json::from_str(&content)
+            .unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
 
-    fs::write(&hooks_path, yaml_content)
-        .map_err(|e| format!("Failed to write Gemini hooks.yaml: {}", e))?;
+    // Add hooks configuration
+    let hook_path_str = hook_script_path.to_string_lossy();
+    settings["hooks"] = serde_json::json!({
+        "Notification": [
+            {
+                "matcher": ".*",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("{} waiting_for_input", hook_path_str)
+                }]
+            }
+        ]
+    });
+
+    // Write back
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    fs::write(&settings_path, content)
+        .map_err(|e| format!("Failed to write Gemini settings: {}", e))?;
 
     Ok(())
 }
@@ -315,16 +335,36 @@ fn remove_codex_hooks() -> Result<(), String> {
     Ok(())
 }
 
-/// Remove Gemini hooks.yaml
+/// Remove Gemini hooks from settings.json
 fn remove_gemini_hooks() -> Result<(), String> {
     let home = std::env::var("HOME")
         .map_err(|_| "Could not determine home directory".to_string())?;
-    let hooks_path = PathBuf::from(home).join(".gemini/hooks.yaml");
-
+    
+    // Cleanup old hooks.yaml if it exists
+    let hooks_path = PathBuf::from(&home).join(".gemini/hooks.yaml");
     if hooks_path.exists() {
-        fs::remove_file(&hooks_path)
-            .map_err(|e| format!("Failed to remove Gemini hooks.yaml: {}", e))?;
+        let _ = fs::remove_file(hooks_path);
     }
+
+    let settings_path = PathBuf::from(home).join(".gemini/settings.json");
+    if !settings_path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Failed to read Gemini settings: {}", e))?;
+    let mut settings: serde_json::Value = serde_json::from_str(&content)
+        .unwrap_or_else(|_| serde_json::json!({}));
+
+    // Remove hooks section
+    if let Some(obj) = settings.as_object_mut() {
+        obj.remove("hooks");
+    }
+
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    fs::write(&settings_path, content)
+        .map_err(|e| format!("Failed to write Gemini settings: {}", e))?;
 
     Ok(())
 }
