@@ -38,9 +38,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: |
-          pnpm install
-          cd frontend && pnpm install
+        run: pnpm install
 
       - name: Import Apple Developer Certificate
         env:
@@ -140,9 +138,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: |
-          pnpm install
-          cd frontend && pnpm install
+        run: pnpm install
 
       - name: Build for Linux
         run: pnpm tauri build
@@ -180,9 +176,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: |
-          pnpm install
-          cd frontend && pnpm install
+        run: pnpm install
 
       - name: Build for Windows
         run: pnpm tauri build
