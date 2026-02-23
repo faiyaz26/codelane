@@ -7,12 +7,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::git::FileChangeStats;
 use crate::import_analyzer::{self, AnalysisLanguage};
 
-/// A node in the dependency graph
+/* /// A node in the dependency graph
 #[derive(Debug, Clone)]
 struct GraphNode {
     file_path: String,
     dependencies: Vec<String>, // Files this node depends on
-}
+} */
 
 /// Build a dependency graph from changed files
 pub fn build_dependency_graph(

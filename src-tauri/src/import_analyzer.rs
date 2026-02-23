@@ -4,7 +4,7 @@
 //! for smart file ordering in code review.
 
 use std::path::Path;
-use tree_sitter::{Language, Parser, Query, QueryCursor};
+use tree_sitter::{Language, Parser};
 
 /// Supported languages for import analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,8 +47,8 @@ impl AnalysisLanguage {
         }
     }
 
-    /// Get tree-sitter query for extracting imports
-    fn import_query(&self) -> &'static str {
+    // Get tree-sitter query for extracting imports
+    /* fn import_query(&self) -> &'static str {
         match self {
             Self::TypeScript | Self::JavaScript => {
                 // Capture import statements and their sources
@@ -93,7 +93,7 @@ impl AnalysisLanguage {
                 "#
             }
         }
-    }
+    } */
 }
 
 /// Extract import paths from a source file
@@ -108,11 +108,11 @@ pub fn extract_imports(file_path: &str, content: &str) -> Result<Vec<String>, St
         .set_language(&language.tree_sitter_language())
         .map_err(|e| format!("Failed to set parser language: {}", e))?;
 
-    let tree = parser
+    let _tree = parser
         .parse(content, None)
         .ok_or_else(|| "Failed to parse file".to_string())?;
 
-    let root_node = tree.root_node();
+    // let root_node = tree.root_node();
 
     // For now, use a simpler regex-based approach for import extraction
     // Tree-sitter integration can be added later with proper streaming iterator handling
@@ -175,7 +175,7 @@ fn extract_imports_regex(content: &str, language: AnalysisLanguage) -> Vec<Strin
     imports
 }
 
-/// Clean and normalize import path
+/* // Clean and normalize import path
 fn clean_import_path(raw: &str, language: AnalysisLanguage) -> String {
     let mut cleaned = raw.trim();
 
@@ -222,7 +222,7 @@ fn clean_import_path(raw: &str, language: AnalysisLanguage) -> String {
             }
         }
     }
-}
+} */
 
 /// Resolve import path to an actual file path
 pub fn resolve_import_path(

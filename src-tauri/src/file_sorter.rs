@@ -292,7 +292,7 @@ pub fn sort_files_smart_dependencies(
     file_contents: HashMap<String, String>,
 ) -> Vec<FileChangeStats> {
     // Step 1: Categorize all files into tiers (same as smart sort)
-    let mut categorized: Vec<(FileChangeStats, FileCategory)> = files
+    let categorized: Vec<(FileChangeStats, FileCategory)> = files
         .into_iter()
         .map(|f| {
             let category = categorize_file(&f.path);
