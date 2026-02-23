@@ -38,7 +38,9 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: |
+          pnpm install
+          cd frontend && pnpm install
 
       - name: Build (${{ matrix.arch }})
         uses: tauri-apps/tauri-action@v0
@@ -84,7 +86,9 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: |
+          pnpm install
+          cd frontend && pnpm install
 
       - name: Build for Linux
         run: pnpm tauri build
@@ -122,7 +126,9 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: |
+          pnpm install
+          cd frontend && pnpm install
 
       - name: Build for Windows
         run: pnpm tauri build
