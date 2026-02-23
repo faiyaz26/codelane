@@ -8,7 +8,7 @@ import { getFileAtRevision } from '../../lib/git-api';
 import { detectLanguage, getShikiLanguage } from './types';
 import { editorSettingsManager } from '../../services/EditorSettingsManager';
 import type { DiffViewMode } from './diff/types';
-import type { InlineAnnotation } from '../../types/review';
+import type { InlineAnnotation, PendingReviewComment, PrReviewComment } from '../../types/review';
 
 // Import styles
 import '@git-diff-view/solid/styles/diff-view.css';
@@ -21,6 +21,13 @@ interface DiffViewerProps {
   embedded?: boolean; // If true, don't add overflow-auto (parent handles scrolling)
   viewMode?: 'unified' | 'split'; // External view mode (overrides internal state)
   annotations?: InlineAnnotation[];
+  // PR review comment props
+  enableAddComment?: boolean;
+  pendingComments?: PendingReviewComment[];
+  githubComments?: PrReviewComment[];
+  onAddComment?: (line: number, body: string) => void;
+  onUpdateComment?: (commentId: string, body: string) => void;
+  onRemoveComment?: (commentId: string) => void;
 }
 
 export function DiffViewer(props: DiffViewerProps) {
@@ -30,6 +37,9 @@ export function DiffViewer(props: DiffViewerProps) {
   const [newContent, setNewContent] = createSignal('');
   const [dataReady, setDataReady] = createSignal(false);
   const [diffFileInstance, setDiffFileInstance] = createSignal<DiffFile | null>(null);
+
+  // Widget state for comment boxes
+  const [editingCommentId, setEditingCommentId] = createSignal<string | null>(null);
 
   // Reactive effective view mode: use external prop if provided, otherwise internal state
   const effectiveViewMode = createMemo(() => props.viewMode ?? viewMode());
@@ -77,8 +87,6 @@ export function DiffViewer(props: DiffViewerProps) {
   });
 
   // Create and fully initialize DiffFile when all data is ready.
-  // Using diffFile prop (instead of data prop) ensures we control the
-  // initialization order, avoiding SolidJS effect ordering issues in the library.
   createEffect(() => {
     const diffText = props.diff;
     const ready = dataReady();
@@ -114,18 +122,61 @@ export function DiffViewer(props: DiffViewerProps) {
     onCleanup(() => file.clear());
   });
 
-  // Build extendData for inline annotations
+  // Build extendData for inline annotations + GitHub comments + pending comments
   const extendData = createMemo(() => {
     const annotations = props.annotations;
-    if (!annotations || annotations.length === 0) return undefined;
+    const githubComments = props.githubComments;
+    const pendingComments = props.pendingComments;
+
+    const hasAnnotations = annotations && annotations.length > 0;
+    const hasGhComments = githubComments && githubComments.length > 0;
+    const hasPending = pendingComments && pendingComments.length > 0;
+
+    if (!hasAnnotations && !hasGhComments && !hasPending) return undefined;
 
     const newFile: Record<string, { data: InlineAnnotation[] } | undefined> = {};
-    for (const annotation of annotations) {
-      const key = String(annotation.line);
+
+    const addToLine = (line: number, annotation: InlineAnnotation) => {
+      const key = String(line);
       if (newFile[key]) {
         newFile[key]!.data.push(annotation);
       } else {
         newFile[key] = { data: [annotation] };
+      }
+    };
+
+    // Add GitHub review comments (shown as published)
+    if (hasGhComments) {
+      for (const c of githubComments!) {
+        if (c.line !== null) {
+          addToLine(c.line, {
+            line: c.line,
+            comment: c.body,
+            source: 'github',
+            user: c.user,
+            id: c.id,
+          });
+        }
+      }
+    }
+
+    // Add pending comments
+    if (hasPending) {
+      for (const c of pendingComments!) {
+        addToLine(c.line, {
+          line: c.line,
+          comment: c.body,
+          source: 'github', // Render similarly but with pending badge
+          user: 'You (pending)',
+          id: undefined,
+        });
+      }
+    }
+
+    // Add AI annotations
+    if (hasAnnotations) {
+      for (const annotation of annotations!) {
+        addToLine(annotation.line, annotation);
       }
     }
 
@@ -138,6 +189,12 @@ export function DiffViewer(props: DiffViewerProps) {
     info: { border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.15)', color: '#93c5fd' },
     warning: { border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.15)', color: '#fbbf24' },
     error: { border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.15)', color: '#fca5a5' },
+  };
+
+  // GitHub comment styling
+  const githubCommentStyle = {
+    published: { border: '1px solid rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.1)', color: '#c4b5fd' },
+    pending: { border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)', color: '#fbbf24' },
   };
 
   const severityIcons: Record<string, string> = {
@@ -157,6 +214,41 @@ export function DiffViewer(props: DiffViewerProps) {
       <div class="py-1 px-2">
         <For each={renderProps.data}>
           {(annotation) => {
+            // GitHub-sourced comment (published or pending)
+            if (annotation.source === 'github') {
+              const isPending = annotation.user === 'You (pending)';
+              const styles = isPending ? githubCommentStyle.pending : githubCommentStyle.published;
+              return (
+                <div
+                  class="px-3 py-1.5 my-0.5 rounded text-xs"
+                  style={{ border: styles.border, background: styles.background, color: styles.color }}
+                >
+                  <div class="flex items-start gap-2">
+                    {/* Chat bubble icon */}
+                    <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke={styles.color} viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-0.5">
+                        <span style={{ color: 'rgb(200,200,200)', 'font-weight': '500' }}>@{annotation.user}</span>
+                        <span
+                          class="text-[10px] px-1.5 py-0 rounded-full"
+                          style={{
+                            background: isPending ? 'rgba(245,158,11,0.2)' : 'rgba(139,92,246,0.2)',
+                            color: isPending ? '#fbbf24' : '#c4b5fd',
+                          }}
+                        >
+                          {isPending ? 'Pending' : 'Published'}
+                        </span>
+                      </div>
+                      <span class="leading-relaxed" style={{ color: 'rgb(230,230,230)' }}>{annotation.comment}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // AI annotation (existing behavior)
             const severity = annotation.severity || 'info';
             const styles = severityInlineStyles[severity];
             return (
@@ -174,6 +266,118 @@ export function DiffViewer(props: DiffViewerProps) {
             );
           }}
         </For>
+      </div>
+    );
+  };
+
+  // Widget line renderer for inline comment box (when user clicks "+" on a line)
+  const renderWidgetLine = (widgetProps: {
+    lineNumber: number;
+    side: SplitSide;
+    diffFile: DiffFile;
+    onClose: () => void;
+  }) => {
+    // Pre-populate if editing an existing pending comment
+    const pendingOnLine = props.pendingComments?.filter(c => c.line === widgetProps.lineNumber) || [];
+    const existingComment = pendingOnLine.length > 0 ? pendingOnLine[0] : null;
+
+    // Track local text state for this widget
+    const [widgetText, setWidgetText] = createSignal(existingComment?.body || '');
+
+    const handleSave = () => {
+      const text = widgetText().trim();
+      if (!text) return;
+
+      if (existingComment && editingCommentId() === existingComment.id) {
+        props.onUpdateComment?.(existingComment.id, text);
+        setEditingCommentId(null);
+      } else {
+        props.onAddComment?.(widgetProps.lineNumber, text);
+      }
+      setWidgetText('');
+      widgetProps.onClose();
+    };
+
+    const handleDelete = () => {
+      if (existingComment) {
+        props.onRemoveComment?.(existingComment.id);
+      }
+      widgetProps.onClose();
+    };
+
+    return (
+      <div class="px-2 py-2" style={{ background: 'rgba(30,30,40,0.95)' }}>
+        <div
+          class="rounded-md overflow-hidden"
+          style={{ border: '1px solid rgba(139,92,246,0.4)', background: 'rgba(20,20,30,0.95)' }}
+        >
+          <div class="flex items-center justify-between px-3 py-1.5" style={{ 'border-bottom': '1px solid rgba(139,92,246,0.2)' }}>
+            <span class="text-xs" style={{ color: '#c4b5fd', 'font-weight': '500' }}>
+              {existingComment ? 'Edit Comment' : 'Add Comment'} — Line {widgetProps.lineNumber}
+            </span>
+            <span class="text-[10px] px-1.5 py-0 rounded-full" style={{ background: 'rgba(245,158,11,0.2)', color: '#fbbf24' }}>
+              Pending
+            </span>
+          </div>
+          <textarea
+            class="w-full px-3 py-2 text-xs resize-none focus:outline-none"
+            style={{
+              background: 'transparent',
+              color: 'rgb(230,230,230)',
+              'min-height': '60px',
+              'font-family': 'inherit',
+            }}
+            placeholder="Write a review comment... (Markdown supported)"
+            value={widgetText()}
+            onInput={(e) => setWidgetText(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSave();
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                widgetProps.onClose();
+              }
+            }}
+            ref={(el) => setTimeout(() => el.focus(), 0)}
+          />
+          <div class="flex items-center justify-between px-3 py-1.5" style={{ 'border-top': '1px solid rgba(139,92,246,0.2)' }}>
+            <span class="text-[10px]" style={{ color: 'rgba(200,200,200,0.5)' }}>
+              {'\u2318'}+Enter to save · Esc to cancel
+            </span>
+            <div class="flex items-center gap-2">
+              <Show when={existingComment}>
+                <button
+                  onClick={handleDelete}
+                  class="px-2 py-0.5 text-xs rounded transition-colors"
+                  style={{ color: '#fca5a5', background: 'rgba(239,68,68,0.15)' }}
+                >
+                  Delete
+                </button>
+              </Show>
+              <button
+                onClick={() => widgetProps.onClose()}
+                class="px-2 py-0.5 text-xs rounded transition-colors"
+                style={{ color: 'rgba(200,200,200,0.7)', background: 'rgba(200,200,200,0.1)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!widgetText().trim()}
+                class="px-2 py-0.5 text-xs rounded transition-colors"
+                style={{
+                  color: widgetText().trim() ? '#c4b5fd' : 'rgba(200,200,200,0.3)',
+                  background: widgetText().trim() ? 'rgba(139,92,246,0.2)' : 'rgba(200,200,200,0.05)',
+                  cursor: widgetText().trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -242,8 +446,10 @@ export function DiffViewer(props: DiffViewerProps) {
               diffViewHighlight={true}
               diffViewTheme="dark"
               diffViewFontSize={14}
+              diffViewAddWidget={props.enableAddComment}
               extendData={extendData()}
               renderExtendLine={extendData() ? renderExtendLine : undefined}
+              renderWidgetLine={props.enableAddComment ? renderWidgetLine : undefined}
             />
           )}
         </Show>

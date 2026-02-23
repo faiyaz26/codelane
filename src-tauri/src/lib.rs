@@ -104,6 +104,9 @@ pub fn run() {
             github::github_check_status,
             github::github_fetch_pr,
             github::github_submit_review,
+            github::github_fetch_pr_review_comments,
+            github::github_fetch_pr_conversation,
+            github::github_submit_review_with_comments,
             // AI code review commands
             ai::ai_generate_review,
             ai::ai_test_tool,

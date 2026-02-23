@@ -15,6 +15,7 @@ import { ReviewSummaryPanel } from './ReviewSummaryPanel';
 import { ReviewChangesPanel } from './ReviewChangesPanel';
 import { ReviewScopeSelector } from './ReviewScopeSelector';
 import { PRReviewActions } from './PRReviewActions';
+import { PRConversationPanel } from './PRConversationPanel';
 import { ResizeHandle } from '../layout/ResizeHandle';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { useGitService } from '../../hooks/useGitService';
@@ -68,7 +69,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
   // Build scope config based on lane type and selected scope
   const getScopeConfig = (): ReviewScopeConfig | undefined => {
     if (isPrReview() && prMetadata()) {
-      return { scope: 'branch_diff', baseBranch: prMetadata()!.baseBranch };
+      return { scope: 'branch_diff', baseBranch: prMetadata()!.baseBranch, prMetadata: prMetadata()! };
     }
     if (reviewScope() === 'branch_diff') {
       return { scope: 'branch_diff', baseBranch: baseBranch() };
@@ -564,9 +565,23 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
                 onRegenerate={handleRegenerate}
               />
             </div>
+            {/* PR Conversation Comments (PR lanes only, before SUBMIT REVIEW) */}
+            <Show when={isPrReview() && (reviewState().prConversationComments.length > 0 || reviewState().prCommentsLoading)}>
+              <PRConversationPanel
+                comments={reviewState().prConversationComments}
+                loading={reviewState().prCommentsLoading}
+              />
+            </Show>
             {/* PR Review Actions (PR lanes only) */}
             <Show when={isPrReview() && prMetadata()}>
-              <PRReviewActions prUrl={prMetadata()!.prUrl} />
+              <PRReviewActions
+                prUrl={prMetadata()!.prUrl}
+                repoName={prMetadata()!.repoName}
+                prNumber={prMetadata()!.number}
+                headSha={prMetadata()!.headSha}
+                pendingComments={reviewState().pendingComments}
+                onCommentsSubmitted={() => codeReviewStore.clearPendingComments(props.laneId)}
+              />
             </Show>
           </div>
 
@@ -585,6 +600,12 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
               visibleFilePath={reviewState().visibleFilePath}
               scrollToPath={reviewState().scrollToPath}
               onVisibleFileChange={handleVisibleFileChange}
+              enableAddComment={isPrReview()}
+              prReviewComments={reviewState().prReviewComments}
+              pendingComments={reviewState().pendingComments}
+              onAddComment={(path, line, body) => codeReviewStore.addPendingComment(props.laneId, path, line, body)}
+              onUpdateComment={(commentId, body) => codeReviewStore.updatePendingComment(props.laneId, commentId, body)}
+              onRemoveComment={(commentId) => codeReviewStore.removePendingComment(props.laneId, commentId)}
             />
           </div>
           </div>

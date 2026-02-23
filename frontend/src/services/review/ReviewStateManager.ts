@@ -8,7 +8,7 @@
 
 import { createSignal, createRoot, type Accessor } from 'solid-js';
 import type { FileChangeStats } from '../../types/git';
-import type { InlineAnnotation } from '../../types/review';
+import type { InlineAnnotation, PrReviewComment, PrConversationComment, PendingReviewComment } from '../../types/review';
 
 export type ReviewPhase =
   | 'idle'
@@ -40,6 +40,11 @@ export interface CodeReviewState {
   progress: ReviewProgress;
   scrollToPath: string | null; // Path to scroll to (set by sidebar click, consumed by scroll view)
   changesetChecksum: string | null; // Checksum of file paths to detect stale reviews
+  // GitHub PR comment data
+  prReviewComments: PrReviewComment[];
+  prConversationComments: PrConversationComment[];
+  pendingComments: PendingReviewComment[];
+  prCommentsLoading: boolean;
 }
 
 function createDefaultState(): CodeReviewState {
@@ -55,6 +60,10 @@ function createDefaultState(): CodeReviewState {
     generatedAt: null,
     visibleFilePath: null,
     changesetChecksum: null,
+    prReviewComments: [],
+    prConversationComments: [],
+    pendingComments: [],
+    prCommentsLoading: false,
     progress: {
       phase: 'idle',
       totalFiles: 0,

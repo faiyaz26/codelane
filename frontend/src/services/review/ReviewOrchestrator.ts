@@ -22,7 +22,9 @@ import { parseBatchedReviewWithAnnotations } from './annotationParser';
 import { processDiffsWithTruncation, getTruncationSummary } from '../../utils/diffTruncation';
 import { filterReviewableFiles, getExclusionSummary } from '../../utils/fileFilters';
 import { computeChangesetChecksum } from '../../utils/changesetChecksum';
+import { fetchPrReviewComments, fetchPrConversation } from '../../lib/github-api';
 import type { ReviewPhase } from './ReviewStateManager';
+import type { PrMetadata } from '../../types/lane';
 
 /**
  * Review scope configuration
@@ -33,6 +35,8 @@ export interface ReviewScopeConfig {
   scope: 'working_changes' | 'branch_diff';
   /** Base branch for branch_diff scope (e.g., 'main') */
   baseBranch?: string;
+  /** PR metadata for fetching/submitting comments (PR lanes only) */
+  prMetadata?: PrMetadata;
 }
 
 /**
@@ -159,6 +163,28 @@ export class ReviewOrchestrator {
   private abortControllers = new Map<string, AbortController>();
 
   /**
+   * Fetch PR comments from GitHub (non-blocking, runs in parallel with review generation)
+   */
+  private async fetchPrComments(laneId: string, prMetadata: PrMetadata): Promise<void> {
+    reviewStateManager.setState(laneId, prev => ({ ...prev, prCommentsLoading: true }));
+    try {
+      const [reviewComments, conversationComments] = await Promise.all([
+        fetchPrReviewComments(prMetadata.repoName, prMetadata.number),
+        fetchPrConversation(prMetadata.repoName, prMetadata.number),
+      ]);
+      reviewStateManager.setState(laneId, prev => ({
+        ...prev,
+        prReviewComments: reviewComments,
+        prConversationComments: conversationComments,
+        prCommentsLoading: false,
+      }));
+    } catch (err) {
+      console.error('[Review] Failed to fetch PR comments:', err);
+      reviewStateManager.setState(laneId, prev => ({ ...prev, prCommentsLoading: false }));
+    }
+  }
+
+  /**
    * Cancel an ongoing review generation
    */
   cancelReview(laneId: string): void {
@@ -222,6 +248,11 @@ export class ReviewOrchestrator {
         },
       }));
     }, timeoutMs);
+
+    // Fetch PR comments in parallel (non-blocking) if this is a PR review
+    if (scopeConfig?.prMetadata) {
+      this.fetchPrComments(laneId, scopeConfig.prMetadata);
+    }
 
     try {
       // 1. Get changed files with stats (scope-aware)

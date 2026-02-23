@@ -17,6 +17,7 @@ import { reviewScrollCoordinator } from './review/ReviewScrollCoordinator';
 import type { Accessor } from 'solid-js';
 import type { CodeReviewState } from './review/ReviewStateManager';
 import type { ReviewScopeConfig } from './review/ReviewOrchestrator';
+import type { PendingReviewComment } from '../types/review';
 
 export const codeReviewStore = {
   /**
@@ -67,6 +68,57 @@ export const codeReviewStore = {
    */
   getReviewContext(laneId: string): string {
     return reviewScrollCoordinator.getReviewContext(laneId);
+  },
+
+  /**
+   * Add a pending review comment (not yet submitted to GitHub)
+   */
+  addPendingComment(laneId: string, path: string, line: number, body: string): void {
+    const comment: PendingReviewComment = {
+      id: crypto.randomUUID(),
+      path,
+      line,
+      side: 'RIGHT',
+      body,
+      status: 'pending',
+      createdAt: Date.now(),
+    };
+    reviewStateManager.setState(laneId, prev => ({
+      ...prev,
+      pendingComments: [...prev.pendingComments, comment],
+    }));
+  },
+
+  /**
+   * Update body of a pending review comment
+   */
+  updatePendingComment(laneId: string, commentId: string, body: string): void {
+    reviewStateManager.setState(laneId, prev => ({
+      ...prev,
+      pendingComments: prev.pendingComments.map(c =>
+        c.id === commentId ? { ...c, body } : c
+      ),
+    }));
+  },
+
+  /**
+   * Remove a pending review comment
+   */
+  removePendingComment(laneId: string, commentId: string): void {
+    reviewStateManager.setState(laneId, prev => ({
+      ...prev,
+      pendingComments: prev.pendingComments.filter(c => c.id !== commentId),
+    }));
+  },
+
+  /**
+   * Clear all pending comments (after successful submission)
+   */
+  clearPendingComments(laneId: string): void {
+    reviewStateManager.setState(laneId, prev => ({
+      ...prev,
+      pendingComments: [],
+    }));
   },
 };
 

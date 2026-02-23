@@ -18,7 +18,7 @@ import { MarkdownRenderer } from '../../lib/markdown/MarkdownRenderer';
 import { debounce } from '../../utils/debounce';
 import { useLazyDiff } from '../../hooks/useLazyDiff';
 import type { FileChangeStats } from '../../types/git';
-import type { InlineAnnotation } from '../../types/review';
+import type { InlineAnnotation, PrReviewComment, PendingReviewComment } from '../../types/review';
 
 interface ReviewFileScrollViewProps {
   laneId: string;
@@ -30,6 +30,13 @@ interface ReviewFileScrollViewProps {
   visibleFilePath: string | null;
   onVisibleFileChange: (path: string) => void;
   scrollToPath: string | null; // Reactive prop from store - triggers scroll when set
+  // PR review comment props
+  enableAddComment?: boolean;
+  prReviewComments?: PrReviewComment[];
+  pendingComments?: PendingReviewComment[];
+  onAddComment?: (path: string, line: number, body: string) => void;
+  onUpdateComment?: (commentId: string, body: string) => void;
+  onRemoveComment?: (commentId: string) => void;
 }
 
 export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
@@ -382,6 +389,12 @@ export function ReviewFileScrollView(props: ReviewFileScrollViewProps) {
                         embedded={true}
                         viewMode={diffViewMode()}
                         annotations={props.perFileAnnotations.get(file.path)}
+                        enableAddComment={props.enableAddComment}
+                        pendingComments={props.pendingComments?.filter(c => c.path === file.path)}
+                        githubComments={props.prReviewComments?.filter(c => c.path === file.path)}
+                        onAddComment={(line, body) => props.onAddComment?.(file.path, line, body)}
+                        onUpdateComment={props.onUpdateComment}
+                        onRemoveComment={props.onRemoveComment}
                       />
                     </div>
                   </Show>

@@ -5,10 +5,9 @@
  * Each file's AI feedback is sticky at the bottom while that file is visible.
  */
 
-import { createMemo } from 'solid-js';
 import { ReviewFileScrollView } from './ReviewFileScrollView';
 import type { FileChangeStats } from '../../types/git';
-import type { InlineAnnotation } from '../../types/review';
+import type { InlineAnnotation, PrReviewComment, PendingReviewComment } from '../../types/review';
 
 interface ReviewChangesPanelProps {
   laneId: string;
@@ -20,6 +19,13 @@ interface ReviewChangesPanelProps {
   visibleFilePath: string | null;
   scrollToPath: string | null;
   onVisibleFileChange: (path: string) => void;
+  // PR review comment props
+  enableAddComment?: boolean;
+  prReviewComments?: PrReviewComment[];
+  pendingComments?: PendingReviewComment[];
+  onAddComment?: (path: string, line: number, body: string) => void;
+  onUpdateComment?: (commentId: string, body: string) => void;
+  onRemoveComment?: (commentId: string) => void;
 }
 
 export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
@@ -39,6 +45,12 @@ export function ReviewChangesPanel(props: ReviewChangesPanelProps) {
         visibleFilePath={props.visibleFilePath}
         onVisibleFileChange={props.onVisibleFileChange}
         scrollToPath={props.scrollToPath}
+        enableAddComment={props.enableAddComment}
+        prReviewComments={props.prReviewComments}
+        pendingComments={props.pendingComments}
+        onAddComment={props.onAddComment}
+        onUpdateComment={props.onUpdateComment}
+        onRemoveComment={props.onRemoveComment}
       />
     </section>
   );

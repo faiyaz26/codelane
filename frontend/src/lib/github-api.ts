@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { PrMetadata } from '../types/lane';
+import type { PrReviewComment, PrConversationComment } from '../types/review';
 
 /**
  * gh CLI installation and authentication status
@@ -68,4 +69,38 @@ export async function submitPrReview(
   body?: string,
 ): Promise<string> {
   return invoke<string>('github_submit_review', { prUrl, reviewType, body });
+}
+
+/**
+ * Fetch inline review comments on a PR diff
+ */
+export async function fetchPrReviewComments(
+  repoName: string,
+  prNumber: number,
+): Promise<PrReviewComment[]> {
+  return invoke<PrReviewComment[]>('github_fetch_pr_review_comments', { repoName, prNumber });
+}
+
+/**
+ * Fetch top-level PR conversation comments
+ */
+export async function fetchPrConversation(
+  repoName: string,
+  prNumber: number,
+): Promise<PrConversationComment[]> {
+  return invoke<PrConversationComment[]>('github_fetch_pr_conversation', { repoName, prNumber });
+}
+
+/**
+ * Submit a review with inline comments on a PR
+ */
+export async function submitReviewWithComments(params: {
+  repoName: string;
+  prNumber: number;
+  commitId: string;
+  event: string;
+  body?: string;
+  comments: { path: string; line: number; side: string; body: string }[];
+}): Promise<string> {
+  return invoke<string>('github_submit_review_with_comments', params);
 }

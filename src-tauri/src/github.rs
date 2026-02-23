@@ -3,9 +3,10 @@
 //! Wraps the `gh` CLI for PR review operations.
 //! Requires `gh` to be installed and authenticated.
 
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::settings::check_command_exists;
 
@@ -43,6 +44,43 @@ pub struct PullRequestInfo {
     pub files_changed: u32,
     pub additions: u32,
     pub deletions: u32,
+}
+
+/// An inline review comment on a PR diff
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewComment {
+    pub id: u64,
+    pub path: String,
+    pub line: Option<u32>,
+    pub original_line: Option<u32>,
+    pub side: Option<String>,
+    pub body: String,
+    pub user: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub in_reply_to_id: Option<u64>,
+}
+
+/// A top-level PR conversation comment (issue comment)
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrConversationComment {
+    pub id: u64,
+    pub body: String,
+    pub user: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub author_association: String,
+}
+
+/// A single inline comment to submit as part of a review
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReviewInlineComment {
+    pub path: String,
+    pub line: u32,
+    pub side: String,
+    pub body: String,
 }
 
 // ============================================================================
@@ -181,6 +219,122 @@ pub async fn github_submit_review(
     run_gh(&args)?;
 
     Ok(format!("Review submitted: {}", review_type))
+}
+
+/// Fetch inline review comments on a PR
+#[tauri::command]
+pub async fn github_fetch_pr_review_comments(
+    repo_name: String,
+    pr_number: u32,
+) -> Result<Vec<PrReviewComment>, String> {
+    let endpoint = format!("repos/{}/pulls/{}/comments", repo_name, pr_number);
+    let output = run_gh(&["api", &endpoint, "--paginate"])?;
+
+    // gh api --paginate may return empty for no comments
+    if output.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let json: Vec<serde_json::Value> = serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse review comments: {}", e))?;
+
+    let comments = json
+        .into_iter()
+        .map(|c| PrReviewComment {
+            id: c["id"].as_u64().unwrap_or(0),
+            path: c["path"].as_str().unwrap_or("").to_string(),
+            line: c["line"].as_u64().map(|n| n as u32),
+            original_line: c["original_line"].as_u64().map(|n| n as u32),
+            side: c["side"].as_str().map(|s| s.to_string()),
+            body: c["body"].as_str().unwrap_or("").to_string(),
+            user: c["user"]["login"].as_str().unwrap_or("").to_string(),
+            created_at: c["created_at"].as_str().unwrap_or("").to_string(),
+            updated_at: c["updated_at"].as_str().unwrap_or("").to_string(),
+            in_reply_to_id: c["in_reply_to_id"].as_u64(),
+        })
+        .collect();
+
+    Ok(comments)
+}
+
+/// Fetch top-level PR conversation comments (issue comments)
+#[tauri::command]
+pub async fn github_fetch_pr_conversation(
+    repo_name: String,
+    pr_number: u32,
+) -> Result<Vec<PrConversationComment>, String> {
+    let endpoint = format!("repos/{}/issues/{}/comments", repo_name, pr_number);
+    let output = run_gh(&["api", &endpoint, "--paginate"])?;
+
+    if output.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let json: Vec<serde_json::Value> = serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse conversation comments: {}", e))?;
+
+    let comments = json
+        .into_iter()
+        .map(|c| PrConversationComment {
+            id: c["id"].as_u64().unwrap_or(0),
+            body: c["body"].as_str().unwrap_or("").to_string(),
+            user: c["user"]["login"].as_str().unwrap_or("").to_string(),
+            created_at: c["created_at"].as_str().unwrap_or("").to_string(),
+            updated_at: c["updated_at"].as_str().unwrap_or("").to_string(),
+            author_association: c["author_association"].as_str().unwrap_or("").to_string(),
+        })
+        .collect();
+
+    Ok(comments)
+}
+
+/// Submit a review with inline comments on a PR
+#[tauri::command]
+pub async fn github_submit_review_with_comments(
+    repo_name: String,
+    pr_number: u32,
+    commit_id: String,
+    event: String,
+    body: Option<String>,
+    comments: Vec<ReviewInlineComment>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "commit_id": commit_id,
+        "event": event,
+        "body": body.unwrap_or_default(),
+        "comments": comments,
+    });
+
+    let endpoint = format!("repos/{}/pulls/{}/reviews", repo_name, pr_number);
+    let payload_str = payload.to_string();
+
+    // Pipe JSON payload via stdin
+    let mut child = Command::new("gh")
+        .args(["api", &endpoint, "--method", "POST", "--input", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to run gh: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(payload_str.as_bytes())
+            .map_err(|e| format!("Failed to write to gh stdin: {}", e))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for gh: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+
+    Ok(format!(
+        "Review submitted with {} inline comments",
+        comments.len()
+    ))
 }
 
 // ============================================================================
