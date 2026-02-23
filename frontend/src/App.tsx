@@ -7,6 +7,8 @@ import { CreateLaneDialog } from './components/lanes';
 import { SettingsDialog } from './components/SettingsDialog';
 import { AboutDialog } from './components/AboutDialog';
 import { OnboardingWizard, type WizardData } from './components/onboarding';
+import { UpdateToast } from './components/UpdateToast';
+import { updaterService } from './services/UpdaterService';
 import { listLanes, deleteLane } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
@@ -133,9 +135,20 @@ function App() {
       setOnboardingOpen(true);
     });
 
+    const unlistenCheckUpdates = await listen('menu:check-for-updates', () => {
+      updaterService.checkForUpdates();
+    });
+
+    // Check for updates ~10 seconds after startup (non-blocking)
+    const updateCheckTimer = setTimeout(() => {
+      updaterService.checkForUpdates();
+    }, 10_000);
+
     onCleanup(() => {
       unlistenAbout();
       unlistenOnboarding();
+      unlistenCheckUpdates();
+      clearTimeout(updateCheckTimer);
     });
   });
 
@@ -435,6 +448,9 @@ function App() {
         onComplete={handleOnboardingComplete}
         onSkip={handleOnboardingSkip}
       />
+
+      {/* Update Toast — bottom-right, shown when a new version is available */}
+      <UpdateToast />
 
       {/* Notification Toast */}
       <Show when={notification()}>

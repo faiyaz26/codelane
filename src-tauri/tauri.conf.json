@@ -90,9 +90,10 @@
     },
     "fs": {},
     "updater": {
-      "active": false,
       "pubkey": "",
-      "endpoints": []
+      "endpoints": [
+        "https://github.com/faiyaz26/codelane/releases/latest/download/latest.json"
+      ]
     }
   }
 }

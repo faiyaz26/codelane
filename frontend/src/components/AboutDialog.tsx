@@ -1,11 +1,12 @@
-// About Dialog - Shows app information and version
+// About Dialog - Shows app information, version, and update check
 
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import { getVersion } from '@tauri-apps/api/app';
 import codelaneLogoWhite from '../assets/codelane-logo-white.png';
 import codelaneLogoDark from '../assets/codelane-logo-dark.png';
 import { themeManager } from '../services/ThemeManager';
+import { updaterService } from '../services/UpdaterService';
 
 interface AboutDialogProps {
   open: boolean;
@@ -44,7 +45,74 @@ export function AboutDialog(props: AboutDialogProps) {
               <h1 class="text-2xl font-bold text-zed-text-primary mb-2">Codelane</h1>
 
               {/* Version */}
-              <p class="text-sm text-zed-text-secondary mb-6">Version {version()}</p>
+              <p class="text-sm text-zed-text-secondary mb-3">Version {version()}</p>
+
+              {/* Update check */}
+              <div class="mb-6">
+                <Show when={updaterService.status() === 'idle' || updaterService.status() === 'up-to-date' || updaterService.status() === 'error'}>
+                  <button
+                    onClick={() => updaterService.checkForUpdates()}
+                    class="text-xs text-zed-accent-blue hover:text-zed-accent-blue-hover transition-colors"
+                  >
+                    Check for Updates
+                  </button>
+                </Show>
+
+                <Show when={updaterService.status() === 'checking'}>
+                  <span class="text-xs text-zed-text-tertiary flex items-center justify-center gap-1.5">
+                    <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Checking for updates…
+                  </span>
+                </Show>
+
+                <Show when={updaterService.status() === 'up-to-date'}>
+                  <span class="text-xs text-zed-accent-green flex items-center justify-center gap-1">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    You're up to date
+                  </span>
+                </Show>
+
+                <Show when={updaterService.status() === 'available' || updaterService.status() === 'downloading'}>
+                  <div class="space-y-2">
+                    <p class="text-xs text-zed-accent-blue">
+                      Version {updaterService.updateVersion()} is available
+                    </p>
+                    <Show
+                      when={updaterService.status() === 'downloading'}
+                      fallback={
+                        <button
+                          onClick={() => updaterService.downloadAndInstall()}
+                          class="px-3 py-1 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-xs rounded transition-colors"
+                        >
+                          Download & Install
+                        </button>
+                      }
+                    >
+                      <div>
+                        <div class="flex justify-between text-xs text-zed-text-secondary mb-1">
+                          <span>Downloading…</span>
+                          <span>{updaterService.downloadProgress()}%</span>
+                        </div>
+                        <div class="w-full bg-zed-bg-app rounded-full h-1">
+                          <div
+                            class="bg-zed-accent-blue h-1 rounded-full transition-all duration-200"
+                            style={{ width: `${updaterService.downloadProgress()}%` }}
+                          />
+                        </div>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+
+                <Show when={updaterService.status() === 'error'}>
+                  <span class="text-xs text-zed-error">Update check failed — try again</span>
+                </Show>
+              </div>
 
               {/* Description */}
               <p class="text-sm text-zed-text-secondary mb-6 leading-relaxed">

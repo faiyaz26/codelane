@@ -179,11 +179,14 @@ pub fn run() {
                 let first_time_setup_item = MenuItem::with_id(app, "first-time-setup", "First-Time Setup", true, None::<&str>)?;
                 submenu.append(&first_time_setup_item)?;
 
+                submenu.append(&PredefinedMenuItem::separator(app)?)?;
+                let check_updates_item = MenuItem::with_id(app, "check-for-updates", "Check for Updates...", true, None::<&str>)?;
+                submenu.append(&check_updates_item)?;
+
                 // Add About to Help menu on non-macOS platforms
                 #[cfg(not(target_os = "macos"))]
                 {
-                    let separator = PredefinedMenuItem::separator(app)?;
-                    submenu.append(&separator)?;
+                    submenu.append(&PredefinedMenuItem::separator(app)?)?;
                     let about_item = MenuItem::with_id(app, "about", "About Codelane", true, None::<&str>)?;
                     submenu.append(&about_item)?;
                 }
@@ -216,6 +219,9 @@ pub fn run() {
                         }
                         "first-time-setup" => {
                             let _ = window.emit("menu:first-time-setup", ());
+                        }
+                        "check-for-updates" => {
+                            let _ = window.emit("menu:check-for-updates", ());
                         }
                         _ => {}
                     }
