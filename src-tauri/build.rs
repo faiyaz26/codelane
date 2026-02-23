@@ -28,8 +28,7 @@ fn main() {
     #[cfg(target_os = "windows")]
     {
         // Windows-specific build configuration
-        // Enable high DPI support
-        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        // High DPI support is handled natively by Tauri's build process
     }
 
     #[cfg(target_os = "linux")]
