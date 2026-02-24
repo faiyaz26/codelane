@@ -41,29 +41,46 @@ jobs:
           # Initialize the master JSON structure using jq
           jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
-          # macOS (Universal)
-          if ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Linux
-          if ls artifacts/tauri-artifacts-linux/**/*.AppImage.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-linux/**/*.AppImage.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-linux/**/*.AppImage.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Windows
-          if ls artifacts/tauri-artifacts-windows/**/*.zip.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-windows/**/*.zip.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-windows/**/*.zip))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
+          # Find all signature files across all downloaded artifacts
+          find artifacts -name "*.sig" | while read sig_path; do
+            echo "Processing signature: $sig_path"
+            SIG=$(cat "$sig_path")
+            
+            # Get the binary path (the file without .sig extension)
+            BIN_PATH="${sig_path%.sig}"
+            
+            if [ -f "$BIN_PATH" ]; then
+              FILE=$(basename "$BIN_PATH")
+              URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+              
+              # Determine platform key based on filename/path
+              PLATFORM=""
+              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
+                if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
+                  PLATFORM="darwin-aarch64"
+                elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
+                  PLATFORM="darwin-x86_64"
+                else
+                  # Fallback for universal
+                  PLATFORM="darwin-universal"
+                fi
+              elif [[ "$FILE" == *".AppImage"* ]]; then
+                PLATFORM="linux-x86_64"
+              elif [[ "$FILE" == *".zip"* ]]; then
+                PLATFORM="windows-x86_64"
+              fi
+              
+              if [ -n "$PLATFORM" ]; then
+                if [ "$PLATFORM" == "darwin-universal" ]; then
+                  jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                  echo "Added universal macOS signatures to darwin-aarch64 and darwin-x86_64"
+                else
+                  jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                  echo "Added $PLATFORM signature"
+                fi
+              fi
+            fi
+          done
           
           cat latest.json
 
@@ -75,6 +92,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.tar.gz
