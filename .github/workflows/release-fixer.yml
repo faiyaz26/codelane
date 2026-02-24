@@ -31,6 +31,9 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      - name: List artifacts (debug)
+        run: find artifacts -type f | sort
+
       - name: Generate latest.json
         run: |
           VERSION=$(echo "${{ github.event.inputs.tag_name }}" | sed 's/^v//')
@@ -42,6 +45,7 @@ jobs:
           jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
           # Find all signature files across all downloaded artifacts
+          echo "Scanning for signatures..."
           find artifacts -name "*.sig" | while read sig_path; do
             echo "Processing signature: $sig_path"
             SIG=$(cat "$sig_path")
@@ -61,7 +65,6 @@ jobs:
                 elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
                   PLATFORM="darwin-x86_64"
                 else
-                  # Fallback for universal
                   PLATFORM="darwin-universal"
                 fi
               elif [[ "$FILE" == *".AppImage"* ]]; then
@@ -78,7 +81,11 @@ jobs:
                   jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
                   echo "Added $PLATFORM signature"
                 fi
+              else
+                echo "Warning: Could not determine platform for $FILE"
               fi
+            else
+              echo "Warning: Signature $sig_path exists but corresponding binary $BIN_PATH was not found."
             fi
           done
           
