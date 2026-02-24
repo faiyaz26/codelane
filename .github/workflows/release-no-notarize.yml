@@ -56,6 +56,8 @@ jobs:
         shell: bash
         run: |
           find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_${{ matrix.arch }}.app.tar.gz"' _ {} \;
+          # Find latest.json and copy it to a predictable place if it exists
+          find target -name "latest.json" -exec cp {} target/release/latest.json \; || true
 
       - name: Upload artifacts (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
@@ -64,8 +66,10 @@ jobs:
           path: |
             target/*/release/bundle/dmg/*.dmg
             target/*/release/bundle/macos/*.tar.gz
-            target/*/release/*.json
-            target/release/*.json
+            target/*/release/latest.json
+            target/release/latest.json
+            target/*/latest.json
+            ./latest.json
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -114,6 +118,7 @@ jobs:
         shell: bash
         run: |
           find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_linux_x64.AppImage.tar.gz"' _ {} \; || true
+          find target -name "latest.json" -exec cp {} target/release/latest.json \; || true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -123,8 +128,9 @@ jobs:
             target/release/bundle/appimage/*.AppImage
             target/release/bundle/appimage/*.tar.gz
             target/release/bundle/deb/*.deb
-            target/release/*.json
-            target/*/release/*.json
+            target/release/latest.json
+            target/*/release/latest.json
+            ./latest.json
 
   build-windows:
     runs-on: windows-latest
@@ -164,6 +170,7 @@ jobs:
         shell: bash
         run: |
           find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_windows_x64.zip"' _ {} \; || true
+          find target -name "latest.json" -exec cp {} target/x86_64-pc-windows-msvc/release/latest.json \; || true
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -173,8 +180,9 @@ jobs:
             target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
             target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             target/x86_64-pc-windows-msvc/release/bundle/nsis/*.zip
-            target/x86_64-pc-windows-msvc/release/*.json
-            target/release/*.json
+            target/x86_64-pc-windows-msvc/release/latest.json
+            target/release/latest.json
+            ./latest.json
 
   create-release:
     needs: [build-macos, build-linux, build-windows]
