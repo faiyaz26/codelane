@@ -250,19 +250,47 @@ jobs:
 
       - name: Generate latest.json
         run: |
-          # Install the tool
-          cargo install tauri-latest-json
-          
           VERSION="${{ steps.version.outputs.value }}"
           TAG="${{ steps.tag.outputs.value }}"
           REPO="${{ github.repository }}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Initialize the master JSON structure using jq
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "Release $TAG" \
+            --arg pub_date "$PUB_DATE" \
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
+
+          # Function to add platform to JSON
+          add_platform() {
+            local key=$1
+            local sig_glob=$2
+            local bin_glob=$3
+            
+            if ls $sig_glob >/dev/null 2>&1; then
+              local sig=$(cat $(ls $sig_glob | head -n 1))
+              local file=$(basename $(ls $bin_glob | head -n 1))
+              local url="https://github.com/$REPO/releases/download/$TAG/$file"
+              jq --arg sig "$sig" --arg url "$url" --arg key "$key" \
+                '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+              echo "Added $key to latest.json"
+            else
+              echo "Warning: No files found for $key (sig: $sig_glob)"
+            fi
+          }
+
+          # macOS Intel
+          add_platform "darwin-x86_64" "artifacts/macos-intel/**/*.app.tar.gz.sig" "artifacts/macos-intel/**/*.app.tar.gz"
           
-          # Generate consolidated latest.json
-          tauri-latest-json generate \
-            --bundle-dir artifacts \
-            --download-url-prefix "https://github.com/$REPO/releases/download/$TAG" \
-            --version "$VERSION" \
-            --output-path latest.json
+          # macOS Silicon
+          add_platform "darwin-aarch64" "artifacts/macos-silicon/**/*.app.tar.gz.sig" "artifacts/macos-silicon/**/*.app.tar.gz"
+          
+          # Linux
+          add_platform "linux-x86_64" "artifacts/linux/**/*.AppImage.sig" "artifacts/linux/**/*.AppImage.tar.gz"
+          
+          # Windows
+          add_platform "windows-x86_64" "artifacts/windows/**/*.zip.sig" "artifacts/windows/**/*.zip"
           
           cat latest.json
 
