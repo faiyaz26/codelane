@@ -8,9 +8,9 @@ on:
         required: true
         type: string
       tag_name:
-        description: "The tag name (e.g. v0.1.0)"
+        description: "The tag name (e.g. v0.2.0)"
         required: true
-        default: "v0.1.0"
+        default: "v0.2.0"
         type: string
 
 jobs:
@@ -31,12 +31,30 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.event.inputs.tag_name }}" | sed 's/^v//')
+          echo "value=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create tag if missing
+        run: |
+          TAG="${{ github.event.inputs.tag_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+          else
+            git tag "$TAG"
+            git push origin "$TAG" || echo "Failed to push tag, but continuing..."
+          fi
+
       - name: List artifacts (debug)
         run: find artifacts -type f | sort
 
       - name: Generate latest.json
         run: |
-          VERSION=$(echo "${{ github.event.inputs.tag_name }}" | sed 's/^v//')
+          VERSION="${{ steps.version.outputs.value }}"
           TAG="${{ github.event.inputs.tag_name }}"
           REPO="${{ github.repository }}"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -45,7 +63,6 @@ jobs:
           jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
           # Find all signature files across all downloaded artifacts
-          echo "Scanning for signatures..."
           find artifacts -name "*.sig" | while read sig_path; do
             echo "Processing signature: $sig_path"
             SIG=$(cat "$sig_path")
@@ -81,11 +98,7 @@ jobs:
                   jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
                   echo "Added $PLATFORM signature"
                 fi
-              else
-                echo "Warning: Could not determine platform for $FILE"
               fi
-            else
-              echo "Warning: Signature $sig_path exists but corresponding binary $BIN_PATH was not found."
             fi
           done
           
