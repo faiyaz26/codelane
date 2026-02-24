@@ -75,7 +75,8 @@ jobs:
       - name: Rename updater artifacts
         shell: bash
         run: |
-          # Rename tarballs and their signatures
+          # Rename tarballs and their signatures to avoid collisions
+          # We search in target/release/bundle and target/*/release/bundle
           find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_${{ matrix.name }}.app.tar.gz"' _ {} \; || true
           find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_${{ matrix.name }}.app.tar.gz.sig"' _ {} \; || true
           find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_${{ matrix.name }}.AppImage.tar.gz"' _ {} \; || true
@@ -88,8 +89,14 @@ jobs:
         with:
           name: tauri-artifacts-${{ matrix.name }}
           path: |
-            target/*/release/bundle/
-            target/release/bundle/
+            target/*/release/bundle/dmg/*.dmg
+            target/*/release/bundle/macos/*.tar.gz*
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.tar.gz*
+            target/release/bundle/deb/*.deb
+            target/*/release/bundle/msi/*.msi
+            target/*/release/bundle/nsis/*.exe
+            target/*/release/bundle/nsis/*.zip*
 
   create-release:
     needs: [build-tauri]
@@ -130,8 +137,10 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
           else
+            # Try to push, but don't fail the whole job if it fails due to permissions
+            # (User can always push manually)
             git tag "$TAG"
-            git push origin "$TAG"
+            git push origin "$TAG" || echo "Failed to push tag, but continuing..."
           fi
 
       - name: List artifacts (debug)
@@ -145,46 +154,57 @@ jobs:
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # Initialize the master JSON structure using jq
-          jq -n \
-            --arg version "$VERSION" \
-            --arg notes "Release $TAG" \
-            --arg pub_date "$PUB_DATE" \
-            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
+          jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
-          # macOS (Universal)
-          if ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Linux
-          if ls artifacts/tauri-artifacts-linux/**/*.AppImage.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-linux/**/*.AppImage.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-linux/**/*.AppImage.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Windows
-          if ls artifacts/tauri-artifacts-windows/**/*.zip.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/tauri-artifacts-windows/**/*.zip.sig)
-            FILE=$(basename $(ls artifacts/tauri-artifacts-windows/**/*.zip))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
+          # Find all signature files across all downloaded artifacts
+          find artifacts -name "*.sig" | while read sig_path; do
+            echo "Processing signature: $sig_path"
+            SIG=$(cat "$sig_path")
+            
+            # Get the binary path (the file without .sig extension)
+            BIN_PATH="${sig_path%.sig}"
+            
+            if [ -f "$BIN_PATH" ]; then
+              FILE=$(basename "$BIN_PATH")
+              URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+              
+              # Determine platform key based on filename/path
+              PLATFORM=""
+              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
+                if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
+                  PLATFORM="darwin-aarch64"
+                elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
+                  PLATFORM="darwin-x86_64"
+                else
+                  PLATFORM="darwin-universal"
+                fi
+              elif [[ "$FILE" == *".AppImage"* ]]; then
+                PLATFORM="linux-x86_64"
+              elif [[ "$FILE" == *".zip"* ]]; then
+                PLATFORM="windows-x86_64"
+              fi
+              
+              if [ -n "$PLATFORM" ]; then
+                if [ "$PLATFORM" == "darwin-universal" ]; then
+                  jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                else
+                  jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                fi
+              fi
+            fi
+          done
           
           cat latest.json
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.value }}
           name: Codelane ${{ steps.tag.outputs.value }}
           draft: false
           prerelease: false
           generate_release_notes: true
+          make_latest: true
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.tar.gz
