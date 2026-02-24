@@ -50,6 +50,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
+          includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
@@ -107,6 +108,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
@@ -156,6 +159,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           args: --target x86_64-pc-windows-msvc
+          includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
@@ -226,53 +230,44 @@ jobs:
           REPO="${{ github.repository }}"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          echo "{" > latest.json
-          echo "  \"version\": \"$VERSION\"," >> latest.json
-          echo "  \"notes\": \"Release $TAG\"," >> latest.json
-          echo "  \"pub_date\": \"$PUB_DATE\"," >> latest.json
-          echo "  \"platforms\": {" >> latest.json
-
-          PLATFORMS_ADDED=0
+          # Initialize the master JSON structure using jq
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "Release $TAG" \
+            --arg pub_date "$PUB_DATE" \
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
           # macOS Intel
           if ls artifacts/macos-intel/**/*.app.tar.gz.sig >/dev/null 2>&1; then
             SIG=$(cat artifacts/macos-intel/**/*.app.tar.gz.sig)
             FILE=$(basename $(ls artifacts/macos-intel/**/*.app.tar.gz))
-            echo "    \"darwin-x86_64\": { \"signature\": \"$SIG\", \"url\": \"https://github.com/$REPO/releases/download/$TAG/$FILE\" }," >> latest.json
-            PLATFORMS_ADDED=1
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
           fi
 
           # macOS Silicon
           if ls artifacts/macos-silicon/**/*.app.tar.gz.sig >/dev/null 2>&1; then
             SIG=$(cat artifacts/macos-silicon/**/*.app.tar.gz.sig)
             FILE=$(basename $(ls artifacts/macos-silicon/**/*.app.tar.gz))
-            echo "    \"darwin-aarch64\": { \"signature\": \"$SIG\", \"url\": \"https://github.com/$REPO/releases/download/$TAG/$FILE\" }," >> latest.json
-            PLATFORMS_ADDED=1
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
           fi
 
           # Linux
           if ls artifacts/linux/**/*.AppImage.sig >/dev/null 2>&1; then
             SIG=$(cat artifacts/linux/**/*.AppImage.sig)
             FILE=$(basename $(ls artifacts/linux/**/*.AppImage.tar.gz))
-            echo "    \"linux-x86_64\": { \"signature\": \"$SIG\", \"url\": \"https://github.com/$REPO/releases/download/$TAG/$FILE\" }," >> latest.json
-            PLATFORMS_ADDED=1
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
           fi
 
           # Windows
           if ls artifacts/windows/**/*.zip.sig >/dev/null 2>&1; then
             SIG=$(cat artifacts/windows/**/*.zip.sig)
             FILE=$(basename $(ls artifacts/windows/**/*.zip))
-            echo "    \"windows-x86_64\": { \"signature\": \"$SIG\", \"url\": \"https://github.com/$REPO/releases/download/$TAG/$FILE\" }," >> latest.json
-            PLATFORMS_ADDED=1
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
           fi
-
-          # Remove trailing comma if any platforms were added
-          if [ $PLATFORMS_ADDED -eq 1 ]; then
-            sed -i '$ s/,$//' latest.json
-          fi
-
-          echo "  }" >> latest.json
-          echo "}" >> latest.json
           
           cat latest.json
 
