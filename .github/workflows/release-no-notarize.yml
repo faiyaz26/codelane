@@ -9,16 +9,21 @@ on:
         type: string
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build-tauri:
+    runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - args: "--target aarch64-apple-darwin"
-            arch: silicon
-          - args: "--target x86_64-apple-darwin"
-            arch: intel
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            name: macos
+          - platform: ubuntu-22.04
+            args: ""
+            name: linux
+          - platform: windows-latest
+            args: "--target x86_64-pc-windows-msvc"
+            name: windows
     steps:
       - uses: actions/checkout@v4
 
@@ -28,63 +33,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-          # Cache buster to clear corrupted manifest state
-          key: v1
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build (${{ matrix.arch }})
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          args: ${{ matrix.args }}
-          includeUpdaterJson: true
-
-      - name: Rename updater artifacts
-        shell: bash
-        run: |
-          # Rename tarballs and their signatures
-          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_${{ matrix.arch }}.app.tar.gz"' _ {} \;
-          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_${{ matrix.arch }}.app.tar.gz.sig"' _ {} \;
-
-      - name: Upload artifacts (${{ matrix.arch }})
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}
-          path: |
-            target/*/release/bundle/dmg/*.dmg
-            target/*/release/bundle/macos/*.tar.gz
-            target/*/release/bundle/macos/*.sig
-
-  build-linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - uses: dtolnay/rust-toolchain@stable
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
           key: v1
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux only)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -102,83 +59,42 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build for Linux
+      - name: Build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
+          args: ${{ matrix.args }}
           includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
         run: |
-          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_linux_x64.AppImage.tar.gz"' _ {} \; || true
-          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%.AppImage.sig}_linux_x64.AppImage.sig"' _ {} \; || true
+          # Rename tarballs and their signatures
+          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_${{ matrix.name }}.app.tar.gz"' _ {} \; || true
+          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_${{ matrix.name }}.app.tar.gz.sig"' _ {} \; || true
+          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_${{ matrix.name }}.AppImage.tar.gz"' _ {} \; || true
+          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%.AppImage.sig}_${{ matrix.name }}.AppImage.sig"' _ {} \; || true
+          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_${{ matrix.name }}.zip"' _ {} \; || true
+          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_${{ matrix.name }}.zip.sig"' _ {} \; || true
 
-      - name: Upload Linux artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux
+          name: tauri-artifacts-${{ matrix.name }}
           path: |
-            target/release/bundle/appimage/*.AppImage
-            target/release/bundle/appimage/*.tar.gz
-            target/release/bundle/appimage/*.sig
+            target/*/release/bundle/dmg/*.dmg
+            target/*/release/bundle/macos/*.tar.gz*
+            target/release/bundle/appimage/*.AppImage*
             target/release/bundle/deb/*.deb
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-          key: v1
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build for Windows
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          args: --target x86_64-pc-windows-msvc
-          includeUpdaterJson: true
-
-      - name: Rename updater artifacts
-        shell: bash
-        run: |
-          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_windows_x64.zip"' _ {} \; || true
-          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_windows_x64.zip.sig"' _ {} \; || true
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: |
-            target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.zip
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.sig
+            target/*/release/bundle/msi/*.msi
+            target/*/release/bundle/nsis/*.exe
+            target/*/release/bundle/nsis/*.zip*
 
   create-release:
-    needs: [build-macos, build-linux, build-windows]
+    needs: [build-tauri]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -237,36 +153,29 @@ jobs:
             --arg pub_date "$PUB_DATE" \
             '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
-          # Function to add platform to JSON
-          # Usage: add_platform <json_key> <sig_glob> <binary_glob>
-          add_platform() {
-            local key=$1
-            local sig_glob=$2
-            local bin_glob=$3
-            
-            if ls $sig_glob >/dev/null 2>&1; then
-              local sig=$(cat $(ls $sig_glob | head -n 1))
-              local file=$(basename $(ls $bin_glob | head -n 1))
-              local url="https://github.com/$REPO/releases/download/$TAG/$file"
-              jq --arg sig "$sig" --arg url "$url" --arg key "$key" \
-                '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-              echo "Added $key to latest.json"
-            else
-              echo "Warning: No files found for $key (sig: $sig_glob)"
-            fi
-          }
+          # macOS (Universal)
+          if ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
 
-          # macOS Intel
-          add_platform "darwin-x86_64" "artifacts/macos-intel/**/*.app.tar.gz.sig" "artifacts/macos-intel/**/*.app.tar.gz"
-          
-          # macOS Silicon
-          add_platform "darwin-aarch64" "artifacts/macos-silicon/**/*.app.tar.gz.sig" "artifacts/macos-silicon/**/*.app.tar.gz"
-          
           # Linux
-          add_platform "linux-x86_64" "artifacts/linux/**/*.AppImage.sig" "artifacts/linux/**/*.AppImage.tar.gz"
-          
+          if ls artifacts/tauri-artifacts-linux/**/*.AppImage.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-linux/**/*.AppImage.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-linux/**/*.AppImage.tar.gz))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
+
           # Windows
-          add_platform "windows-x86_64" "artifacts/windows/**/*.zip.sig" "artifacts/windows/**/*.zip"
+          if ls artifacts/tauri-artifacts-windows/**/*.zip.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-windows/**/*.zip.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-windows/**/*.zip))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
           
           cat latest.json
 
@@ -280,9 +189,8 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/**/*.dmg
-            artifacts/**/*.app.tar.gz
+            artifacts/**/*.tar.gz
             artifacts/**/*.AppImage
-            artifacts/**/*.AppImage.tar.gz
             artifacts/**/*.deb
             artifacts/**/*.msi
             artifacts/**/*.exe
