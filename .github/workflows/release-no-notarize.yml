@@ -33,7 +33,6 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-          key: v1
           # Cache buster to clear corrupted manifest state
           key: v1
 
