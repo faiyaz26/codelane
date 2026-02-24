@@ -1,0 +1,92 @@
+name: Release Fixer
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The ID of the workflow run to get artifacts from"
+        required: true
+        type: string
+      tag_name:
+        description: "The tag name (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Generate latest.json
+        run: |
+          VERSION=$(echo "${{ github.event.inputs.tag_name }}" | sed 's/^v//')
+          TAG="${{ github.event.inputs.tag_name }}"
+          REPO="${{ github.repository }}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Initialize the master JSON structure using jq
+          jq -n 
+            --arg version "$VERSION" 
+            --arg notes "Release $TAG" 
+            --arg pub_date "$PUB_DATE" 
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
+
+          # macOS (Universal)
+          if ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-macos/**/*.app.tar.gz.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-macos/**/*.app.tar.gz))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
+
+          # Linux
+          if ls artifacts/tauri-artifacts-linux/**/*.AppImage.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-linux/**/*.AppImage.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-linux/**/*.AppImage.tar.gz))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
+
+          # Windows
+          if ls artifacts/tauri-artifacts-windows/**/*.zip.sig >/dev/null 2>&1; then
+            SIG=$(cat artifacts/tauri-artifacts-windows/**/*.zip.sig)
+            FILE=$(basename $(ls artifacts/tauri-artifacts-windows/**/*.zip))
+            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
+            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+          fi
+          
+          cat latest.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: Codelane ${{ github.event.inputs.tag_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.tar.gz
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.msi
+            artifacts/**/*.exe
+            artifacts/**/*.zip
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
