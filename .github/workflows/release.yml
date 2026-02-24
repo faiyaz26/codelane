@@ -32,7 +32,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: ". -> target"
           key: v1
 
       - name: Install pnpm
@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p notarized
-          find src-tauri/target -type f -name "*.dmg" -print0 | while IFS= read -r -d '' dmg; do
+          find target -type f -name "*.dmg" -print0 | while IFS= read -r -d '' dmg; do
             echo "Submitting $dmg for notarization..."
             xcrun notarytool submit "$dmg" \
               --apple-id "$APPLE_ID" \
@@ -82,9 +82,9 @@ jobs:
           name: macos-${{ matrix.arch }}
           path: |
             notarized/*.dmg
-            src-tauri/target/*/release/bundle/dmg/*.dmg
-            src-tauri/target/*/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/*/release/latest.json
+            target/*/release/bundle/dmg/*.dmg
+            target/*/release/bundle/macos/*.app.tar.gz
+            target/*/release/latest.json
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -99,7 +99,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: ". -> target"
           key: v1
 
       - name: Install system dependencies
@@ -134,10 +134,10 @@ jobs:
         with:
           name: linux
           path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/latest.json
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.tar.gz
+            target/release/bundle/deb/*.deb
+            target/release/latest.json
 
   build-windows:
     runs-on: windows-latest
@@ -154,7 +154,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: ". -> target"
           key: v1
 
       - name: Install pnpm
@@ -178,10 +178,10 @@ jobs:
         with:
           name: windows
           path: |
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.zip
-            src-tauri/target/x86_64-pc-windows-msvc/release/latest.json
+            target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.zip
+            target/x86_64-pc-windows-msvc/release/latest.json
 
   create-release:
     needs: [build-macos, build-linux, build-windows]
