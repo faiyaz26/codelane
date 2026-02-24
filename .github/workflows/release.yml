@@ -250,49 +250,19 @@ jobs:
 
       - name: Generate latest.json
         run: |
+          # Install the tool
+          cargo install tauri-latest-json
+          
           VERSION="${{ steps.version.outputs.value }}"
           TAG="${{ steps.tag.outputs.value }}"
           REPO="${{ github.repository }}"
-          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          # Initialize the master JSON structure using jq
-          jq -n \
-            --arg version "$VERSION" \
-            --arg notes "Release $TAG" \
-            --arg pub_date "$PUB_DATE" \
-            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
-
-          # macOS Intel
-          if ls artifacts/macos-intel/**/*.app.tar.gz.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/macos-intel/**/*.app.tar.gz.sig)
-            FILE=$(basename $(ls artifacts/macos-intel/**/*.app.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # macOS Silicon
-          if ls artifacts/macos-silicon/**/*.app.tar.gz.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/macos-silicon/**/*.app.tar.gz.sig)
-            FILE=$(basename $(ls artifacts/macos-silicon/**/*.app.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Linux
-          if ls artifacts/linux/**/*.AppImage.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/linux/**/*.AppImage.sig)
-            FILE=$(basename $(ls artifacts/linux/**/*.AppImage.tar.gz))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["linux-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
-
-          # Windows
-          if ls artifacts/windows/**/*.zip.sig >/dev/null 2>&1; then
-            SIG=$(cat artifacts/windows/**/*.zip.sig)
-            FILE=$(basename $(ls artifacts/windows/**/*.zip))
-            URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-            jq --arg sig "$SIG" --arg url "$URL" '.platforms["windows-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-          fi
+          
+          # Generate consolidated latest.json
+          tauri-latest-json generate \
+            --bundle-dir artifacts \
+            --download-url-prefix "https://github.com/$REPO/releases/download/$TAG" \
+            --version "$VERSION" \
+            --output-path latest.json
           
           cat latest.json
 
