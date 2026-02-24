@@ -39,10 +39,10 @@ jobs:
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # Initialize the master JSON structure using jq
-          jq -n 
-            --arg version "$VERSION" 
-            --arg notes "Release $TAG" 
-            --arg pub_date "$PUB_DATE" 
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "Release $TAG" \
+            --arg pub_date "$PUB_DATE" \
             '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
           # macOS (Universal)
