@@ -16,8 +16,11 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: "--target universal-apple-darwin"
-            name: macos
+            args: "--target aarch64-apple-darwin"
+            name: macos-silicon
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            name: macos-intel
           - platform: ubuntu-22.04
             args: ""
             name: linux
@@ -60,47 +63,40 @@ jobs:
         run: pnpm install
 
       - name: Build
-        uses: tauri-apps/tauri-action@v0
+        run: |
+          # Use the CLI directly to ensure we get updater bundles and signatures
+          pnpm tauri build ${{ matrix.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri v2 uses TAURI_SIGNING_PRIVATE_KEY
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          # Fallback for v1/action internal logic
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          args: ${{ matrix.args }}
-          includeUpdaterJson: true
-
-      - name: Rename updater artifacts
-        shell: bash
-        run: |
-          # Use a more targeted search to avoid capturing internal build binaries
-          # Look specifically in the bundle directories
-          find target -path "*/bundle/*" -iname "*.app.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz"' _ {} \; || true
-          find target -path "*/bundle/*" -iname "*.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz.sig"' _ {} \; || true
-          find target -path "*/bundle/*" -iname "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.tar.gz"' _ {} \; || true
-          find target -path "*/bundle/*" -iname "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.sig"' _ {} \; || true
-          find target -path "*/bundle/*" -iname "*.zip" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip"' _ {} \; || true
-          find target -path "*/bundle/*" -iname "*.zip.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip.sig"' _ {} \; || true
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir dist
-          # ONLY copy from bundle directories to avoid garbage files
-          find target -path "*/bundle/*" -iname "*.dmg" -exec cp {} dist/ \; || true
-          find target -path "*/bundle/*" -iname "*.AppImage" -exec cp {} dist/ \; || true
-          find target -path "*/bundle/*" -iname "*.deb" -exec cp {} dist/ \; || true
-          find target -path "*/bundle/*" -iname "*.msi" -exec cp {} dist/ \; || true
-          find target -path "*/bundle/*" -iname "*.exe" -exec cp {} dist/ \; || true
-          # Captured renamed updater files
-          find target -path "*/bundle/*" -iname "Codelane_*.tar.gz*" -exec cp {} dist/ \; || true
-          find target -path "*/bundle/*" -iname "Codelane_*.zip*" -exec cp {} dist/ \; || true
           
-          echo "Final artifacts to upload:"
-          ls -R dist/
+          # Find and copy all relevant bundles
+          # We search specifically in the bundle directory to avoid build noise
+          find target -path "*/bundle/*" -type f \( -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} dist/ \; || true
+          
+          # Find and copy all signatures
+          find target -path "*/bundle/*" -name "*.sig" -exec cp {} dist/ \; || true
+          
+          # Platform-specific renaming for updater packages to avoid collisions
+          cd dist
+          if [[ "${{ matrix.name }}" == "macos-silicon" ]]; then
+            for f in *.tar.gz*; do mv "$f" "Codelane_macos_aarch64_${f}" || true; done
+          elif [[ "${{ matrix.name }}" == "macos-intel" ]]; then
+            for f in *.tar.gz*; do mv "$f" "Codelane_macos_x64_${f}" || true; done
+          elif [[ "${{ matrix.name }}" == "linux" ]]; then
+            for f in *.AppImage.tar.gz*; do mv "$f" "Codelane_linux_x64_${f}" || true; done
+          elif [[ "${{ matrix.name }}" == "windows" ]]; then
+            for f in *.zip*; do mv "$f" "Codelane_windows_x64_${f}" || true; done
+          fi
+          
+          echo "Final artifacts in dist/:"
+          ls -R .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -147,7 +143,6 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
           else
-            # Try to push, but don't fail the whole job if it fails due to permissions
             git tag "$TAG"
             git push origin "$TAG" || echo "Failed to push tag, but continuing..."
           fi
@@ -168,7 +163,6 @@ jobs:
           # Find all signature files across all downloaded artifacts
           find artifacts -name "*.sig" | while read sig_path; do
             echo "Processing signature: $sig_path"
-            # Read and trim the signature
             SIG=$(cat "$sig_path" | xargs)
             
             # Get the binary path (the file without .sig extension)
@@ -178,28 +172,21 @@ jobs:
               FILE=$(basename "$BIN_PATH")
               URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
               
-              # Determine platform key based on filename/path
+              # Map platform key based on the filename we assigned in the prepare step
               PLATFORM=""
-              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
-                if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
-                  PLATFORM="darwin-aarch64"
-                elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
-                  PLATFORM="darwin-x86_64"
-                else
-                  PLATFORM="darwin-universal"
-                fi
-              elif [[ "$FILE" == *".AppImage"* ]]; then
+              if [[ "$FILE" == *"macos_aarch64"* ]]; then
+                PLATFORM="darwin-aarch64"
+              elif [[ "$FILE" == *"macos_x64"* ]]; then
+                PLATFORM="darwin-x86_64"
+              elif [[ "$FILE" == *"linux_x64"* ]]; then
                 PLATFORM="linux-x86_64"
-              elif [[ "$FILE" == *".zip"* ]]; then
+              elif [[ "$FILE" == *"windows_x64"* ]]; then
                 PLATFORM="windows-x86_64"
               fi
               
               if [ -n "$PLATFORM" ]; then
-                if [ "$PLATFORM" == "darwin-universal" ]; then
-                  jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                else
-                  jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                fi
+                jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                echo "Added $PLATFORM signature"
               fi
             fi
           done
