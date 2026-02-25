@@ -1,0 +1,95 @@
+name: Release App (Tauri Action Recommended)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Optional tag name. If empty, uses version from src-tauri/tauri.conf.json"
+        required: false
+        type: string
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: "--target x86_64-pc-windows-msvc"
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: v1
+
+      - name: Install system dependencies (Linux only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y 
+            libwebkit2gtk-4.1-dev 
+            libappindicator3-dev 
+            librsvg2-dev 
+            patchelf 
+            libgtk-3-dev 
+            libsoup-3.0-dev 
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Determine Tag Name
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "value=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            # Extract version from tauri.conf.json using node
+            VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            echo "value=v$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and Release with Tauri Action
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tauri Auto-Updater Keys
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY || secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD || secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple Developer credentials for signing (Optional: If configured in tauri.conf.json)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ steps.tag.outputs.value }}
+          releaseName: "Codelane ${{ steps.tag.outputs.value }}"
+          releaseBody: "Release for Codelane ${{ steps.tag.outputs.value }}"
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

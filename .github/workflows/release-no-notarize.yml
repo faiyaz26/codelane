@@ -64,12 +64,17 @@ jobs:
 
       - name: Build
         run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is empty. Tauri updater artifacts (.sig, .tar.gz) will NOT be generated!"
+          else
+            echo "✅ TAURI_SIGNING_PRIVATE_KEY is set (Length: ${#TAURI_SIGNING_PRIVATE_KEY})"
+          fi
           # Build using CLI to ensure updater targets are triggered
           pnpm tauri build ${{ matrix.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY || secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD || secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Prepare artifacts
         shell: bash
