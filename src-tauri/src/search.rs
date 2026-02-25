@@ -471,7 +471,7 @@ fn search_file(path: &std::path::Path, pattern: &Regex) -> Option<Vec<SearchMatc
     let file = File::open(path).ok()?;
     let reader = BufReader::new(file);
     
-    let mut matches = Vec::new();
+    let mut matches: Vec<SearchMatch> = Vec::new();
     let path_str = path.to_string_lossy().to_string();
     
     // We need a small rolling buffer for context lines
@@ -494,9 +494,7 @@ fn search_file(path: &std::path::Path, pattern: &Regex) -> Option<Vec<SearchMatc
         }
 
         // 2. Check for new matches in this line
-        let mut match_found = false;
         for mat in pattern.find_iter(&line) {
-            match_found = true;
             let match_idx = matches.len();
             
             matches.push(SearchMatch {

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, MemoryRefreshKind};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 /// Cached system instance for efficient process monitoring
 static SYSTEM: Mutex<Option<System>> = Mutex::new(None);
