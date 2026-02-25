@@ -1230,6 +1230,11 @@ Successfully implemented a comprehensive Error Boundary system for the Code Revi
    - Wrapped CodeReviewLayout with error boundary
    - Error boundary only wraps Code Review tab (doesn't affect other tabs)
 
+### 6. **CI/CD Pipeline Stabilization**
+- Implemented robust `latest.json` aggregation for Tauri v2.
+- Switched to a flat `dist/` directory strategy for reliable asset uploads.
+- Unified macOS builds to a single universal target.
+
 ## Implementation Details
 
 ### Error Fallback UI Features
