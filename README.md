@@ -12,7 +12,7 @@ Built on Tauri and SolidJS for exceptional performance, Codelane empowers develo
 - **Backend**: Rust + Tauri 2.x
 - **Styling**: Tailwind CSS
 - **Terminal**: portable-pty + xterm.js
-- **Editor**: Monaco Editor (VS Code's editor)
+- **Highlighter**: Shiki
 - **Git**: gitoxide (pure Rust git)
 
 ## Quick Start
@@ -75,7 +75,7 @@ pnpm dev
 # Build for current platform
 make build
 
-# Output in src-tauri/target/release/bundle/
+# Output in target/release/bundle/
 ```
 
 ## Architecture
@@ -90,7 +90,7 @@ make build
 │  │    SolidJS Frontend (TypeScript + Vite)   │  │
 │  │  • Lane management UI                     │  │
 │  │  • Terminal views (xterm.js)              │  │
-│  │  • Monaco editor                          │  │
+│  │  • Code Viewer (Shiki)                    │  │
 │  │  • Git interface                          │  │
 │  └───────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────┤
