@@ -64,7 +64,6 @@ jobs:
 
       - name: Build and sign
         run: |
-          # Use the CLI directly to ensure we get updater bundles and signatures
           pnpm tauri build ${{ matrix.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,33 +100,29 @@ jobs:
         shell: bash
         run: |
           mkdir dist
-          
           # Copy notarized DMG if it exists
           if [ -d "notarized" ] && ls notarized/*.dmg >/dev/null 2>&1; then
             cp notarized/*.dmg dist/
           else
-            find target -path "*/bundle/*" -iname "*.dmg" -exec cp {} dist/ \; || true
+            find target -iname "*.dmg" -exec cp {} dist/ \; || true
           fi
           
-          # Find and copy all other bundles
-          find target -path "*/bundle/*" -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} dist/ \; || true
+          find target -type f \( -iname "*.AppImage" -o -iname "*.deb" -o -iname "*.msi" -o -iname "*.exe" -o -iname "*.zip" -o -iname "*.tar.gz" -o -iname "*.sig" \) -exec cp {} dist/ \; || true
           
-          # Find and copy all signatures
-          find target -path "*/bundle/*" -name "*.sig" -exec cp {} dist/ \; || true
-          
-          # Platform-specific renaming for updater packages to avoid collisions
           cd dist
           if [[ "${{ matrix.name }}" == "macos-silicon" ]]; then
-            for f in *.tar.gz*; do mv "$f" "Codelane_macos_aarch64_${f}" || true; done
+            find . -iname "*.tar.gz" -exec mv {} Codelane_macos_aarch64.app.tar.gz \; 2>/dev/null || true
+            find . -iname "*.tar.gz.sig" -exec mv {} Codelane_macos_aarch64.app.tar.gz.sig \; 2>/dev/null || true
           elif [[ "${{ matrix.name }}" == "macos-intel" ]]; then
-            for f in *.tar.gz*; do mv "$f" "Codelane_macos_x64_${f}" || true; done
+            find . -iname "*.tar.gz" -exec mv {} Codelane_macos_x64.app.tar.gz \; 2>/dev/null || true
+            find . -iname "*.tar.gz.sig" -exec mv {} Codelane_macos_x64.app.tar.gz.sig \; 2>/dev/null || true
           elif [[ "${{ matrix.name }}" == "linux" ]]; then
-            for f in *.AppImage.tar.gz*; do mv "$f" "Codelane_linux_x64_${f}" || true; done
+            find . -iname "*.AppImage.tar.gz" -exec mv {} Codelane_linux_x64.AppImage.tar.gz \; 2>/dev/null || true
+            find . -iname "*.AppImage.tar.gz.sig" -exec mv {} Codelane_linux_x64.AppImage.tar.gz.sig \; 2>/dev/null || true
           elif [[ "${{ matrix.name }}" == "windows" ]]; then
-            for f in *.zip*; do mv "$f" "Codelane_windows_x64_${f}" || true; done
+            find . -iname "*.zip" -exec mv {} Codelane_windows_x64.zip \; 2>/dev/null || true
+            find . -iname "*.zip.sig" -exec mv {} Codelane_windows_x64.zip.sig \; 2>/dev/null || true
           fi
-          
-          echo "Final artifacts in dist/:"
           ls -R .
 
       - name: Upload artifacts
@@ -189,43 +184,28 @@ jobs:
           REPO="${{ github.repository }}"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # Initialize the master JSON structure using jq
           jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
 
-          # Find all signature files across all downloaded artifacts
           find artifacts -name "*.sig" | while read sig_path; do
-            echo "Processing signature: $sig_path"
             SIG=$(cat "$sig_path" | xargs)
-            
-            # Get the binary path (the file without .sig extension)
             BIN_PATH="${sig_path%.sig}"
-            
             if [ -f "$BIN_PATH" ]; then
               FILE=$(basename "$BIN_PATH")
               URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-              
-              # Map platform key based on the filename we assigned in the prepare step
               PLATFORM=""
-              if [[ "$FILE" == *"macos_aarch64"* ]]; then
-                PLATFORM="darwin-aarch64"
-              elif [[ "$FILE" == *"macos_x64"* ]]; then
-                PLATFORM="darwin-x86_64"
-              elif [[ "$FILE" == *"linux_x64"* ]]; then
-                PLATFORM="linux-x86_64"
-              elif [[ "$FILE" == *"windows_x64"* ]]; then
-                PLATFORM="windows-x86_64"
+              if [[ "$FILE" == *"macos_aarch64"* ]]; then PLATFORM="darwin-aarch64";
+              elif [[ "$FILE" == *"macos_x64"* ]]; then PLATFORM="darwin-x86_64";
+              elif [[ "$FILE" == *"linux_x64"* ]]; then PLATFORM="linux-x86_64";
+              elif [[ "$FILE" == *"windows_x64"* ]]; then PLATFORM="windows-x86_64";
               fi
-              
               if [ -n "$PLATFORM" ]; then
                 jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                echo "Added $PLATFORM signature"
               fi
             fi
           done
-          
           cat latest.json
 
-      - name: Flatten artifacts
+      - name: Flatten assets
         run: |
           mkdir release_assets
           find artifacts -type f -exec cp {} release_assets/ \;

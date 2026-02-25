@@ -65,7 +65,7 @@ jobs:
           # Find all signature files across all downloaded artifacts
           find artifacts -name "*.sig" | while read sig_path; do
             echo "Processing signature: $sig_path"
-            SIG=$(cat "$sig_path")
+            SIG=$(cat "$sig_path" | xargs)
             
             # Get the binary path (the file without .sig extension)
             BIN_PATH="${sig_path%.sig}"
@@ -76,26 +76,19 @@ jobs:
               
               # Determine platform key based on filename/path
               PLATFORM=""
-              if [[ "$FILE" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
-                if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
-                  PLATFORM="darwin-aarch64"
-                elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
-                  PLATFORM="darwin-x86_64"
-                else
-                  PLATFORM="darwin-universal"
-                fi
-              elif [[ "$FILE" == *".AppImage"* ]]; then
+              if [[ "$FILE" == *"macos_aarch64"* ]]; then
+                PLATFORM="darwin-aarch64"
+              elif [[ "$FILE" == *"macos_x64"* ]]; then
+                PLATFORM="darwin-x86_64"
+              elif [[ "$FILE" == *"linux_x64"* ]]; then
                 PLATFORM="linux-x86_64"
-              elif [[ "$FILE" == *".zip"* ]]; then
+              elif [[ "$FILE" == *"windows_x64"* ]]; then
                 PLATFORM="windows-x86_64"
               fi
               
               if [ -n "$PLATFORM" ]; then
-                if [ "$PLATFORM" == "darwin-universal" ]; then
-                  jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                else
-                  jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                fi
+                jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
+                echo "Added $PLATFORM signature"
               fi
             fi
           done
@@ -111,8 +104,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name }}
-          name: Codelane ${{ github.event.inputs.tag_name }}
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: Codelane ${{ steps.tag.outputs.value }}
           draft: false
           prerelease: false
           generate_release_notes: true
