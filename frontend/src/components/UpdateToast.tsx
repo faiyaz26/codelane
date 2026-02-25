@@ -22,7 +22,7 @@ export function UpdateToast() {
             </div>
             <Show when={updaterService.status() === 'available'}>
               <button
-                onClick={() => updaterService.dismiss()}
+                onClick={() => updaterService.dismiss(true)}
                 class="text-zed-text-disabled hover:text-zed-text-primary transition-colors"
                 aria-label="Dismiss"
               >
@@ -51,7 +51,7 @@ export function UpdateToast() {
                     Download & Install
                   </button>
                   <button
-                    onClick={() => updaterService.dismiss()}
+                    onClick={() => updaterService.dismiss(true)}
                     class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors"
                   >
                     Later

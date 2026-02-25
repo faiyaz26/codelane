@@ -51,7 +51,7 @@ export function AboutDialog(props: AboutDialogProps) {
               <div class="mb-6">
                 <Show when={updaterService.status() === 'idle' || updaterService.status() === 'up-to-date' || updaterService.status() === 'error'}>
                   <button
-                    onClick={() => updaterService.checkForUpdates()}
+                    onClick={() => updaterService.checkForUpdates(true)}
                     class="text-xs text-zed-accent-blue hover:text-zed-accent-blue-hover transition-colors"
                   >
                     Check for Updates

@@ -16,6 +16,7 @@ const [releaseNotes, setReleaseNotes] = createSignal<string | null>(null);
 const [downloadProgress, setDownloadProgress] = createSignal(0);
 const [errorMessage, setErrorMessage] = createSignal('');
 
+const MUTED_VERSION_KEY = 'codelane:muted-update-version';
 let pendingUpdate: Update | null = null;
 
 function resetToIdleAfter(ms: number) {
@@ -34,7 +35,7 @@ export const updaterService = {
   downloadProgress,
   errorMessage,
 
-  async checkForUpdates(): Promise<boolean> {
+  async checkForUpdates(isManual = false): Promise<boolean> {
     if (status() === 'checking' || status() === 'downloading') return false;
 
     setStatus('checking');
@@ -48,9 +49,18 @@ export const updaterService = {
         pendingUpdate = update;
         setUpdateVersion(update.version);
         setReleaseNotes(update.body ?? null);
+
+        // Check if user muted this specific version
+        const mutedVersion = localStorage.getItem(MUTED_VERSION_KEY);
+        if (!isManual && mutedVersion === update.version) {
+          console.info(`[Updater] Update ${update.version} is available but muted by user.`);
+          setStatus('idle');
+          return false;
+        }
+
         setStatus('available');
 
-        // Show native notification if possible
+        // Show native notification if possible (only for new discoveries or manual checks)
         try {
           const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification');
           let permission = await isPermissionGranted();
@@ -106,8 +116,10 @@ export const updaterService = {
         }
       });
 
-      // Relaunch after install — import dynamically to avoid loading process plugin
-      // unless we actually need it
+      // Clear muted version on successful update
+      localStorage.removeItem(MUTED_VERSION_KEY);
+
+      // Relaunch after install
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
     } catch (err) {
@@ -118,8 +130,12 @@ export const updaterService = {
     }
   },
 
-  dismiss() {
+  dismiss(mute = false) {
     if (status() === 'available' || status() === 'up-to-date' || status() === 'error') {
+      const currentVersion = updateVersion();
+      if (mute && currentVersion) {
+        localStorage.setItem(MUTED_VERSION_KEY, currentVersion);
+      }
       setStatus('idle');
       pendingUpdate = null;
     }
