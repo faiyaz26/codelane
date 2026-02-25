@@ -85,6 +85,7 @@ jobs:
           find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_${{ matrix.name }}.zip.sig"' _ {} \; || true
 
       - name: Prepare artifacts
+        shell: bash
         run: |
           mkdir dist
           find target -name "*.dmg" -exec cp {} dist/ \; || true

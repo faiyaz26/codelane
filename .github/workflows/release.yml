@@ -110,6 +110,7 @@ jobs:
           done
 
       - name: Prepare artifacts
+        shell: bash
         run: |
           mkdir dist
           # Copy notarized DMG if it exists, otherwise build DMG
