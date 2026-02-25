@@ -60,9 +60,7 @@ jobs:
         run: pnpm install
 
       - name: Build and sign
-        run: |
-          # Run build using the CLI directly to ensure signatures are generated
-          pnpm tauri build ${{ matrix.args }}
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -70,19 +68,26 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Tauri v2 uses TAURI_SIGNING_PRIVATE_KEY
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Fallback for v1/action internal logic
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.args }}
+          includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
         run: |
           # Rename tarballs and their signatures to avoid collisions
-          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz"' _ {} \; || true
-          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz.sig"' _ {} \; || true
-          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.tar.gz"' _ {} \; || true
-          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.sig"' _ {} \; || true
-          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip"' _ {} \; || true
-          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip.sig"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.app.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz.sig"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.tar.gz"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.sig"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.zip" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip"' _ {} \; || true
+          find target -path "*/bundle/*" -iname "*.zip.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip.sig"' _ {} \; || true
 
       - name: Notarize DMG (macOS only)
         if: matrix.platform == 'macos-latest'
@@ -113,17 +118,16 @@ jobs:
           if [ -d "notarized" ] && ls notarized/*.dmg >/dev/null 2>&1; then
             cp notarized/*.dmg dist/
           else
-            find target -iname "*.dmg" -exec cp {} dist/ \; || true
+            find target -path "*/bundle/*" -iname "*.dmg" -exec cp {} dist/ \; || true
           fi
-          find target -iname "*.AppImage" -exec cp {} dist/ \; || true
-          find target -iname "*.AppImage.sig" -exec cp {} dist/ \; || true
-          find target -iname "*.deb" -exec cp {} dist/ \; || true
-          find target -iname "*.msi" -exec cp {} dist/ \; || true
-          find target -iname "*.exe" -exec cp {} dist/ \; || true
-          find target -iname "*.zip" -exec cp {} dist/ \; || true
-          find target -iname "*.zip.sig" -exec cp {} dist/ \; || true
-          find target -iname "*.tar.gz" -exec cp {} dist/ \; || true
-          find target -iname "*.tar.gz.sig" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "*.AppImage" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "*.AppImage.sig" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "*.deb" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "*.msi" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "*.exe" -exec cp {} dist/ \; || true
+          # Captured renamed updater files
+          find target -path "*/bundle/*" -iname "Codelane_*.tar.gz*" -exec cp {} dist/ \; || true
+          find target -path "*/bundle/*" -iname "Codelane_*.zip*" -exec cp {} dist/ \; || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -170,7 +174,6 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
           else
-            # Try to push, but don't fail the whole job if it fails due to permissions
             git tag "$TAG"
             git push origin "$TAG" || echo "Failed to push tag, but continuing..."
           fi
