@@ -162,7 +162,8 @@ jobs:
           # Find all signature files across all downloaded artifacts
           find artifacts -name "*.sig" | while read sig_path; do
             echo "Processing signature: $sig_path"
-            SIG=$(cat "$sig_path")
+            # Read and trim the signature
+            SIG=$(cat "$sig_path" | xargs)
             
             # Get the binary path (the file without .sig extension)
             BIN_PATH="${sig_path%.sig}"
