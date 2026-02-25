@@ -117,17 +117,17 @@ jobs:
           if [ -d "notarized" ] && ls notarized/*.dmg >/dev/null 2>&1; then
             cp notarized/*.dmg dist/
           else
-            find target -name "*.dmg" -exec cp {} dist/ \; || true
+            find target -iname "*.dmg" -exec cp {} dist/ \; || true
           fi
-          find target -name "*.AppImage" -exec cp {} dist/ \; || true
-          find target -name "*.AppImage.sig" -exec cp {} dist/ \; || true
-          find target -name "*.deb" -exec cp {} dist/ \; || true
-          find target -name "*.msi" -exec cp {} dist/ \; || true
-          find target -name "*.exe" -exec cp {} dist/ \; || true
-          find target -name "*.zip" -exec cp {} dist/ \; || true
-          find target -name "*.zip.sig" -exec cp {} dist/ \; || true
-          find target -name "*.app.tar.gz" -exec cp {} dist/ \; || true
-          find target -name "*.app.tar.gz.sig" -exec cp {} dist/ \; || true
+          find target -iname "*.AppImage" -exec cp {} dist/ \; || true
+          find target -iname "*.AppImage.sig" -exec cp {} dist/ \; || true
+          find target -iname "*.deb" -exec cp {} dist/ \; || true
+          find target -iname "*.msi" -exec cp {} dist/ \; || true
+          find target -iname "*.exe" -exec cp {} dist/ \; || true
+          find target -iname "*.zip" -exec cp {} dist/ \; || true
+          find target -iname "*.zip.sig" -exec cp {} dist/ \; || true
+          find target -iname "*.tar.gz" -exec cp {} dist/ \; || true
+          find target -iname "*.tar.gz.sig" -exec cp {} dist/ \; || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
