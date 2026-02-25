@@ -1231,7 +1231,9 @@ Successfully implemented a comprehensive Error Boundary system for the Code Revi
    - Error boundary only wraps Code Review tab (doesn't affect other tabs)
 
 ### 6. **CI/CD Pipeline Stabilization**
-- Implemented robust `latest.json` aggregation for Tauri v2.
+- Implemented robust `latest.json` aggregation for Tauri v2 using a "Signature Scanner" script.
+- Overhauled GitHub Action workflows ("Release App") with a flattening strategy to ensure assets are root-level.
+- Fixed cross-platform (Windows/macOS/Linux) artifact collection issues by explicitly using Bash shells.
 - Switched to a flat `dist/` directory strategy for reliable asset uploads.
 - Unified macOS builds to a single universal target.
 
