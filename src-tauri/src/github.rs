@@ -89,7 +89,13 @@ pub struct ReviewInlineComment {
 
 /// Run a gh command and return stdout
 fn run_gh(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("gh")
+    // Resolve absolute path for production robustness
+    let gh_path = match check_command_exists("gh".to_string()) {
+        Ok(Some(path)) => path,
+        _ => "gh".to_string(), // Fallback to bare command
+    };
+
+    let output = Command::new(gh_path)
         .args(args)
         .output()
         .map_err(|e| format!("Failed to run gh: {}", e))?;
@@ -108,20 +114,18 @@ fn run_gh(args: &[&str]) -> Result<String, String> {
 /// Check gh CLI installation and authentication status
 #[tauri::command]
 pub async fn github_check_status() -> Result<GhCliStatus, String> {
-    // 1. Check if gh is installed
-    let installed = match check_command_exists("gh".to_string()) {
-        Ok(Some(_)) => true,
-        _ => false,
+    // 1. Check if gh is installed and get its path
+    let gh_path = match check_command_exists("gh".to_string()) {
+        Ok(Some(path)) => path,
+        _ => {
+            return Ok(GhCliStatus {
+                installed: false,
+                authenticated: false,
+                user: None,
+                version: None,
+            });
+        }
     };
-
-    if !installed {
-        return Ok(GhCliStatus {
-            installed: false,
-            authenticated: false,
-            user: None,
-            version: None,
-        });
-    }
 
     // 2. Get version
     let version = run_gh(&["--version"])
@@ -129,7 +133,7 @@ pub async fn github_check_status() -> Result<GhCliStatus, String> {
         .and_then(|v| v.lines().next().map(|l| l.to_string()));
 
     // 3. Check authentication
-    let auth_output = Command::new("gh")
+    let auth_output = Command::new(&gh_path)
         .args(["auth", "status"])
         .output()
         .map_err(|e| format!("Failed to run gh auth status: {}", e))?;
@@ -155,7 +159,7 @@ pub async fn github_check_status() -> Result<GhCliStatus, String> {
         .filter(|s| !s.is_empty());
 
     Ok(GhCliStatus {
-        installed,
+        installed: true,
         authenticated,
         user,
         version,
@@ -298,6 +302,12 @@ pub async fn github_submit_review_with_comments(
     body: Option<String>,
     comments: Vec<ReviewInlineComment>,
 ) -> Result<String, String> {
+    // Resolve absolute path for production robustness
+    let gh_path = match check_command_exists("gh".to_string()) {
+        Ok(Some(path)) => path,
+        _ => "gh".to_string(),
+    };
+
     let payload = serde_json::json!({
         "commit_id": commit_id,
         "event": event,
@@ -309,7 +319,7 @@ pub async fn github_submit_review_with_comments(
     let payload_str = payload.to_string();
 
     // Pipe JSON payload via stdin
-    let mut child = Command::new("gh")
+    let mut child = Command::new(gh_path)
         .args(["api", &endpoint, "--method", "POST", "--input", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

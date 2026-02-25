@@ -145,8 +145,8 @@ function App() {
     document.addEventListener('keydown', handleClipboard);
     document.addEventListener('paste', handleNativePaste, true); // capture phase
     onCleanup(() => {
-      document.remove_EventListener('keydown', handleClipboard);
-      document.remove_EventListener('paste', handleNativePaste, true);
+      document.removeEventListener('keydown', handleClipboard);
+      document.removeEventListener('paste', handleNativePaste, true);
     });
   });
 
