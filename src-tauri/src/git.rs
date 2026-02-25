@@ -400,6 +400,15 @@ pub async fn git_sort_files(
                 let mut file_contents = HashMap::new();
                 for file in &files {
                     let file_path = work_path.join(&file.path);
+                    
+                    // Safety check: Skip files that are too large to prevent OOM
+                    if let Ok(metadata) = std::fs::metadata(&file_path) {
+                        if metadata.len() > 100 * 1024 { // 100 KB limit
+                            tracing::debug!("Skipping large file for dependency analysis: {:?}", file.path);
+                            continue;
+                        }
+                    }
+
                     if let Ok(content) = std::fs::read_to_string(&file_path) {
                         file_contents.insert(file.path.clone(), content);
                     }

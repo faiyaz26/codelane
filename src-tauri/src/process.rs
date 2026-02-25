@@ -136,12 +136,15 @@ pub fn get_app_resource_usage() -> Result<AppResourceUsage, String> {
     // Get current process PID
     let current_pid = Pid::from_u32(std::process::id());
 
-    // Refresh memory info and all processes to find children
-    system.refresh_memory_specifics(MemoryRefreshKind::everything());
+    // Only refresh what we need: process data (memory/cpu)
+    let refresh_kind = ProcessRefreshKind::new()
+        .with_cpu()
+        .with_memory();
+    
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
-        ProcessRefreshKind::everything(),
+        refresh_kind,
     );
 
     // Collect all processes that are part of this app (current + children)
@@ -175,7 +178,11 @@ pub fn get_app_resource_usage() -> Result<AppResourceUsage, String> {
 
     if process_count > 0 {
         let memory_mb = total_memory as f64 / 1024.0 / 1024.0;
+        
+        // Refresh total memory info once per call for accurate percentage
+        system.refresh_memory();
         let total_system_memory = system.total_memory();
+        
         let memory_percent = if total_system_memory > 0 {
             (total_memory as f64 / total_system_memory as f64 * 100.0) as f32
         } else {

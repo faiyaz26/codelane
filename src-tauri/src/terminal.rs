@@ -319,6 +319,7 @@ pub async fn create_terminal(
 /// Read PTY output in a background thread and emit events to the frontend
 fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: AppHandle) {
     let mut buf = [0u8; 4096];
+    let mut consecutive_errors = 0;
 
     loop {
         match reader.read(&mut buf) {
@@ -346,7 +347,16 @@ fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: A
                         data,
                     },
                 ) {
-                    tracing::warn!("Failed to emit terminal-output event: {}", e);
+                    tracing::warn!("Failed to emit terminal-output event for {}: {}", terminal_id, e);
+                    consecutive_errors += 1;
+                    
+                    // If we fail to emit 10 times in a row, the frontend is likely gone
+                    if consecutive_errors > 10 {
+                        tracing::error!("Terminal {} thread exiting due to persistent emission errors", terminal_id);
+                        break;
+                    }
+                } else {
+                    consecutive_errors = 0;
                 }
             }
             Err(e) => {
@@ -361,7 +371,7 @@ fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: A
                 if e.kind() == std::io::ErrorKind::BrokenPipe
                     || e.kind() == std::io::ErrorKind::UnexpectedEof
                 {
-                    tracing::info!("Terminal {} closed", terminal_id);
+                    tracing::info!("Terminal {} closed (Broken pipe)", terminal_id);
                 } else {
                     tracing::error!("PTY read error for terminal {}: {}", terminal_id, e);
                 }

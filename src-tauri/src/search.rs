@@ -470,43 +470,62 @@ async fn run_search(
 fn search_file(path: &std::path::Path, pattern: &Regex) -> Option<Vec<SearchMatch>> {
     let file = File::open(path).ok()?;
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
-
-    if lines.is_empty() {
-        return None;
-    }
-
+    
     let mut matches = Vec::new();
     let path_str = path.to_string_lossy().to_string();
+    
+    // We need a small rolling buffer for context lines
+    let mut context_queue: VecDeque<String> = VecDeque::with_capacity(CONTEXT_LINES);
+    let mut lines_after_to_collect: Vec<(usize, usize)> = Vec::new(); // (match_idx, lines_left)
+    
+    // Read line by line to keep memory usage low
+    for (line_idx, line_result) in reader.lines().enumerate() {
+        let line = match line_result {
+            Ok(l) => l,
+            Err(_) => break, // Stop reading on encoding errors
+        };
 
-    for (line_idx, line) in lines.iter().enumerate() {
-        // Find all matches in the line
-        for mat in pattern.find_iter(line) {
-            // Get context lines
-            let context_before: Vec<String> = lines
-                .iter()
-                .skip(line_idx.saturating_sub(CONTEXT_LINES))
-                .take(line_idx.saturating_sub(line_idx.saturating_sub(CONTEXT_LINES)))
-                .cloned()
-                .collect();
+        // 1. Process context for existing matches
+        for (match_idx, lines_left) in lines_after_to_collect.iter_mut() {
+            if *lines_left > 0 {
+                matches[*match_idx].context_after.push(line.clone());
+                *lines_left -= 1;
+            }
+        }
 
-            let context_after: Vec<String> = lines
-                .iter()
-                .skip(line_idx + 1)
-                .take(CONTEXT_LINES)
-                .cloned()
-                .collect();
-
+        // 2. Check for new matches in this line
+        let mut match_found = false;
+        for mat in pattern.find_iter(&line) {
+            match_found = true;
+            let match_idx = matches.len();
+            
             matches.push(SearchMatch {
                 file_path: path_str.clone(),
                 line_number: (line_idx + 1) as u32,
                 column: mat.start() as u32,
                 line_content: line.clone(),
                 match_text: mat.as_str().to_string(),
-                context_before,
-                context_after,
+                context_before: context_queue.iter().cloned().collect(),
+                context_after: Vec::with_capacity(CONTEXT_LINES),
             });
+
+            // Mark this match to collect subsequent lines for context
+            lines_after_to_collect.push((match_idx, CONTEXT_LINES));
+            
+            // Limit matches per file to avoid runaway results
+            if matches.len() > 500 {
+                return Some(matches);
+            }
         }
+
+        // 3. Update rolling buffer for 'context_before'
+        if context_queue.len() >= CONTEXT_LINES {
+            context_queue.pop_front();
+        }
+        context_queue.push_back(line);
+
+        // Cleanup completed context collectors
+        lines_after_to_collect.retain(|(_, left)| *left > 0);
     }
 
     if matches.is_empty() {
@@ -515,6 +534,8 @@ fn search_file(path: &std::path::Path, pattern: &Regex) -> Option<Vec<SearchMatc
         Some(matches)
     }
 }
+
+use std::collections::VecDeque;
 
 #[cfg(test)]
 mod tests {

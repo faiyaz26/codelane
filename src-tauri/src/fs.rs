@@ -63,6 +63,18 @@ pub async fn read_file(
 ) -> Result<String, String> {
     tracing::debug!("Reading file: {}", path);
 
+    // Safety check: Don't read massive files into memory
+    let metadata = tokio::fs::metadata(&path)
+        .await
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    
+    if metadata.len() > 1024 * 1024 { // 1 MB limit
+        return Err(format!(
+            "File is too large to open ({} bytes). Codelane has a 1MB limit for integrated viewing.",
+            metadata.len()
+        ));
+    }
+
     let contents = tokio::fs::read_to_string(&path)
         .await
         .map_err(|e| format!("Failed to read file: {}", e))?;
