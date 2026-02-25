@@ -60,7 +60,9 @@ jobs:
         run: pnpm install
 
       - name: Build and sign
-        uses: tauri-apps/tauri-action@v0
+        run: |
+          # Run build using the CLI directly to ensure signatures are generated
+          pnpm tauri build ${{ matrix.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -68,25 +70,19 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Provide both sets of variables for maximum compatibility
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          args: ${{ matrix.args }}
-          includeUpdaterJson: true
 
       - name: Rename updater artifacts
         shell: bash
         run: |
           # Rename tarballs and their signatures to avoid collisions
-          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_macos.app.tar.gz"' _ {} \; || true
-          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_macos.app.tar.gz.sig"' _ {} \; || true
-          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_linux_x64.AppImage.tar.gz"' _ {} \; || true
-          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%.AppImage.sig}_linux_x64.AppImage.sig"' _ {} \; || true
-          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_windows_x64.zip"' _ {} \; || true
-          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_windows_x64.zip.sig"' _ {} \; || true
+          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz"' _ {} \; || true
+          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_macos.app.tar.gz.sig"' _ {} \; || true
+          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.tar.gz"' _ {} \; || true
+          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_linux_x64.AppImage.sig"' _ {} \; || true
+          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip"' _ {} \; || true
+          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%/*}/Codelane_windows_x64.zip.sig"' _ {} \; || true
 
       - name: Notarize DMG (macOS only)
         if: matrix.platform == 'macos-latest'
@@ -174,6 +170,7 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
           else
+            # Try to push, but don't fail the whole job if it fails due to permissions
             git tag "$TAG"
             git push origin "$TAG" || echo "Failed to push tag, but continuing..."
           fi
@@ -205,7 +202,7 @@ jobs:
               
               # Determine platform key based on filename/path
               PLATFORM=""
-              if [[ "$FILE" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
+              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
                 if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
                   PLATFORM="darwin-aarch64"
                 elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
