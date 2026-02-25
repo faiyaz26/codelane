@@ -84,19 +84,25 @@ jobs:
           find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_${{ matrix.name }}.zip"' _ {} \; || true
           find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_${{ matrix.name }}.zip.sig"' _ {} \; || true
 
+      - name: Prepare artifacts
+        run: |
+          mkdir dist
+          find target -name "*.dmg" -exec cp {} dist/ \; || true
+          find target -name "*.AppImage" -exec cp {} dist/ \; || true
+          find target -name "*.AppImage.sig" -exec cp {} dist/ \; || true
+          find target -name "*.deb" -exec cp {} dist/ \; || true
+          find target -name "*.msi" -exec cp {} dist/ \; || true
+          find target -name "*.exe" -exec cp {} dist/ \; || true
+          find target -name "*.zip" -exec cp {} dist/ \; || true
+          find target -name "*.zip.sig" -exec cp {} dist/ \; || true
+          find target -name "*.app.tar.gz" -exec cp {} dist/ \; || true
+          find target -name "*.app.tar.gz.sig" -exec cp {} dist/ \; || true
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: tauri-artifacts-${{ matrix.name }}
-          path: |
-            target/*/release/bundle/dmg/*.dmg
-            target/*/release/bundle/macos/*.tar.gz*
-            target/release/bundle/appimage/*.AppImage
-            target/release/bundle/appimage/*.tar.gz*
-            target/release/bundle/deb/*.deb
-            target/*/release/bundle/msi/*.msi
-            target/*/release/bundle/nsis/*.exe
-            target/*/release/bundle/nsis/*.zip*
+          path: dist/
 
   create-release:
     needs: [build-tauri]
@@ -170,7 +176,7 @@ jobs:
               
               # Determine platform key based on filename/path
               PLATFORM=""
-              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
+              if [[ "$FILE" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
                 if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
                   PLATFORM="darwin-aarch64"
                 elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
@@ -206,13 +212,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.tar.gz
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.msi
-            artifacts/**/*.exe
-            artifacts/**/*.zip
+            artifacts/**/*
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

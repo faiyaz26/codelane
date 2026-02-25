@@ -114,13 +114,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.tar.gz
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.msi
-            artifacts/**/*.exe
-            artifacts/**/*.zip
+            artifacts/**/*
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

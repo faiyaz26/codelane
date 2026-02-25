@@ -109,14 +109,30 @@ jobs:
             cp "$dmg" notarized/
           done
 
+      - name: Prepare artifacts
+        run: |
+          mkdir dist
+          # Copy notarized DMG if it exists, otherwise build DMG
+          if [ -d "notarized" ] && ls notarized/*.dmg >/dev/null 2>&1; then
+            cp notarized/*.dmg dist/
+          else
+            find target -name "*.dmg" -exec cp {} dist/ \; || true
+          fi
+          find target -name "*.AppImage" -exec cp {} dist/ \; || true
+          find target -name "*.AppImage.sig" -exec cp {} dist/ \; || true
+          find target -name "*.deb" -exec cp {} dist/ \; || true
+          find target -name "*.msi" -exec cp {} dist/ \; || true
+          find target -name "*.exe" -exec cp {} dist/ \; || true
+          find target -name "*.zip" -exec cp {} dist/ \; || true
+          find target -name "*.zip.sig" -exec cp {} dist/ \; || true
+          find target -name "*.app.tar.gz" -exec cp {} dist/ \; || true
+          find target -name "*.app.tar.gz.sig" -exec cp {} dist/ \; || true
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: tauri-artifacts-${{ matrix.name }}
-          path: |
-            notarized/*.dmg
-            target/*/release/bundle/
-            target/release/bundle/
+          path: dist/
 
   create-release:
     needs: [build-tauri]
@@ -224,13 +240,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.tar.gz
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.msi
-            artifacts/**/*.exe
-            artifacts/**/*.zip
+            artifacts/**/*
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
