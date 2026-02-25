@@ -49,6 +49,25 @@ export const updaterService = {
         setUpdateVersion(update.version);
         setReleaseNotes(update.body ?? null);
         setStatus('available');
+
+        // Show native notification if possible
+        try {
+          const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification');
+          let permission = await isPermissionGranted();
+          if (!permission) {
+            permission = await requestPermission() === 'granted';
+          }
+          if (permission) {
+            sendNotification({
+              title: 'Update Available',
+              body: `Codelane ${update.version} is ready to install.`,
+              icon: 'icons/128x128.png'
+            });
+          }
+        } catch (e) {
+          // Notifications might not be supported or fail, ignore silently
+        }
+
         return true;
       } else {
         setStatus('up-to-date');
