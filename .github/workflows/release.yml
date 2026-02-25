@@ -1,4 +1,4 @@
-name: Release App
+name: Release App (Tauri Action Recommended)
 
 on:
   workflow_dispatch:
@@ -9,24 +9,23 @@ on:
         type: string
 
 jobs:
-  build-tauri:
-    runs-on: ${{ matrix.platform }}
+  release:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
-            name: macos-silicon
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
-            name: macos-intel
           - platform: ubuntu-22.04
             args: ""
-            name: linux
           - platform: windows-latest
             args: "--target x86_64-pc-windows-msvc"
-            name: windows
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,170 +61,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build and sign
+      - name: Determine Tag Name
+        id: tag
+        shell: bash
         run: |
-          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is empty. Tauri updater artifacts (.sig, .tar.gz) will NOT be generated!"
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "value=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
           else
-            echo "✅ TAURI_SIGNING_PRIVATE_KEY is set (Length: ${#TAURI_SIGNING_PRIVATE_KEY})"
+            # Extract version from tauri.conf.json using node
+            VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            echo "value=v$VERSION" >> $GITHUB_OUTPUT
           fi
-          pnpm tauri build ${{ matrix.args }}
+
+      - name: Build and Release with Tauri Action
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tauri Auto-Updater Keys
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY || secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD || secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple Developer credentials for signing (Optional: If configured in tauri.conf.json)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY || secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD || secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Notarize DMG (macOS only)
-        if: matrix.platform == 'macos-latest'
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          mkdir -p notarized
-          find target -type f -name "*.dmg" -print0 | while IFS= read -r -d '' dmg; do
-            echo "Submitting $dmg for notarization..."
-            xcrun notarytool submit "$dmg" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait
-            echo "Stapling $dmg..."
-            xcrun stapler staple "$dmg"
-            cp "$dmg" notarized/
-          done
-
-      - name: Prepare artifacts
-        shell: bash
-        run: |
-          mkdir dist
-          # Copy notarized DMG if it exists
-          if [ -d "notarized" ] && ls notarized/*.dmg >/dev/null 2>&1; then
-            cp notarized/*.dmg dist/
-          else
-            find target -iname "*.dmg" -exec cp {} dist/ \; || true
-          fi
-          
-          find target -type f \( -iname "*.AppImage" -o -iname "*.deb" -o -iname "*.msi" -o -iname "*.exe" -o -iname "*.zip" -o -iname "*.tar.gz" -o -iname "*.sig" \) -exec cp {} dist/ \; || true
-          
-          cd dist
-          if [[ "${{ matrix.name }}" == "macos-silicon" ]]; then
-            find . -iname "*.tar.gz" -exec mv {} Codelane_macos_aarch64.app.tar.gz \; 2>/dev/null || true
-            find . -iname "*.tar.gz.sig" -exec mv {} Codelane_macos_aarch64.app.tar.gz.sig \; 2>/dev/null || true
-          elif [[ "${{ matrix.name }}" == "macos-intel" ]]; then
-            find . -iname "*.tar.gz" -exec mv {} Codelane_macos_x64.app.tar.gz \; 2>/dev/null || true
-            find . -iname "*.tar.gz.sig" -exec mv {} Codelane_macos_x64.app.tar.gz.sig \; 2>/dev/null || true
-          elif [[ "${{ matrix.name }}" == "linux" ]]; then
-            find . -iname "*.AppImage.tar.gz" -exec mv {} Codelane_linux_x64.AppImage.tar.gz \; 2>/dev/null || true
-            find . -iname "*.AppImage.tar.gz.sig" -exec mv {} Codelane_linux_x64.AppImage.tar.gz.sig \; 2>/dev/null || true
-          elif [[ "${{ matrix.name }}" == "windows" ]]; then
-            find . -iname "*.zip" -exec mv {} Codelane_windows_x64.zip \; 2>/dev/null || true
-            find . -iname "*.zip.sig" -exec mv {} Codelane_windows_x64.zip.sig \; 2>/dev/null || true
-          fi
-          ls -R .
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
         with:
-          name: tauri-artifacts-${{ matrix.name }}
-          path: dist/
-
-  create-release:
-    needs: [build-tauri]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Read version
-        id: version
-        run: |
-          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-          echo "value=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Resolve tag name
-        id: tag
-        run: |
-          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
-            echo "value=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "value=v${{ steps.version.outputs.value }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create tag if missing
-        run: |
-          TAG="${{ steps.tag.outputs.value }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists"
-          else
-            git tag "$TAG"
-            git push origin "$TAG" || echo "Failed to push tag, but continuing..."
-          fi
-
-      - name: List artifacts (debug)
-        run: find artifacts -type f | sort
-
-      - name: Generate latest.json
-        run: |
-          VERSION="${{ steps.version.outputs.value }}"
-          TAG="${{ steps.tag.outputs.value }}"
-          REPO="${{ github.repository }}"
-          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          jq -n --arg version "$VERSION" --arg notes "Release $TAG" --arg pub_date "$PUB_DATE" '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}' > latest.json
-
-          find artifacts -name "*.sig" | while read sig_path; do
-            SIG=$(cat "$sig_path" | xargs)
-            BIN_PATH="${sig_path%.sig}"
-            if [ -f "$BIN_PATH" ]; then
-              FILE=$(basename "$BIN_PATH")
-              URL="https://github.com/$REPO/releases/download/$TAG/$FILE"
-              PLATFORM=""
-              if [[ "$FILE" == *"macos_aarch64"* ]]; then PLATFORM="darwin-aarch64";
-              elif [[ "$FILE" == *"macos_x64"* ]]; then PLATFORM="darwin-x86_64";
-              elif [[ "$FILE" == *"linux_x64"* ]]; then PLATFORM="linux-x86_64";
-              elif [[ "$FILE" == *"windows_x64"* ]]; then PLATFORM="windows-x86_64";
-              fi
-              if [ -n "$PLATFORM" ]; then
-                jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-              fi
-            fi
-          done
-          cat latest.json
-
-      - name: Flatten assets
-        run: |
-          mkdir release_assets
-          find artifacts -type f -exec cp {} release_assets/ \;
-          cp latest.json release_assets/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.value }}
-          name: Codelane ${{ steps.tag.outputs.value }}
-          draft: false
+          tagName: ${{ steps.tag.outputs.value }}
+          releaseName: "Codelane ${{ steps.tag.outputs.value }}"
+          releaseBody: "Release for Codelane ${{ steps.tag.outputs.value }}"
+          releaseDraft: false
           prerelease: false
-          generate_release_notes: true
-          make_latest: true
-          files: |
-            release_assets/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          args: ${{ matrix.args }}
