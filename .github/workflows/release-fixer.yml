@@ -76,7 +76,7 @@ jobs:
               
               # Determine platform key based on filename/path
               PLATFORM=""
-              if [[ "$FILE" == *"macos"* ]] || [[ "$sig_path" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
+              if [[ "$FILE" == *"macos"* ]] || [[ "$FILE" == *"darwin"* ]]; then
                 if [[ "$FILE" == *"aarch64"* ]] || [[ "$FILE" == *"silicon"* ]]; then
                   PLATFORM="darwin-aarch64"
                 elif [[ "$FILE" == *"x86_64"* ]] || [[ "$FILE" == *"intel"* ]]; then
@@ -93,16 +93,20 @@ jobs:
               if [ -n "$PLATFORM" ]; then
                 if [ "$PLATFORM" == "darwin-universal" ]; then
                   jq --arg sig "$SIG" --arg url "$URL" '.platforms["darwin-aarch64"] = {signature: $sig, url: $url} | .platforms["darwin-x86_64"] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                  echo "Added universal macOS signatures to darwin-aarch64 and darwin-x86_64"
                 else
                   jq --arg sig "$SIG" --arg url "$URL" --arg key "$PLATFORM" '.platforms[$key] = {signature: $sig, url: $url}' latest.json > tmp.json && mv tmp.json latest.json
-                  echo "Added $PLATFORM signature"
                 fi
               fi
             fi
           done
           
           cat latest.json
+
+      - name: Flatten artifacts
+        run: |
+          mkdir release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          cp latest.json release_assets/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -114,7 +118,6 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*
-            latest.json
+            release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

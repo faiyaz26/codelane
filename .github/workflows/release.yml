@@ -231,6 +231,12 @@ jobs:
           
           cat latest.json
 
+      - name: Flatten artifacts
+        run: |
+          mkdir release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          cp latest.json release_assets/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -241,7 +247,6 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*
-            latest.json
+            release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,4 @@
-name: Release (No Notarize)
+name: Release App (No Notarize)
 
 on:
   workflow_dispatch:
@@ -76,13 +76,12 @@ jobs:
         shell: bash
         run: |
           # Rename tarballs and their signatures to avoid collisions
-          # We search in target/release/bundle and target/*/release/bundle
-          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_${{ matrix.name }}.app.tar.gz"' _ {} \; || true
-          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_${{ matrix.name }}.app.tar.gz.sig"' _ {} \; || true
-          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_${{ matrix.name }}.AppImage.tar.gz"' _ {} \; || true
-          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%.AppImage.sig}_${{ matrix.name }}.AppImage.sig"' _ {} \; || true
-          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_${{ matrix.name }}.zip"' _ {} \; || true
-          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_${{ matrix.name }}.zip.sig"' _ {} \; || true
+          find target -name "Codelane.app.tar.gz" -exec sh -c 'mv "$1" "${1%.app.tar.gz}_macos.app.tar.gz"' _ {} \; || true
+          find target -name "Codelane.app.tar.gz.sig" -exec sh -c 'mv "$1" "${1%.app.tar.gz.sig}_macos.app.tar.gz.sig"' _ {} \; || true
+          find target -name "*.AppImage.tar.gz" -exec sh -c 'mv "$1" "${1%.AppImage.tar.gz}_linux_x64.AppImage.tar.gz"' _ {} \; || true
+          find target -name "*.AppImage.sig" -exec sh -c 'mv "$1" "${1%.AppImage.sig}_linux_x64.AppImage.sig"' _ {} \; || true
+          find target -name "*.zip" -exec sh -c 'mv "$1" "${1%.zip}_windows_x64.zip"' _ {} \; || true
+          find target -name "*.zip.sig" -exec sh -c 'mv "$1" "${1%.zip.sig}_windows_x64.zip.sig"' _ {} \; || true
 
       - name: Prepare artifacts
         shell: bash
@@ -146,7 +145,6 @@ jobs:
             echo "Tag $TAG already exists"
           else
             # Try to push, but don't fail the whole job if it fails due to permissions
-            # (User can always push manually)
             git tag "$TAG"
             git push origin "$TAG" || echo "Failed to push tag, but continuing..."
           fi
@@ -204,6 +202,12 @@ jobs:
           
           cat latest.json
 
+      - name: Flatten artifacts
+        run: |
+          mkdir release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          cp latest.json release_assets/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -214,7 +218,6 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            artifacts/**/*
-            latest.json
+            release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
