@@ -171,6 +171,13 @@ The backend has ~250 tests covering core functionality. Tests use `tempfile` for
 - **Code Review Automation**: Integrated with Claude Code, Cursor, and Aider
 - **Smart File Sorting**: AI-driven file organization with dependency analysis
 - **Dependency Analysis**: Tree-sitter powered code structure understanding
+- **Multiple AI Agents**: Configure different agents per lane with model selection
+  - **Claude Code**: Use Claude models (Opus, Sonnet, Haiku) via Anthropic API
+  - **Aider**: Local or API-based models (GPT-4, Claude, local LLMs via Ollama)
+  - **OpenCode/Cursor**: Your choice of supported models
+  - **Custom Shell**: Run any CLI-based AI coding assistant
+
+> **Note**: Codelane is an orchestration tool - you'll need to configure your preferred AI service (API keys, local models, etc.) separately. The application provides the terminal environment where these agents run.
 
 ### 📟 Integrated Terminal
 - **Full ANSI Support**: 256 colors, cursor control, scroll regions via xterm.js
@@ -235,6 +242,46 @@ make clean
 pnpm install
 make build
 ```
+
+## FAQ
+
+### Which AI model should I use with Codelane?
+
+Codelane is an **orchestration tool** that provides the environment for AI coding agents to run. It doesn't include AI models itself. You have several options:
+
+1. **Cloud-based models (API)**:
+   - **Anthropic Claude** (via Claude Code or Aider): Requires API key from [console.anthropic.com](https://console.anthropic.com)
+   - **OpenAI GPT-4** (via Aider, Cursor): Requires API key from [platform.openai.com](https://platform.openai.com)
+   
+2. **Local models** (free, runs on your machine):
+   - Install [Ollama](https://ollama.ai) and download models like `codellama`, `deepseek-coder`, `qwen2.5-coder`
+   - Use with Aider: `aider --model ollama/codellama`
+   - Popular local coding models: Qwen2.5-Coder, DeepSeek-Coder, CodeLlama, StarCoder2
+
+3. **Hybrid approach**:
+   - Use local models for exploration/drafts
+   - Use Claude/GPT-4 for complex refactoring
+
+**Recommendation**: If you have many local models already, start with **Ollama + Aider** for a free, privacy-focused setup. Configure it in the lane settings.
+
+### How do I set up Aider with local models?
+
+```bash
+# Install Ollama
+# Visit https://ollama.ai for your platform
+
+# Pull a coding model
+ollama pull qwen2.5-coder:7b
+
+# In Codelane terminal, use Aider with local model
+aider --model ollama/qwen2.5-coder:7b
+```
+
+### How do I configure Claude Code?
+
+1. Get API key from [console.anthropic.com](https://console.anthropic.com)
+2. Set environment variable: `export ANTHROPIC_API_KEY=your_key`
+3. In lane settings, select "Claude Code" and choose model (Sonnet, Opus, Haiku)
 
 ## License
 
