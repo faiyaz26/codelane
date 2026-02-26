@@ -120,6 +120,14 @@ export function ProjectLanes() {
             </div>
           </div>
         </div>
+
+        <div className="mt-16 rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden max-w-5xl mx-auto">
+          <img 
+            src="/screenshots/git_manager.png" 
+            alt="Codelane Git Manager Interface" 
+            className="rounded-lg w-full h-auto object-cover border border-[#374151]/50"
+          />
+        </div>
       </div>
     </section>
   );

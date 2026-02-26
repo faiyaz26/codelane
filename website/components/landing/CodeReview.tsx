@@ -72,57 +72,12 @@ export function CodeReview() {
             </div>
           </div>
 
-          <div className="rounded-md border border-[#374151] bg-[#18181B] overflow-hidden">
-            <div className="px-4 py-3 bg-[#1F2937] border-b border-[#374151] flex items-center justify-between">
-              <span className="font-mono text-sm text-gray-400">
-                components/AuthProvider.tsx
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded text-xs font-medium bg-red-500/20 text-red-400">
-                  -3
-                </span>
-                <span className="px-2 py-1 rounded text-xs font-medium bg-[#34D399]/20 text-[#34D399]">
-                  +7
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 font-mono text-sm overflow-x-auto">
-              {diffLines.map((line, index) => {
-                let bgColor = '';
-                let textColor = 'text-gray-400';
-                let prefix = ' ';
-
-                if (line.type === 'removed') {
-                  bgColor = 'bg-red-500/10';
-                  textColor = 'text-red-300';
-                  prefix = '-';
-                } else if (line.type === 'added') {
-                  bgColor = 'bg-[#34D399]/10';
-                  textColor = 'text-[#34D399]';
-                  prefix = '+';
-                }
-
-                return (
-                  <div key={index} className={`${bgColor} ${textColor} py-0.5`}>
-                    <span className="text-gray-600 select-none mr-4">
-                      {index + 1}
-                    </span>
-                    <span className="select-none mr-2">{prefix}</span>
-                    {line.content.replace(/^[+-]\s*/, '')}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="px-4 py-3 bg-[#1F2937] border-t border-[#374151] flex items-center justify-end gap-2">
-              <button className="px-4 py-2 rounded border border-[#374151] text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
-                Reject
-              </button>
-              <button className="px-4 py-2 rounded bg-[#34D399] text-[#18181B] hover:bg-[#34D399]/90 transition-colors text-sm font-medium">
-                Approve Changes
-              </button>
-            </div>
+          <div className="rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl">
+            <img 
+              src="/screenshots/code_review_tab.png" 
+              alt="Codelane Code Review Interface" 
+              className="w-full h-auto object-cover"
+            />
           </div>
         </div>
 
