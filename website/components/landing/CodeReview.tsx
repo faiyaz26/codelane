@@ -74,12 +74,12 @@ export function CodeReview() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl h-full">
+          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl flex items-center">
             <Image 
               src={codeReviewImg}
               alt="Codelane Code Review Interface" 
               placeholder="blur"
-              className="w-full h-full object-cover object-left-top"
+              className="w-full h-auto"
             />
           </div>
         </div>
