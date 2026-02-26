@@ -1,4 +1,6 @@
 import { Terminal, Sparkles, Code2, Cpu } from 'lucide-react';
+import Image from 'next/image';
+import agentConfigImg from '@/public/screenshots/agent_configuration.png';
 
 export function AgentIntegration() {
   const agents = [
@@ -123,9 +125,10 @@ export function AgentIntegration() {
         </div>
 
         <div className="mt-16 rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden max-w-5xl mx-auto">
-          <img 
-            src="/screenshots/agent_configuration.png" 
+          <Image 
+            src={agentConfigImg}
             alt="Codelane Agent Configuration Interface" 
+            placeholder="blur"
             className="rounded-lg w-full h-auto object-cover border border-[#374151]/50"
           />
         </div>

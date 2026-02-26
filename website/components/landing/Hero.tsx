@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import agentTerminalImg from '@/public/screenshots/agent_terminal.png';
 import { Terminal, Github, Download, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -99,9 +101,10 @@ export function Hero() {
         </div>
 
         <div className="mt-16 mb-8 relative rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden mx-auto max-w-5xl">
-          <img 
-            src="/screenshots/agent_terminal.png" 
+          <Image 
+            src={agentTerminalImg}
             alt="Codelane Agent Terminal Interface" 
+            placeholder="blur"
             className="rounded-lg w-full h-auto object-cover border border-[#374151]/50"
           />
         </div>

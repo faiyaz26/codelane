@@ -1,4 +1,6 @@
 import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import Image from 'next/image';
+import codeReviewImg from '@/public/screenshots/code_review_tab.png';
 
 export function CodeReview() {
   const diffLines = [
@@ -73,9 +75,10 @@ export function CodeReview() {
           </div>
 
           <div className="rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl">
-            <img 
-              src="/screenshots/code_review_tab.png" 
+            <Image 
+              src={codeReviewImg}
               alt="Codelane Code Review Interface" 
+              placeholder="blur"
               className="w-full h-auto object-cover"
             />
           </div>

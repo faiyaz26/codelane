@@ -1,4 +1,6 @@
 import { GitBranch, Bot, Wrench } from 'lucide-react';
+import Image from 'next/image';
+import gitManagerImg from '@/public/screenshots/git_manager.png';
 
 export function ProjectLanes() {
   const lanes = [
@@ -122,9 +124,10 @@ export function ProjectLanes() {
         </div>
 
         <div className="mt-16 rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden max-w-5xl mx-auto">
-          <img 
-            src="/screenshots/git_manager.png" 
+          <Image 
+            src={gitManagerImg}
             alt="Codelane Git Manager Interface" 
+            placeholder="blur"
             className="rounded-lg w-full h-auto object-cover border border-[#374151]/50"
           />
         </div>
