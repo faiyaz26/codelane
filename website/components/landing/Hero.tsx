@@ -1,11 +1,64 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import agentTerminalImg from '@/public/screenshots/agent_terminal.webp';
 import { Terminal, Github, Download, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Hero() {
+  const [platform, setPlatform] = useState({
+    label: 'Download for macOS',
+    link: 'https://github.com/faiyaz26/codelane/releases/latest',
+  });
+
+  useEffect(() => {
+    async function detectPlatform() {
+      const ua = window.navigator.userAgent.toLowerCase();
+      let os = 'macos';
+      let arch = 'aarch64'; // Default to silicon for mac
+
+      if (ua.includes('win')) os = 'windows';
+      else if (ua.includes('linux')) os = 'linux';
+      else if (ua.includes('mac')) {
+        os = 'macos';
+        // Simple check for Intel vs Silicon
+        if (ua.includes('intel')) arch = 'x64';
+      }
+
+      try {
+        const response = await fetch('https://api.github.com/repos/faiyaz26/codelane/releases/latest');
+        const data = await response.json();
+        const assets = data.assets;
+
+        let bestAsset = null;
+        let label = 'Download for macOS';
+
+        if (os === 'macos') {
+          bestAsset = assets.find((a: any) => a.name.endsWith(`${arch}.dmg`));
+          label = arch === 'aarch64' ? 'Download for macOS (Silicon)' : 'Download for macOS (Intel)';
+        } else if (os === 'windows') {
+          bestAsset = assets.find((a: any) => a.name.endsWith('x64-setup.exe'));
+          label = 'Download for Windows';
+        } else if (os === 'linux') {
+          bestAsset = assets.find((a: any) => a.name.endsWith('amd64.AppImage'));
+          label = 'Download for Linux';
+        }
+
+        if (bestAsset) {
+          setPlatform({
+            label,
+            link: bestAsset.browser_download_url,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to fetch latest release:', e);
+      }
+    }
+
+    detectPlatform();
+  }, []);
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#18181B]">
       <div className="absolute inset-0 opacity-20">
@@ -38,13 +91,13 @@ export function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-          <a href="https://github.com/faiyaz26/codelane/releases/latest" target="_blank" rel="noopener noreferrer">
+          <a href={platform.link} target="_blank" rel="noopener noreferrer">
             <Button
               size="lg"
               className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
             >
               <Download className="w-5 h-5 mr-2" />
-              Download for macOS
+              {platform.label}
             </Button>
           </a>
           <a href="https://github.com/faiyaz26/codelane" target="_blank" rel="noopener noreferrer">
@@ -58,6 +111,13 @@ export function Hero() {
             </Button>
           </a>
         </div>
+
+        <p className="text-sm text-gray-500 mb-16">
+          Also available for{' '}
+          <a href="https://github.com/faiyaz26/codelane/releases/latest" className="text-[#60A5FA] hover:underline">
+            Windows and Linux
+          </a>
+        </p>
 
         <div className="mt-16 mb-8 relative rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden mx-auto max-w-5xl">
           <Image 
