@@ -86,7 +86,7 @@ export function Footer() {
 
         <div className="pt-8 border-t border-[#374151] flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-gray-500 text-sm">
-            © 2024 Codelane. Licensed under AGPL-3.0.
+            © 2026 Codelane. Licensed under AGPL-3.0.
           </div>
           <div className="flex items-center gap-6 text-sm">
             <a href="#" className="text-gray-400 hover:text-white transition-colors">

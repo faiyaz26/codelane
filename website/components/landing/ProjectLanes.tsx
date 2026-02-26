@@ -15,7 +15,7 @@ export function ProjectLanes() {
     {
       name: 'Lane B',
       icon: Bot,
-      title: 'Gemini',
+      title: 'Cursor',
       status: 'Refactoring API layer',
       color: 'border-[#34D399]',
       glow: 'from-[#34D399]/20',
@@ -44,7 +44,7 @@ export function ProjectLanes() {
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             Parallelism without the Context Switch. Use Git Worktrees to run
             different features in isolated lanes. Run Claude Code in Lane A,
-            Gemini in Lane B, and debug manually in Lane C—all without touching
+            Cursor in Lane B, and debug manually in Lane C—all without touching
             your main working directory.
           </p>
         </div>

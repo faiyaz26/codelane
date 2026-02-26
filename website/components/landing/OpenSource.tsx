@@ -77,12 +77,14 @@ export function OpenSource() {
                 use AGPL-3.0.
               </p>
             </div>
-            <Button
-              variant="outline"
-              className="border-[#60A5FA] text-[#60A5FA] hover:bg-[#60A5FA]/10 whitespace-nowrap"
-            >
-              Contact for Licensing
-            </Button>
+            <a href="mailto:faiyaz26@gmail.com">
+              <Button
+                variant="outline"
+                className="border-[#60A5FA] text-[#60A5FA] hover:bg-[#60A5FA]/10 whitespace-nowrap"
+              >
+                Contact for Licensing
+              </Button>
+            </a>
           </div>
         </div>
 
@@ -92,7 +94,7 @@ export function OpenSource() {
               View the source on GitHub
             </div>
             <code className="px-6 py-3 bg-[#18181B] rounded border border-[#374151] text-[#60A5FA] font-mono text-sm">
-              git clone https://github.com/codelane/codelane.git
+              git clone https://github.com/faiyaz26/codelane.git
             </code>
             <p className="text-sm text-gray-500 max-w-md">
               Star the repo, open issues, submit PRs. Codelane is built by

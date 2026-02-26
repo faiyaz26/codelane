@@ -63,21 +63,25 @@ export function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-          <Button
-            size="lg"
-            className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Download for macOS
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="border-[#374151] bg-transparent hover:bg-[#1F2937] text-white px-8 h-12 text-lg font-medium"
-          >
-            <Github className="w-5 h-5 mr-2" />
-            View on GitHub
-          </Button>
+          <a href="https://github.com/faiyaz26/codelane/releases/latest" target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Download for macOS
+            </Button>
+          </a>
+          <a href="https://github.com/faiyaz26/codelane" target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-[#374151] bg-transparent hover:bg-[#1F2937] text-white px-8 h-12 text-lg font-medium"
+            >
+              <Github className="w-5 h-5 mr-2" />
+              View on GitHub
+            </Button>
+          </a>
         </div>
 
         <div className="inline-block px-6 py-4 rounded-md border border-[#374151] bg-[#1F2937]/80 backdrop-blur-sm">

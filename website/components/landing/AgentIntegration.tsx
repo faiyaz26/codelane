@@ -10,21 +10,21 @@ export function AgentIntegration() {
       borderColor: 'border-[#60A5FA]/20',
     },
     {
-      name: 'Gemini',
+      name: 'Cursor',
       icon: Sparkles,
       color: 'text-[#34D399]',
       bgColor: 'bg-[#34D399]/10',
       borderColor: 'border-[#34D399]/20',
     },
     {
-      name: 'OpenCode',
+      name: 'Aider',
       icon: Code2,
       color: 'text-[#F59E0B]',
       bgColor: 'bg-[#F59E0B]/10',
       borderColor: 'border-[#F59E0B]/20',
     },
     {
-      name: 'Codex',
+      name: 'Custom',
       icon: Cpu,
       color: 'text-[#8B5CF6]',
       bgColor: 'bg-[#8B5CF6]/10',
@@ -86,15 +86,15 @@ export function AgentIntegration() {
           <div className="p-8 rounded-md border border-[#374151] bg-[#1F2937]/50 backdrop-blur-sm">
             <Sparkles className="w-10 h-10 text-[#34D399] mb-4" />
             <h3 className="text-2xl font-semibold text-white mb-4">
-              Model Agnostic
+              Agent Agnostic
             </h3>
             <p className="text-gray-400 leading-relaxed mb-4">
-              Switch between Claude, Gemini, or any custom agent without changing
-              your workflow. Use the best model for each task, not the one your
+              Switch between Claude Code, Cursor, Aider, or any custom agent without changing
+              your workflow. Use the best agent for each task, not the one your
               IDE dictates.
             </p>
             <div className="flex flex-wrap gap-2">
-              {['Claude', 'Gemini', 'OpenAI', 'Custom'].map((model) => (
+              {['Claude Code', 'Cursor', 'Aider', 'Custom'].map((model) => (
                 <span
                   key={model}
                   className="px-3 py-1 rounded-full text-xs font-medium bg-[#18181B] text-gray-400 border border-[#374151]"
