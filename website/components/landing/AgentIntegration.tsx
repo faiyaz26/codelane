@@ -1,6 +1,6 @@
 import { Terminal, Sparkles, Code2, Cpu } from 'lucide-react';
 import Image from 'next/image';
-import agentConfigImg from '@/public/screenshots/agent_configuration.png';
+import agentConfigImg from '@/public/screenshots/agent_configuration.webp';
 
 export function AgentIntegration() {
   const agents = [

@@ -1,6 +1,6 @@
 import { CheckCircle2, XCircle, Eye } from 'lucide-react';
 import Image from 'next/image';
-import codeReviewImg from '@/public/screenshots/code_review_tab.png';
+import codeReviewImg from '@/public/screenshots/code_review_tab.webp';
 
 export function CodeReview() {
   const diffLines = [

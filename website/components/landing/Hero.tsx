@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import agentTerminalImg from '@/public/screenshots/agent_terminal.png';
+import agentTerminalImg from '@/public/screenshots/agent_terminal.webp';
 import { Terminal, Github, Download, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 

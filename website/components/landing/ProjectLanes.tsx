@@ -1,6 +1,6 @@
 import { GitBranch, Bot, Wrench } from 'lucide-react';
 import Image from 'next/image';
-import gitManagerImg from '@/public/screenshots/git_manager.png';
+import gitManagerImg from '@/public/screenshots/git_manager.webp';
 
 export function ProjectLanes() {
   const lanes = [
