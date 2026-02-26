@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Eye } from 'lucide-react';
 import Image from 'next/image';
 import codeReviewImg from '@/public/screenshots/code_review_tab.webp';
 
@@ -69,16 +69,15 @@ export function CodeReview() {
               </p>
             </div>
 
-            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm hover:border-red-400/50 transition-colors">
+            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm hover:border-[#F59E0B]/50 transition-colors">
               <div className="flex items-center gap-3 mb-4">
-                <XCircle className="w-6 h-6 text-red-400" />
+                <MessageSquare className="w-6 h-6 text-[#F59E0B]" />
                 <h3 className="text-xl font-semibold text-white">
-                  Inline Editing
+                  Contextual AI Assistant
                 </h3>
               </div>
               <p className="text-gray-400 leading-relaxed">
-                Tweak agent output directly in the diff view. Fix minor issues
-                without round-tripping back to the agent or your editor.
+                Have questions about a diff? Ask the built-in AI assistant to explain changes, summarize the PR, or identify potential bugs directly within the review tab.
               </p>
             </div>
           </div>
