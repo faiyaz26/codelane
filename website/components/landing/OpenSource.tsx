@@ -65,29 +65,6 @@ export function OpenSource() {
           })}
         </div>
 
-        <div className="p-8 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm mb-12">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex-1">
-              <h3 className="text-2xl font-semibold text-white mb-3">
-                Need Commercial Licensing?
-              </h3>
-              <p className="text-gray-400 leading-relaxed">
-                Building Codelane into your enterprise tooling or proprietary
-                product? We offer commercial licenses for organizations that can't
-                use AGPL-3.0.
-              </p>
-            </div>
-            <a href="mailto:faiyaz26@gmail.com">
-              <Button
-                variant="outline"
-                className="border-[#60A5FA] text-[#60A5FA] hover:bg-[#60A5FA]/10 whitespace-nowrap"
-              >
-                Contact for Licensing
-              </Button>
-            </a>
-          </div>
-        </div>
-
         <div className="text-center">
           <div className="inline-flex flex-col items-center gap-4 p-8 rounded-md border border-[#374151] bg-gradient-to-br from-[#34D399]/10 to-transparent backdrop-blur-sm">
             <div className="font-mono text-lg text-gray-400">
