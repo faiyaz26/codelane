@@ -1,38 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import agentTerminalImg from '@/public/screenshots/agent_terminal.webp';
 import { Terminal, Github, Download, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Hero() {
-  const [displayedText, setDisplayedText] = useState('');
-  const [cursorVisible, setCursorVisible] = useState(true);
-  const fullText = '$ codelane --parallel --lanes=3 --agent=claude';
-
-  useEffect(() => {
-    let index = 0;
-    const typingInterval = setInterval(() => {
-      if (index < fullText.length) {
-        setDisplayedText(fullText.slice(0, index + 1));
-        index++;
-      } else {
-        clearInterval(typingInterval);
-      }
-    }, 80);
-
-    return () => clearInterval(typingInterval);
-  }, []);
-
-  useEffect(() => {
-    const cursorInterval = setInterval(() => {
-      setCursorVisible((prev) => !prev);
-    }, 530);
-
-    return () => clearInterval(cursorInterval);
-  }, []);
-
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#18181B]">
       <div className="absolute inset-0 opacity-20">
@@ -84,20 +57,6 @@ export function Hero() {
               View on GitHub
             </Button>
           </a>
-        </div>
-
-        <div className="inline-block px-6 py-4 rounded-md border border-[#374151] bg-[#1F2937]/80 backdrop-blur-sm">
-          <div className="font-mono text-left text-sm md:text-base">
-            <span className="text-[#34D399]">→</span>
-            <span className="text-gray-300 ml-2">
-              {displayedText}
-              <span
-                className={`inline-block w-2 h-5 ml-1 bg-[#60A5FA] ${
-                  cursorVisible ? 'opacity-100' : 'opacity-0'
-                }`}
-              />
-            </span>
-          </div>
         </div>
 
         <div className="mt-16 mb-8 relative rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden mx-auto max-w-5xl">
