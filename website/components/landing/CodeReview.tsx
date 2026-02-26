@@ -32,7 +32,7 @@ export function CodeReview() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8 mb-12">
+        <div className="grid lg:grid-cols-3 gap-8 mb-12">
           <div className="space-y-4">
             <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm">
               <div className="flex items-center gap-3 mb-4">
@@ -74,7 +74,7 @@ export function CodeReview() {
             </div>
           </div>
 
-          <div className="rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl h-full">
+          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl h-full">
             <Image 
               src={codeReviewImg}
               alt="Codelane Code Review Interface" 
