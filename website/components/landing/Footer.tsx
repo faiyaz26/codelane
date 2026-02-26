@@ -5,28 +5,20 @@ export function Footer() {
     {
       title: 'Product',
       items: [
-        { name: 'Download', href: '#' },
-        { name: 'Documentation', href: '#' },
-        { name: 'Roadmap', href: '#' },
-        { name: 'Changelog', href: '#' },
+        { name: 'Download', href: 'https://github.com/faiyaz26/codelane/releases/latest' },
       ],
     },
     {
       title: 'Community',
       items: [
-        { name: 'GitHub', href: '#', icon: Github },
-        { name: 'Issues', href: '#', icon: AlertCircle },
-        { name: 'Discussions', href: '#' },
-        { name: 'Contributing', href: '#' },
+        { name: 'GitHub', href: 'https://github.com/faiyaz26/codelane', icon: Github },
+        { name: 'Issues', href: 'https://github.com/faiyaz26/codelane/issues', icon: AlertCircle },
       ],
     },
     {
       title: 'Legal',
       items: [
-        { name: 'AGPL-3.0 License', href: '#' },
-        { name: 'Commercial Licensing', href: '#' },
-        { name: 'Privacy Policy', href: '#' },
-        { name: 'Terms of Use', href: '#' },
+        { name: 'AGPL-3.0 License', href: 'https://github.com/faiyaz26/codelane/blob/main/LICENSE' },
       ],
     },
   ];
@@ -45,19 +37,15 @@ export function Footer() {
             </p>
             <div className="flex items-center gap-3">
               <a
-                href="#"
+                href="https://github.com/faiyaz26/codelane"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="p-2 rounded border border-[#374151] text-gray-400 hover:text-white hover:border-[#60A5FA] transition-colors"
               >
                 <Github className="w-5 h-5" />
               </a>
               <a
-                href="#"
-                className="p-2 rounded border border-[#374151] text-gray-400 hover:text-white hover:border-[#60A5FA] transition-colors"
-              >
-                <FileText className="w-5 h-5" />
-              </a>
-              <a
-                href="#"
+                href="mailto:faiyaz26@gmail.com"
                 className="p-2 rounded border border-[#374151] text-gray-400 hover:text-white hover:border-[#60A5FA] transition-colors"
               >
                 <Mail className="w-5 h-5" />
@@ -89,13 +77,7 @@ export function Footer() {
             © 2026 Codelane. Licensed under AGPL-3.0.
           </div>
           <div className="flex items-center gap-6 text-sm">
-            <a href="#" className="text-gray-400 hover:text-white transition-colors">
-              Status
-            </a>
-            <a href="#" className="text-gray-400 hover:text-white transition-colors">
-              Security
-            </a>
-            <a href="#" className="text-gray-400 hover:text-white transition-colors">
+            <a href="mailto:faiyaz26@gmail.com" className="text-gray-400 hover:text-white transition-colors">
               Contact
             </a>
           </div>
