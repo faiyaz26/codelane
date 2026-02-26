@@ -44,10 +44,10 @@ export function ProjectLanes() {
             Isolated Project Lanes
           </h2>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-            Parallelism without the Context Switch. Use Git Worktrees to run
-            different features in isolated lanes. Run Feature Development in Lane A,
-            review a PR in Lane B, and fix failing tests in Lane C—all 
-            without touching your main working directory.
+            Stop stashing code and juggling branches. Codelane uses Git Worktrees 
+            to give every task its own isolated lane. Run agents, build features, 
+            and review PRs simultaneously in independent environments that 
+            never interfere with your main working directory.
           </p>
         </div>
 
