@@ -1,33 +1,34 @@
-import { Terminal, Sparkles, Code2, Cpu } from 'lucide-react';
+import { Terminal, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import agentConfigImg from '@/public/screenshots/agent_configuration.webp';
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeIcon } from '@/components/icons/AgentIcons';
 
 export function AgentIntegration() {
   const agents = [
     {
-      name: 'Claude Code',
-      icon: Sparkles,
+      name: 'Claude',
+      icon: ClaudeIcon,
       color: 'text-[#60A5FA]',
       bgColor: 'bg-[#60A5FA]/10',
       borderColor: 'border-[#60A5FA]/20',
     },
     {
-      name: 'Cursor',
-      icon: Sparkles,
+      name: 'Gemini',
+      icon: GeminiIcon,
       color: 'text-[#34D399]',
       bgColor: 'bg-[#34D399]/10',
       borderColor: 'border-[#34D399]/20',
     },
     {
-      name: 'Aider',
-      icon: Code2,
+      name: 'Codex',
+      icon: OpenAIIcon,
       color: 'text-[#F59E0B]',
       bgColor: 'bg-[#F59E0B]/10',
       borderColor: 'border-[#F59E0B]/20',
     },
     {
-      name: 'Custom',
-      icon: Cpu,
+      name: 'OpenCode',
+      icon: OpenCodeIcon,
       color: 'text-[#8B5CF6]',
       bgColor: 'bg-[#8B5CF6]/10',
       borderColor: 'border-[#8B5CF6]/20',
