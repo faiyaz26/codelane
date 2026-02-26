@@ -1,6 +1,6 @@
 import { FileCode, Edit3, Layout, Zap } from 'lucide-react';
 import Image from 'next/image';
-import aiReviewImg from '@/public/screenshots/ai_review_generation.webp';
+import markdownImg from '@/public/screenshots/markdown_rendering.webp';
 
 export function MarkdownFirst() {
   const comparisons = [
@@ -80,8 +80,8 @@ export function MarkdownFirst() {
             <div className="absolute -inset-1 bg-gradient-to-r from-[#60A5FA] to-[#34D399] rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
             <div className="relative rounded-xl border border-[#374151] bg-[#1F2937] overflow-hidden shadow-2xl">
               <Image 
-                src={aiReviewImg}
-                alt="Codelane AI Review Markdown Interface" 
+                src={markdownImg}
+                alt="Codelane Markdown Rendering Interface" 
                 placeholder="blur"
                 className="w-full h-auto"
               />
