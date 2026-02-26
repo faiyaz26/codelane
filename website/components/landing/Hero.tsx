@@ -19,7 +19,7 @@ export function Hero() {
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#374151] bg-[#1F2937]/50 backdrop-blur-sm mb-8">
           <Terminal className="w-4 h-4 text-[#60A5FA]" />
           <span className="font-mono text-sm text-gray-400">
-            Built with Rust + Tauri
+            Built with Tauri + SolidJS
           </span>
         </div>
 
