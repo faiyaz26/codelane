@@ -33,6 +33,15 @@ export function CodeReview() {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8 mb-12 items-start">
+          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl">
+            <Image 
+              src={codeReviewImg}
+              alt="Codelane Code Review Interface" 
+              placeholder="blur"
+              className="w-full h-auto"
+            />
+          </div>
+
           <div className="space-y-4">
             <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm">
               <div className="flex items-center gap-3 mb-4">
@@ -72,15 +81,6 @@ export function CodeReview() {
                 without round-tripping back to the agent or your editor.
               </p>
             </div>
-          </div>
-
-          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl">
-            <Image 
-              src={codeReviewImg}
-              alt="Codelane Code Review Interface" 
-              placeholder="blur"
-              className="w-full h-auto"
-            />
           </div>
         </div>
 
