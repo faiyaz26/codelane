@@ -3,52 +3,65 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import agentTerminalImg from '@/public/screenshots/agent_terminal.webp';
-import { Terminal, Github, Download, ChevronDown } from 'lucide-react';
+import { Terminal, Github, Download, ChevronDown, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function Hero() {
   const [platform, setPlatform] = useState({
+    os: 'macos',
     label: 'Download for macOS',
     link: 'https://github.com/faiyaz26/codelane/releases/latest',
+    silicon: '',
+    intel: '',
   });
 
   useEffect(() => {
     async function detectPlatform() {
       const ua = window.navigator.userAgent.toLowerCase();
       let os = 'macos';
-      let arch = 'aarch64'; // Default to silicon for mac
 
       if (ua.includes('win')) os = 'windows';
       else if (ua.includes('linux')) os = 'linux';
-      else if (ua.includes('mac')) {
-        os = 'macos';
-        // Simple check for Intel vs Silicon
-        if (ua.includes('intel')) arch = 'x64';
-      }
 
       try {
         const response = await fetch('https://api.github.com/repos/faiyaz26/codelane/releases/latest');
         const data = await response.json();
         const assets = data.assets;
 
-        let bestAsset = null;
-        let label = 'Download for macOS';
+        const siliconAsset = assets.find((a: any) => a.name.endsWith('aarch64.dmg'));
+        const intelAsset = assets.find((a: any) => a.name.endsWith('x64.dmg'));
+        const winAsset = assets.find((a: any) => a.name.endsWith('x64-setup.exe'));
+        const linuxAsset = assets.find((a: any) => a.name.endsWith('amd64.AppImage'));
 
         if (os === 'macos') {
-          bestAsset = assets.find((a: any) => a.name.endsWith(`${arch}.dmg`));
-          label = arch === 'aarch64' ? 'Download for macOS (Silicon)' : 'Download for macOS (Intel)';
-        } else if (os === 'windows') {
-          bestAsset = assets.find((a: any) => a.name.endsWith('x64-setup.exe'));
-          label = 'Download for Windows';
-        } else if (os === 'linux') {
-          bestAsset = assets.find((a: any) => a.name.endsWith('amd64.AppImage'));
-          label = 'Download for Linux';
-        }
-
-        if (bestAsset) {
           setPlatform({
-            label,
-            link: bestAsset.browser_download_url,
+            os: 'macos',
+            label: 'Download for macOS',
+            link: siliconAsset?.browser_download_url || intelAsset?.browser_download_url || 'https://github.com/faiyaz26/codelane/releases/latest',
+            silicon: siliconAsset?.browser_download_url || '',
+            intel: intelAsset?.browser_download_url || '',
+          });
+        } else if (os === 'windows') {
+          setPlatform({
+            os: 'windows',
+            label: 'Download for Windows',
+            link: winAsset?.browser_download_url || 'https://github.com/faiyaz26/codelane/releases/latest',
+            silicon: '',
+            intel: '',
+          });
+        } else if (os === 'linux') {
+          setPlatform({
+            os: 'linux',
+            label: 'Download for Linux',
+            link: linuxAsset?.browser_download_url || 'https://github.com/faiyaz26/codelane/releases/latest',
+            silicon: '',
+            intel: '',
           });
         }
       } catch (e) {
@@ -91,15 +104,38 @@ export function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-          <a href={platform.link} target="_blank" rel="noopener noreferrer">
-            <Button
-              size="lg"
-              className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              {platform.label}
-            </Button>
-          </a>
+          {platform.os === 'macos' ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="lg"
+                  className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
+                >
+                  <Download className="w-5 h-5 mr-2" />
+                  {platform.label}
+                  <ChevronDown className="ml-2 w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1F2937] border-[#374151] text-white">
+                <DropdownMenuItem asChild className="hover:bg-[#374151] cursor-pointer">
+                  <a href={platform.silicon}>Apple Silicon (M1/M2/M3)</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="hover:bg-[#374151] cursor-pointer">
+                  <a href={platform.intel}>Intel Mac</a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <a href={platform.link} target="_blank" rel="noopener noreferrer">
+              <Button
+                size="lg"
+                className="bg-[#60A5FA] hover:bg-[#60A5FA]/90 text-white px-8 h-12 text-lg font-medium"
+              >
+                <Download className="w-5 h-5 mr-2" />
+                {platform.label}
+              </Button>
+            </a>
+          )}
           <a href="https://github.com/faiyaz26/codelane" target="_blank" rel="noopener noreferrer">
             <Button
               size="lg"
