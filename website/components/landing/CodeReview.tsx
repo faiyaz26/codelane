@@ -32,8 +32,8 @@ export function CodeReview() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8 mb-12 items-start">
-          <div className="lg:col-span-2 rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl">
+        <div className="mb-12">
+          <div className="rounded-md border border-[#374151] bg-[#18181B] overflow-hidden shadow-2xl mb-8 max-w-5xl mx-auto">
             <Image 
               src={codeReviewImg}
               alt="Codelane Code Review Interface" 
@@ -42,8 +42,8 @@ export function CodeReview() {
             />
           </div>
 
-          <div className="space-y-4">
-            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm hover:border-[#60A5FA]/50 transition-colors">
               <div className="flex items-center gap-3 mb-4">
                 <Eye className="w-6 h-6 text-[#60A5FA]" />
                 <h3 className="text-xl font-semibold text-white">
@@ -56,7 +56,7 @@ export function CodeReview() {
               </p>
             </div>
 
-            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm">
+            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm hover:border-[#34D399]/50 transition-colors">
               <div className="flex items-center gap-3 mb-4">
                 <CheckCircle2 className="w-6 h-6 text-[#34D399]" />
                 <h3 className="text-xl font-semibold text-white">
@@ -69,7 +69,7 @@ export function CodeReview() {
               </p>
             </div>
 
-            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm">
+            <div className="p-6 rounded-md border border-[#374151] bg-[#18181B]/50 backdrop-blur-sm hover:border-red-400/50 transition-colors">
               <div className="flex items-center gap-3 mb-4">
                 <XCircle className="w-6 h-6 text-red-400" />
                 <h3 className="text-xl font-semibold text-white">
