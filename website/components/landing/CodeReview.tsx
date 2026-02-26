@@ -60,12 +60,11 @@ export function CodeReview() {
               <div className="flex items-center gap-3 mb-4">
                 <CheckCircle2 className="w-6 h-6 text-[#34D399]" />
                 <h3 className="text-xl font-semibold text-white">
-                  Selective Approval
+                  Smart PR & Change Review
                 </h3>
               </div>
               <p className="text-gray-400 leading-relaxed">
-                Accept changes file-by-file or hunk-by-hunk. Your agent proposed
-                12 files but you only trust 10? Approve what works, reject the rest.
+                Pull in PRs and unstaged changes to review the human way. Start with type definitions, trace through invocations, and leverage AI feedback to catch what you missed.
               </p>
             </div>
 
