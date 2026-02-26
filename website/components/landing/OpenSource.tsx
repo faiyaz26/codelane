@@ -11,7 +11,7 @@ export function OpenSource() {
     {
       icon: Lock,
       title: 'Pure Local Execution',
-      description: 'Codelane is not a cloud service. Run agents on your own hardware, with your own API keys. Your source code never leaves your machine.',
+      description: 'Codelane itself performs zero online processing. It provides a purely local cockpit for your workflow, while your agents communicate directly with their providers using your own API keys.',
     },
     {
       icon: Package,
