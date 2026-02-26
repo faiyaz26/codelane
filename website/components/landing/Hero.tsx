@@ -82,6 +82,15 @@ export function Hero() {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#374151_1px,transparent_1px),linear-gradient(to_bottom,#374151_1px,transparent_1px)] bg-[size:64px_64px] opacity-10" />
 
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 text-center">
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/logo.png"
+            alt="Codelane Logo"
+            width={120}
+            height={120}
+            className="rounded-2xl shadow-2xl"
+          />
+        </div>
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#374151] bg-[#1F2937]/50 backdrop-blur-sm mb-8">
           <Terminal className="w-4 h-4 text-[#60A5FA]" />
           <span className="font-mono text-sm text-gray-400">

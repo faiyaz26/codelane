@@ -1,4 +1,5 @@
-import { Github, FileText, AlertCircle, Mail, Terminal } from 'lucide-react';
+import { Github, AlertCircle, Mail } from 'lucide-react';
+import Image from 'next/image';
 
 export function Footer() {
   const links = [
@@ -28,8 +29,14 @@ export function Footer() {
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           <div className="md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <Terminal className="w-8 h-8 text-[#60A5FA]" />
+            <div className="flex items-center gap-3 mb-4">
+              <Image
+                src="/logo.png"
+                alt="Codelane Logo"
+                width={32}
+                height={32}
+                className="rounded-lg"
+              />
               <span className="text-2xl font-bold text-white">Codelane</span>
             </div>
             <p className="text-gray-400 leading-relaxed mb-4">
