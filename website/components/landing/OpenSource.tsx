@@ -10,8 +10,8 @@ export function OpenSource() {
     },
     {
       icon: Lock,
-      title: 'No Cloud Lock-In',
-      description: 'Pure local execution. Run agents on your hardware, with your API keys, under your control.',
+      title: 'Pure Local Execution',
+      description: 'Codelane is not a cloud service. Run agents on your own hardware, with your own API keys. Your source code never leaves your machine.',
     },
     {
       icon: Package,
@@ -37,8 +37,8 @@ export function OpenSource() {
             </span>
           </h2>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-            Codelane is AGPL-3.0. No telemetry, no cloud-locking, just pure local
-            performance. Inspect the source, audit the security, extend the
+            Codelane is AGPL-3.0. No telemetry, pure local execution, just 
+            native performance. Inspect the source, audit the security, extend the
             functionality.
           </p>
         </div>
