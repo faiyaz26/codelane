@@ -262,9 +262,10 @@ Codelane is an **orchestration tool** that provides the environment for AI codin
    - **OpenAI GPT-4** (via Aider, Cursor): Requires API key from [platform.openai.com](https://platform.openai.com)
    
 2. **Local models** (free, runs on your machine):
-   - Install [Ollama](https://ollama.ai) and download models like `codellama`, `deepseek-coder`, `qwen2.5-coder`
-   - Use with Aider: `aider --model ollama/codellama`
-   - Popular local coding models: Qwen2.5-Coder, DeepSeek-Coder, CodeLlama, StarCoder2
+   - Install [Ollama](https://ollama.com) - download from their website for your platform
+   - Popular coding models: `qwen2.5-coder`, `deepseek-coder`, `codellama`, `starcoder2`
+   - Use with Aider: `aider --model ollama/qwen2.5-coder`
+   - Check [ollama.com/library](https://ollama.com/library) for latest model names and sizes
 
 3. **Hybrid approach**:
    - Use local models for exploration/drafts
@@ -274,14 +275,13 @@ Codelane is an **orchestration tool** that provides the environment for AI codin
 
 ### How do I set up Aider with local models?
 
-```bash
-# Install Ollama
-# Visit https://ollama.ai for your platform
+See the "Local models" option above for Ollama installation. Quick example:
 
-# Pull a coding model
+```bash
+# Pull a coding model (after installing Ollama)
 ollama pull qwen2.5-coder:7b
 
-# In Codelane terminal, use Aider with local model
+# In Codelane terminal, use Aider with the local model
 aider --model ollama/qwen2.5-coder:7b
 ```
 
