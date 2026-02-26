@@ -210,12 +210,20 @@ pnpm install
 ### Windows: Tauri CLI native binding errors
 If you see errors like `Cannot find module '@tauri-apps/cli-win32-x64-msvc'`:
 
-```bash
+**PowerShell:**
+```powershell
 # Remove existing installations
-rm -rf node_modules
-rm pnpm-lock.yaml
+Remove-Item -Recurse -Force node_modules
+Remove-Item pnpm-lock.yaml
 
 # Reinstall with proper hoisting
+pnpm install
+```
+
+**Git Bash / WSL:**
+```bash
+rm -rf node_modules
+rm pnpm-lock.yaml
 pnpm install
 ```
 
@@ -262,7 +270,7 @@ Codelane is an **orchestration tool** that provides the environment for AI codin
    - Use local models for exploration/drafts
    - Use Claude/GPT-4 for complex refactoring
 
-**Recommendation**: If you have many local models already, start with **Ollama + Aider** for a free, privacy-focused setup. Configure it in the lane settings.
+**Recommendation**: For a free, privacy-focused setup without API costs, start with **Ollama + Aider**. Configure it in the lane settings once installed.
 
 ### How do I set up Aider with local models?
 
