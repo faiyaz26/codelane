@@ -66,16 +66,56 @@ export function OpenSource() {
         </div>
 
         <div className="text-center">
-          <div className="inline-flex flex-col items-center gap-4 p-8 rounded-md border border-[#374151] bg-gradient-to-br from-[#34D399]/10 to-transparent backdrop-blur-sm">
-            <div className="font-mono text-lg text-gray-400">
-              View the source on GitHub
+          <div className="inline-flex flex-col items-center gap-6 p-8 rounded-md border border-[#374151] bg-gradient-to-br from-[#34D399]/10 to-transparent backdrop-blur-sm w-full max-w-2xl mx-auto">
+            <h3 className="text-2xl font-semibold text-white">Join the Community</h3>
+            
+            <div className="flex flex-wrap justify-center gap-4">
+              <iframe 
+                src="https://ghbtns.com/github-btn.html?user=faiyaz26&repo=codelane&type=star&count=true&size=large" 
+                frameBorder="0" 
+                scrolling="0" 
+                width="170" 
+                height="30" 
+                title="GitHub Star"
+              ></iframe>
+              <iframe 
+                src="https://ghbtns.com/github-btn.html?user=faiyaz26&repo=codelane&type=fork&count=true&size=large" 
+                frameBorder="0" 
+                scrolling="0" 
+                width="170" 
+                height="30" 
+                title="GitHub Fork"
+              ></iframe>
             </div>
-            <code className="px-6 py-3 bg-[#18181B] rounded border border-[#374151] text-[#60A5FA] font-mono text-sm">
-              git clone https://github.com/faiyaz26/codelane.git
-            </code>
+
+            <div className="w-full">
+              <div className="font-mono text-sm text-gray-400 mb-2">Clone the repository</div>
+              <code className="block px-6 py-3 bg-[#18181B] rounded border border-[#374151] text-[#60A5FA] font-mono text-sm mb-4">
+                git clone https://github.com/faiyaz26/codelane.git
+              </code>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <a 
+                href="https://github.com/faiyaz26/codelane/issues/new" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-6 py-2 rounded border border-[#374151] text-gray-300 hover:text-white hover:bg-[#1F2937] transition-all"
+              >
+                Create an Issue
+              </a>
+              <a 
+                href="https://github.com/faiyaz26/codelane" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-6 py-2 rounded bg-[#60A5FA] text-white hover:bg-[#60A5FA]/90 transition-all font-medium"
+              >
+                View Repository
+              </a>
+            </div>
+
             <p className="text-sm text-gray-500 max-w-md">
-              Star the repo, open issues, submit PRs. Codelane is built by
-              developers, for developers.
+              Found a bug? Have a feature request? Codelane is open source and we welcome your feedback and contributions.
             </p>
           </div>
         </div>
