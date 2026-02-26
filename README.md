@@ -2,6 +2,7 @@
   <img src="assets/icons/codelane_logo.png" alt="Codelane Logo" width="120" height="120">
   <h1>Codelane</h1>
   <p><strong>Agentic Development Environment</strong> - A modern desktop application that enables parallel feature development across multiple project lanes with AI agents and human-in-the-loop code review.</p>
+  <p><a href="https://codelane.app">codelane.app</a></p>
 </div>
 
 Built on Tauri and SolidJS for exceptional performance, Codelane empowers developers to work on multiple tasks simultaneously while maintaining control through intelligent code review, dependency-aware navigation, and comprehensive git management.

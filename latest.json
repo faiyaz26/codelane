@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "notes": "Release v0.2.0",
+  "pub_date": "2026-02-25T03:33:02Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "signature_string_here",
+      "url": "https://github.com/faiyaz26/codelane/releases/download/v0.2.0/Codelane_macos_aarch64.app.tar.gz"
+    }
+  }
+}

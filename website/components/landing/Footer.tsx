@@ -6,6 +6,7 @@ export function Footer() {
     {
       title: 'Product',
       items: [
+        { name: 'Homepage', href: 'https://codelane.app' },
         { name: 'Download', href: 'https://github.com/faiyaz26/codelane/releases/latest' },
       ],
     },
