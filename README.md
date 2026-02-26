@@ -200,9 +200,34 @@ The backend has ~250 tests covering core functionality. Tests use `tempfile` for
 pnpm install
 ```
 
+### Windows: Tauri CLI native binding errors
+If you see errors like `Cannot find module '@tauri-apps/cli-win32-x64-msvc'`:
+
+```bash
+# Remove existing installations
+rm -rf node_modules
+rm pnpm-lock.yaml
+
+# Reinstall with proper hoisting
+pnpm install
+```
+
+The root `.npmrc` file enables `shamefully-hoist=true` which is required for Tauri CLI to work correctly on Windows.
+
+### Windows: Make commands not working
+On Windows, use PowerShell or install [Make for Windows](https://gnuwin32.sourceforge.net/packages/make.htm), or use pnpm scripts directly:
+
+```bash
+# Instead of 'make dev'
+pnpm dev
+
+# Instead of 'make build'
+pnpm build
+```
+
 ### Hot reload not working
 - Check that port 1420 is not in use
-- Restart the dev server: `make dev`
+- Restart the dev server: `make dev` or `pnpm dev`
 
 ### Clean build from scratch
 ```bash
