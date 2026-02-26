@@ -1,4 +1,4 @@
-name: Release App (Tauri Action Recommended)
+name: Release App
 
 on:
   workflow_dispatch:
