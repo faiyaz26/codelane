@@ -5,9 +5,22 @@
 import { getStore } from './store';
 import type { Lane, LaneConfig, CreateLaneParams, UpdateLaneParams } from '../types/lane';
 import { v4 as uuidv4 } from 'uuid';
-import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch, fetchBranch } from './git-api';
+import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch, fetchBranch, cloneRepo, getRemoteUrl, fetchPrBranch } from './git-api';
 
 const LANES_KEY = 'lanes';
+
+/**
+ * Normalizes a git URL for comparison (removes protocol, .git suffix, and trailing slashes)
+ */
+function normalizeGitUrl(url: string): string {
+  return url
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^git@/, '')
+    .replace(/:/, '/')
+    .replace(/\.git$/, '')
+    .replace(/\/$/, '');
+}
 
 /**
  * Load lanes array from store
@@ -38,27 +51,69 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     throw new Error('Working directory is required');
   }
 
+  let workingDir = params.workingDir.trim();
   let worktreePath: string | undefined;
   let branch: string | undefined;
+
+  // For PR review lanes, ensure the repository exists and matches
+  if (params.laneType === 'pr_review' && params.prMetadata) {
+    const prRepoUrl = params.prMetadata.repoUrl;
+    let needsClone = false;
+
+    const isRepo = await isGitRepo(workingDir);
+    if (!isRepo) {
+      needsClone = true;
+      // If the directory is not a repo and it exists, we might want to clone into a subfolder
+      // to avoid git clone failure if the directory is not empty.
+      // For simplicity, if it's not a repo, we'll append the repo name if we need to clone.
+      const repoName = params.prMetadata.repoName.split('/').pop() || 'repo';
+      if (!workingDir.endsWith(repoName)) {
+        workingDir = `${workingDir.replace(/\/$/, '')}/${repoName}`;
+      }
+    } else {
+      // Check if remote matches
+      try {
+        const remoteUrl = await getRemoteUrl(workingDir);
+        if (normalizeGitUrl(remoteUrl) !== normalizeGitUrl(prRepoUrl)) {
+          console.warn(`Local repo remote (${remoteUrl}) does not match PR repo (${prRepoUrl}).`);
+          needsClone = true;
+          
+          // If the current directory is a different repo, clone into a subdirectory
+          const repoName = params.prMetadata.repoName.split('/').pop() || 'repo';
+          workingDir = `${workingDir.replace(/\/$/, '')}/${repoName}`;
+        }
+      } catch (e) {
+        // If we can't get remote URL but it's a repo, maybe it's a fresh init or different remote name
+        // We'll try to continue or clone if it's really not matching
+        needsClone = true;
+      }
+    }
+
+    if (needsClone) {
+      console.info(`Cloning ${prRepoUrl} into ${workingDir}...`);
+      await cloneRepo(prRepoUrl, workingDir);
+    }
+  }
 
   // Handle branch/worktree creation if branch is specified
   if (params.branch && params.branch.trim()) {
     branch = params.branch.trim();
 
     // Check if directory is a git repo
-    const isRepo = await isGitRepo(params.workingDir);
+    const isRepo = await isGitRepo(workingDir);
     if (isRepo) {
       // For PR review lanes, fetch the remote branch first so we get the actual PR commits
-      if (params.laneType === 'pr_review') {
+      if (params.laneType === 'pr_review' && params.prMetadata) {
         try {
-          await fetchBranch(params.workingDir, branch);
+          // Use the pull request refspec to fetch the branch reliably (even from forks)
+          await fetchPrBranch(workingDir, params.prMetadata.number, branch);
         } catch (e) {
-          console.warn('Failed to fetch remote branch, continuing with local:', e);
+          console.warn('Failed to fetch remote PR branch, continuing with local:', e);
         }
         // Also fetch the base branch to ensure diff works correctly
         if (params.prMetadata?.baseBranch) {
           try {
-            await fetchBranch(params.workingDir, params.prMetadata.baseBranch);
+            await fetchBranch(workingDir, params.prMetadata.baseBranch);
           } catch {
             // Base branch is likely already available locally
           }
@@ -66,20 +121,20 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
       }
 
       // Check if branch exists, create if not
-      const exists = await branchExists(params.workingDir, branch);
+      const exists = await branchExists(workingDir, branch);
       if (!exists) {
         // Create branch from default branch (main/master) instead of HEAD
         let baseBranch: string | undefined;
         try {
-          baseBranch = await getDefaultBranch(params.workingDir);
+          baseBranch = await getDefaultBranch(workingDir);
         } catch {
           // Fall back to creating from HEAD if we can't determine default branch
         }
-        await createBranch(params.workingDir, branch, baseBranch);
+        await createBranch(workingDir, branch, baseBranch);
       }
 
       // Create worktree - backend computes path in ~/.codelane/worktrees/
-      worktreePath = await createWorktree(params.workingDir, branch);
+      worktreePath = await createWorktree(workingDir, branch);
     } else {
       // Not a git repo, ignore branch
       branch = undefined;
@@ -89,7 +144,7 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
   const lane: Lane = {
     id,
     name: params.name,
-    workingDir: params.workingDir,
+    workingDir: workingDir,
     worktreePath,
     branch,
     ...(params.laneType && { laneType: params.laneType }),

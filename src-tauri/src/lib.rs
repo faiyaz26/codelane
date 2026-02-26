@@ -89,6 +89,8 @@ pub fn run() {
             git::git_discard,
             // Git worktree commands
             git::git_init,
+            git::git_clone,
+            git::git_get_remote_url,
             git::git_is_repo,
             git::git_branch_exists,
             git::git_create_branch,
@@ -98,6 +100,7 @@ pub fn run() {
             git::git_worktree_remove,
             // Git remote + branch diff commands
             git::git_fetch_branch,
+            git::git_fetch_pr_branch,
             git::git_diff_branch,
             git::git_branch_changes_with_stats,
             // GitHub CLI commands

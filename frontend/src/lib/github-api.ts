@@ -51,6 +51,7 @@ export async function fetchPrInfo(prUrl: string): Promise<PrMetadata> {
     headBranch: raw.headBranch,
     headSha: raw.headSha,
     prUrl,
+    repoUrl: raw.repoUrl,
     repoName: raw.repoName,
     body: raw.body,
     state: raw.state,

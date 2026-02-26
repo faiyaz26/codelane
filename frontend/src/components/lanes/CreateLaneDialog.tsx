@@ -555,7 +555,7 @@ export function CreateLaneDialog(props: CreateLaneDialogProps) {
           </div>
           <p class="text-xs text-zed-text-tertiary mt-1">
             {laneType() === 'pr_review'
-              ? 'Local path to the repository (must be a git repo)'
+              ? 'Local path to the repository. Will be cloned if it doesn\'t exist.'
               : 'Absolute path to your project directory'}
           </p>
         </div>

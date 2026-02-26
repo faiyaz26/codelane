@@ -25,6 +25,8 @@ const mockCreateWorktree = vi.fn();
 const mockRemoveWorktree = vi.fn();
 const mockGetDefaultBranch = vi.fn();
 const mockFetchBranch = vi.fn();
+const mockCloneRepo = vi.fn();
+const mockGetRemoteUrl = vi.fn();
 vi.mock('../git-api', () => ({
   isGitRepo: (...args: unknown[]) => mockIsGitRepo(...args),
   branchExists: (...args: unknown[]) => mockBranchExists(...args),
@@ -33,6 +35,8 @@ vi.mock('../git-api', () => ({
   removeWorktree: (...args: unknown[]) => mockRemoveWorktree(...args),
   getDefaultBranch: (...args: unknown[]) => mockGetDefaultBranch(...args),
   fetchBranch: (...args: unknown[]) => mockFetchBranch(...args),
+  cloneRepo: (...args: unknown[]) => mockCloneRepo(...args),
+  getRemoteUrl: (...args: unknown[]) => mockGetRemoteUrl(...args),
 }));
 
 let createLane: typeof import('../lane-api')['createLane'];
@@ -56,7 +60,11 @@ beforeEach(async () => {
   mockRemoveWorktree.mockReset();
   mockGetDefaultBranch.mockReset();
   mockFetchBranch.mockReset();
+  mockCloneRepo.mockReset();
+  mockGetRemoteUrl.mockReset();
   mockFetchBranch.mockResolvedValue(undefined);
+  mockCloneRepo.mockResolvedValue(undefined);
+  mockGetRemoteUrl.mockResolvedValue('https://github.com/owner/repo.git');
 
   // Default: empty lanes
   mockStoreGet.mockResolvedValue([]);
@@ -96,6 +104,99 @@ describe('lane-api', () => {
 
     it('throws on whitespace-only working directory', async () => {
       await expect(createLane({ name: 'Test', workingDir: '   ' })).rejects.toThrow('Working directory is required');
+    });
+
+    describe('PR review lane autonomous cloning', () => {
+      const prMetadata = {
+        number: 123,
+        title: 'Fix bug',
+        author: 'faiyaz',
+        baseBranch: 'main',
+        headBranch: 'patch-1',
+        headSha: 'abc',
+        prUrl: 'https://github.com/owner/repo/pull/123',
+        repoUrl: 'https://github.com/owner/repo.git',
+        repoName: 'owner/repo',
+        body: 'fixes #1',
+        state: 'open',
+        filesChanged: 1,
+        additions: 1,
+        deletions: 1,
+      };
+
+      it('clones the repo if workingDir is not a git repo', async () => {
+        mockIsGitRepo.mockResolvedValue(false);
+        mockBranchExists.mockResolvedValue(true);
+        mockCreateWorktree.mockResolvedValue('/worktree/path');
+
+        const lane = await createLane({
+          name: 'PR Review',
+          workingDir: '/projects',
+          laneType: 'pr_review',
+          prMetadata,
+          branch: 'patch-1'
+        });
+
+        // Should append repo name because /projects is not a repo
+        expect(lane.workingDir).toBe('/projects/repo');
+        expect(mockCloneRepo).toHaveBeenCalledWith(prMetadata.repoUrl, '/projects/repo');
+        expect(mockIsGitRepo).toHaveBeenCalledWith('/projects/repo');
+      });
+
+      it('clones into subdirectory if workingDir is a different repo', async () => {
+        mockIsGitRepo.mockResolvedValue(true);
+        mockGetRemoteUrl.mockResolvedValue('https://github.com/different/repo.git');
+        mockBranchExists.mockResolvedValue(true);
+        mockCreateWorktree.mockResolvedValue('/worktree/path');
+
+        const lane = await createLane({
+          name: 'PR Review',
+          workingDir: '/projects/other',
+          laneType: 'pr_review',
+          prMetadata,
+          branch: 'patch-1'
+        });
+
+        expect(lane.workingDir).toBe('/projects/other/repo');
+        expect(mockCloneRepo).toHaveBeenCalledWith(prMetadata.repoUrl, '/projects/other/repo');
+      });
+
+      it('uses existing repo if remote URL matches', async () => {
+        mockIsGitRepo.mockResolvedValue(true);
+        mockGetRemoteUrl.mockResolvedValue('https://github.com/owner/repo.git');
+        mockBranchExists.mockResolvedValue(true);
+        mockCreateWorktree.mockResolvedValue('/worktree/path');
+
+        const lane = await createLane({
+          name: 'PR Review',
+          workingDir: '/projects/repo',
+          laneType: 'pr_review',
+          prMetadata,
+          branch: 'patch-1'
+        });
+
+        expect(lane.workingDir).toBe('/projects/repo');
+        expect(mockCloneRepo).not.toHaveBeenCalled();
+      });
+
+      it('normalizes URLs correctly during comparison', async () => {
+        mockIsGitRepo.mockResolvedValue(true);
+        // SSH vs HTTPS should match
+        mockGetRemoteUrl.mockResolvedValue('git@github.com:owner/repo.git');
+        mockBranchExists.mockResolvedValue(true);
+        mockCreateWorktree.mockResolvedValue('/worktree/path');
+
+        const lane = await createLane({
+          name: 'PR Review',
+          workingDir: '/projects/repo',
+          laneType: 'pr_review',
+          prMetadata,
+          branch: 'patch-1'
+        });
+
+        expect(lane.workingDir).toBe('/projects/repo');
+        expect(mockCloneRepo).not.toHaveBeenCalled();
+      });
     });
 
     it('handles branch creation in git repo', async () => {

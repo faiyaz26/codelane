@@ -622,6 +622,53 @@ pub async fn git_init(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Clone a git repository
+#[tauri::command]
+pub async fn git_clone(url: String, path: String) -> Result<(), String> {
+    let target_path = Path::new(&path);
+    let parent_dir = target_path.parent().ok_or_else(|| "Invalid target path".to_string())?;
+    let repo_name = target_path.file_name().ok_or_else(|| "Invalid target path".to_string())?;
+
+    // Ensure parent directory exists
+    if !parent_dir.exists() {
+        std::fs::create_dir_all(parent_dir)
+            .map_err(|e| format!("Failed to create parent directory {}: {}", parent_dir.display(), e))?;
+    }
+
+    // Run clone from the parent directory
+    // Note: git clone will fail if target directory exists and is not empty
+    let output = Command::new("git")
+        .current_dir(parent_dir)
+        .args(["clone", &url, &repo_name.to_string_lossy()])
+        .output()
+        .map_err(|e| format!("Failed to run git clone: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+
+    Ok(())
+}
+
+/// Get the remote URL for a repository
+#[tauri::command]
+pub async fn git_get_remote_url(path: String, remote: Option<String>) -> Result<String, String> {
+    let work_dir = Path::new(&path);
+    let remote = remote.unwrap_or_else(|| "origin".to_string());
+
+    let output = Command::new("git")
+        .current_dir(work_dir)
+        .args(["remote", "get-url", &remote])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 /// Check if a directory is a git repository
 #[tauri::command]
 pub async fn git_is_repo(path: String) -> Result<bool, String> {
@@ -870,6 +917,27 @@ pub async fn git_fetch_branch(
         // Fallback: just fetch the remote tracking ref
         run_git(work_dir, &["fetch", &remote, &branch])?;
     }
+
+    Ok(())
+}
+
+/// Fetch a PR head branch into a local branch name
+/// This uses the special refs/pull/<number>/head refspec which works for all PRs (including forks)
+#[tauri::command]
+pub async fn git_fetch_pr_branch(
+    path: String,
+    pr_number: u32,
+    local_branch: String,
+    remote: Option<String>,
+) -> Result<(), String> {
+    let repo_root = find_repo_root(&path)?;
+    let work_dir = Path::new(&repo_root);
+    let remote = remote.unwrap_or_else(|| "origin".to_string());
+
+    // Fetch the PR head ref directly into the local branch
+    // Format: git fetch origin pull/<ID>/head:<LOCAL_BRANCH>
+    let refspec = format!("pull/{}/head:{}", pr_number, local_branch);
+    run_git(work_dir, &["fetch", &remote, &refspec])?;
 
     Ok(())
 }
@@ -1547,6 +1615,88 @@ mod tests {
         let diff = result.unwrap();
         assert!(diff.contains("-original"));
         assert!(diff.contains("+staged change"));
+    }
+
+    // =========================================================================
+    // Remote and Clone tests
+    // =========================================================================
+
+    #[test]
+    fn test_git_get_remote_url() {
+        let temp = create_test_repo();
+        let repo_path = temp.path();
+
+        // Add a mock remote
+        git_cmd(repo_path, &["remote", "add", "origin", "https://github.com/example/repo.git"]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_get_remote_url(
+            repo_path.to_str().unwrap().to_string(),
+            None,
+        ));
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "https://github.com/example/repo.git");
+    }
+
+    #[test]
+    fn test_git_clone_local() {
+        let source_repo = create_test_repo();
+        let source_path = source_repo.path();
+        
+        // Add a commit to source so it's not empty (clone of empty repo can be weird)
+        create_file(source_path, "initial.txt", "content");
+        git_cmd(source_path, &["add", "initial.txt"]);
+        git_cmd(source_path, &["commit", "-m", "Initial commit"]);
+
+        let target_parent = TempDir::new().unwrap();
+        let target_path = target_parent.path().join("cloned-repo");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_clone(
+            source_path.to_str().unwrap().to_string(),
+            target_path.to_str().unwrap().to_string(),
+        ));
+
+        assert!(result.is_ok(), "Clone failed: {:?}", result.err());
+        assert!(target_path.exists());
+        assert!(target_path.join(".git").exists());
+        assert!(target_path.join("initial.txt").exists());
+    }
+
+    #[test]
+    fn test_git_fetch_pr_branch() {
+        let source_repo = create_test_repo();
+        let source_path = source_repo.path();
+        
+        // Create a branch in source
+        create_file(source_path, "pr.txt", "pr content");
+        git_cmd(source_path, &["add", "pr.txt"]);
+        git_cmd(source_path, &["commit", "-m", "PR commit"]);
+        git_cmd(source_path, &["branch", "pull/123/head"]); // Mock the PR ref
+
+        let target_repo = create_test_repo();
+        let target_path = target_repo.path();
+        
+        // Add source as remote
+        git_cmd(target_path, &["remote", "add", "origin", &source_path.to_string_lossy()]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(git_fetch_pr_branch(
+            target_path.to_str().unwrap().to_string(),
+            123,
+            "local-pr-branch".to_string(),
+            None,
+        ));
+
+        assert!(result.is_ok(), "Fetch PR branch failed: {:?}", result.err());
+        
+        // Verify branch was created
+        let exists = rt.block_on(git_branch_exists(
+            target_path.to_str().unwrap().to_string(),
+            "local-pr-branch".to_string(),
+        ));
+        assert!(exists.unwrap());
     }
 
     // =========================================================================

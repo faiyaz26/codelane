@@ -178,6 +178,17 @@ pub async fn github_fetch_pr(pr_url: String) -> Result<PullRequestInfo, String> 
     let json: serde_json::Value = serde_json::from_str(&output)
         .map_err(|e| format!("Failed to parse gh output: {}", e))?;
 
+    let pr_web_url = json["url"].as_str().unwrap_or("");
+    let repo_name = extract_repo_name(pr_web_url);
+    
+    // Construct a standard HTTPS clone URL from the repo name
+    // This is a reliable fallback when the direct repository.url field isn't in the partial JSON view
+    let repo_url = if !repo_name.is_empty() {
+        format!("https://github.com/{}.git", repo_name)
+    } else {
+        String::new()
+    };
+
     Ok(PullRequestInfo {
         number: json["number"].as_u64().unwrap_or(0) as u32,
         title: json["title"].as_str().unwrap_or("").to_string(),
@@ -185,8 +196,8 @@ pub async fn github_fetch_pr(pr_url: String) -> Result<PullRequestInfo, String> 
         base_branch: json["baseRefName"].as_str().unwrap_or("").to_string(),
         head_branch: json["headRefName"].as_str().unwrap_or("").to_string(),
         head_sha: json["headRefOid"].as_str().unwrap_or("").to_string(),
-        repo_url: json["url"].as_str().unwrap_or("").to_string(),
-        repo_name: extract_repo_name(json["url"].as_str().unwrap_or("")),
+        repo_url,
+        repo_name,
         body: json["body"].as_str().unwrap_or("").to_string(),
         state: json["state"].as_str().unwrap_or("").to_string(),
         files_changed: json["changedFiles"].as_u64().unwrap_or(0) as u32,

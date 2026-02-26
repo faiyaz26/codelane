@@ -43,6 +43,7 @@ export interface PrMetadata {
   headBranch: string;
   headSha: string;
   prUrl: string;
+  repoUrl: string;
   repoName: string;
   body: string;
   state: string;

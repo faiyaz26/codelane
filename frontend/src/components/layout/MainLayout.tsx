@@ -179,7 +179,7 @@ export function MainLayout(props: MainLayoutProps) {
         workingDir={activeLane()?.workingDir}
         effectiveWorkingDir={activeLane() ? getEffectiveWorkingDir(activeLane()!) : undefined}
         activeView={activeView()}
-        activeLane={activeLane()}
+        activeLane={activeLane() ?? undefined}
         onNavigateToCodeReview={() => setActiveView(ActivityView.CodeReview)}
         onPullPrChanges={handlePullPrChanges}
       />
@@ -196,94 +196,99 @@ export function MainLayout(props: MainLayoutProps) {
         />
         <ResizeHandle direction="left" onResize={handleProjectPanelResize} />
         <Show when={activeLane()} fallback={<WelcomeScreen onNewLane={props.onNewLane} />}>
-          {(lane) => (
-            <div class="flex-1 flex flex-col overflow-hidden min-w-0">
-              {/* Main content row */}
-              <div class="flex-1 flex overflow-hidden">
-                {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, and PR review lanes */}
-                <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || lane().laneType === 'pr_review' || !!lane().prMetadata) ? 'none' : 'contents' }}>
-                  <AgentTerminalPanel
-                    lanes={props.lanes}
-                    activeLaneId={props.activeLaneId}
-                    initializedLanes={props.initializedLanes}
-                    showEditor={showEditor()}
-                    panelWidth={agentPanelWidth()}
-                    onTerminalReady={props.onTerminalReady}
-                    onTerminalExit={props.onTerminalExit}
-                    onAgentFailed={props.onAgentFailed}
-                    onReloadTerminal={props.onReloadTerminal}
+          {(lane) => {
+            const currentLane = lane();
+            if (!currentLane) return null;
+            
+            return (
+              <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+                {/* Main content row */}
+                <div class="flex-1 flex overflow-hidden">
+                  {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, and PR review lanes */}
+                  <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || currentLane.laneType === 'pr_review' || !!currentLane.prMetadata) ? 'none' : 'contents' }}>
+                    <AgentTerminalPanel
+                      lanes={props.lanes}
+                      activeLaneId={props.activeLaneId}
+                      initializedLanes={props.initializedLanes}
+                      showEditor={showEditor()}
+                      panelWidth={agentPanelWidth()}
+                      onTerminalReady={props.onTerminalReady}
+                      onTerminalExit={props.onTerminalExit}
+                      onAgentFailed={props.onAgentFailed}
+                      onReloadTerminal={props.onReloadTerminal}
+                    />
+                  </div>
+
+                  {/* Code Review - takes over main content area */}
+                  <Show when={activeView() === ActivityView.CodeReview}>
+                    <ReviewErrorBoundary>
+                      <CodeReviewLayout
+                        lane={currentLane}
+                        laneId={currentLane.id}
+                        workingDir={getEffectiveWorkingDir(currentLane)}
+                      />
+                    </ReviewErrorBoundary>
+                  </Show>
+
+                  {/* Editor - Center (shared by non-review views) */}
+                  <Show when={activeView() !== ActivityView.CodeReview && showEditor() && props.activeLaneId}>
+                    <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
+                    <div class="flex flex-col overflow-hidden min-w-0 flex-1">
+                      <EditorPanel
+                        laneId={props.activeLaneId!}
+                        basePath={getEffectiveWorkingDir(currentLane)}
+                        selectedFilePath={selectedFile()}
+                        onAllFilesClosed={() => setSelectedFile(undefined)}
+                      />
+                    </div>
+                  </Show>
+
+                  {/* Empty state for Git Manager or PR lanes when no file is selected */}
+                  <Show when={(activeView() === ActivityView.GitManager || ((currentLane.laneType === 'pr_review' || !!currentLane.prMetadata) && activeView() !== ActivityView.CodeReview)) && !(showEditor() && props.activeLaneId)}>
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
+                      <svg class="w-16 h-16 mb-4 text-zed-text-tertiary opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.5"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                      <h3 class="text-lg font-medium text-zed-text-primary mb-2">No File Selected</h3>
+                      <p class="text-sm text-zed-text-secondary max-w-md">
+                        Select a file from the changes list or commit history to view its diff
+                      </p>
+                    </div>
+                  </Show>
+
+                  {/* Sidebar resize handle */}
+                  <Show when={!sidebarCollapsed()}>
+                    <ResizeHandle direction="right" onResize={handleSidebarResize} />
+                  </Show>
+
+                  {/* Sidebar (shared by all views) */}
+                  <Sidebar
+                    lane={currentLane}
+                    effectiveWorkingDir={getEffectiveWorkingDir(currentLane)}
+                    activeView={activeView()}
+                    width={sidebarWidth()}
+                    collapsed={sidebarCollapsed()}
+                    onFileSelect={setSelectedFile}
+                    onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
                   />
                 </div>
 
-                {/* Code Review - takes over main content area */}
-                <Show when={activeView() === ActivityView.CodeReview}>
-                  <ReviewErrorBoundary>
-                    <CodeReviewLayout
-                      lane={lane()}
-                      laneId={lane().id}
-                      workingDir={getEffectiveWorkingDir(lane())}
-                    />
-                  </ReviewErrorBoundary>
+                {/* Bottom Panel - Don't show for Code Review (terminal is in sidebar) */}
+                <Show when={activeView() !== ActivityView.CodeReview}>
+                  <BottomPanel
+                    lanes={props.lanes}
+                    activeLaneId={props.activeLaneId}
+                    initializedLanes={props.initializedLanes}
+                  />
                 </Show>
-
-                {/* Editor - Center (shared by non-review views) */}
-                <Show when={activeView() !== ActivityView.CodeReview && showEditor() && props.activeLaneId}>
-                  <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
-                  <div class="flex flex-col overflow-hidden min-w-0 flex-1">
-                    <EditorPanel
-                      laneId={props.activeLaneId!}
-                      basePath={getEffectiveWorkingDir(lane())}
-                      selectedFilePath={selectedFile()}
-                      onAllFilesClosed={() => setSelectedFile(undefined)}
-                    />
-                  </div>
-                </Show>
-
-                {/* Empty state for Git Manager or PR lanes when no file is selected */}
-                <Show when={(activeView() === ActivityView.GitManager || ((lane().laneType === 'pr_review' || !!lane().prMetadata) && activeView() !== ActivityView.CodeReview)) && !(showEditor() && props.activeLaneId)}>
-                  <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
-                    <svg class="w-16 h-16 mb-4 text-zed-text-tertiary opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.5"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    <h3 class="text-lg font-medium text-zed-text-primary mb-2">No File Selected</h3>
-                    <p class="text-sm text-zed-text-secondary max-w-md">
-                      Select a file from the changes list or commit history to view its diff
-                    </p>
-                  </div>
-                </Show>
-
-                {/* Sidebar resize handle */}
-                <Show when={!sidebarCollapsed()}>
-                  <ResizeHandle direction="right" onResize={handleSidebarResize} />
-                </Show>
-
-                {/* Sidebar (shared by all views) */}
-                <Sidebar
-                  lane={lane()}
-                  effectiveWorkingDir={getEffectiveWorkingDir(lane())}
-                  activeView={activeView()}
-                  width={sidebarWidth()}
-                  collapsed={sidebarCollapsed()}
-                  onFileSelect={setSelectedFile}
-                  onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                />
               </div>
-
-              {/* Bottom Panel - Don't show for Code Review (terminal is in sidebar) */}
-              <Show when={activeView() !== ActivityView.CodeReview}>
-                <BottomPanel
-                  lanes={props.lanes}
-                  activeLaneId={props.activeLaneId}
-                  initializedLanes={props.initializedLanes}
-                />
-              </Show>
-            </div>
-          )}
+            );
+          }}
         </Show>
 
         {/* Activity Bar - Rightmost */}

@@ -94,6 +94,20 @@ export async function initGitRepo(path: string): Promise<void> {
 }
 
 /**
+ * Clone a git repository
+ */
+export async function cloneRepo(url: string, path: string): Promise<void> {
+  return invoke<void>('git_clone', { url, path });
+}
+
+/**
+ * Get the remote URL for a repository
+ */
+export async function getRemoteUrl(path: string, remote: string = 'origin'): Promise<string> {
+  return invoke<string>('git_get_remote_url', { path, remote });
+}
+
+/**
  * Check if a branch exists
  */
 export async function branchExists(path: string, branch: string): Promise<boolean> {
@@ -152,6 +166,18 @@ export async function removeWorktree(path: string, worktreePath: string): Promis
  */
 export async function fetchBranch(path: string, branch: string, remote?: string): Promise<void> {
   return invoke<void>('git_fetch_branch', { path, branch, remote });
+}
+
+/**
+ * Fetch a PR head branch into a local branch name
+ */
+export async function fetchPrBranch(
+  path: string,
+  prNumber: number,
+  localBranch: string,
+  remote: string = 'origin',
+): Promise<void> {
+  return invoke<void>('git_fetch_pr_branch', { path, prNumber, localBranch, remote });
 }
 
 /**

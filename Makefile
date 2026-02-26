@@ -31,6 +31,8 @@ help:
 
 # Development
 dev:
+	@echo "Cleaning up port 1420..."
+	@lsof -ti:1420 | xargs kill -9 2>/dev/null || true
 	pnpm tauri dev --features devtools
 
 frontend:
