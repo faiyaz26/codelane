@@ -88,13 +88,6 @@ export function OpenSource() {
               ></iframe>
             </div>
 
-            <div className="w-full">
-              <div className="font-mono text-sm text-gray-400 mb-2">Clone the repository</div>
-              <code className="block px-6 py-3 bg-[#18181B] rounded border border-[#374151] text-[#60A5FA] font-mono text-sm mb-4">
-                git clone https://github.com/faiyaz26/codelane.git
-              </code>
-            </div>
-
             <div className="flex flex-col sm:flex-row gap-4">
               <a 
                 href="https://github.com/faiyaz26/codelane/issues/new" 
