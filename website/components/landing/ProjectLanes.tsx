@@ -1,4 +1,4 @@
-import { GitBranch, Bot, Wrench } from 'lucide-react';
+import { GitBranch, Bot, Eye, Bug } from 'lucide-react';
 import Image from 'next/image';
 import gitManagerImg from '@/public/screenshots/git_manager.webp';
 
@@ -7,31 +7,31 @@ export function ProjectLanes() {
     {
       name: 'Lane A',
       icon: Bot,
-      title: 'Claude Code',
-      status: 'Building feature/auth',
+      title: 'Feature Development',
+      status: 'Claude: implementing-auth',
       color: 'border-[#60A5FA]',
       glow: 'from-[#60A5FA]/20',
-      badge: 'AI Agent',
+      badge: 'Claude Code',
       badgeColor: 'bg-[#60A5FA]/20 text-[#60A5FA]',
     },
     {
       name: 'Lane B',
-      icon: Bot,
-      title: 'Cursor',
-      status: 'Refactoring API layer',
+      icon: Eye,
+      title: 'PR Review',
+      status: 'Reviewing PR #42',
       color: 'border-[#34D399]',
       glow: 'from-[#34D399]/20',
-      badge: 'AI Agent',
+      badge: 'Human Review',
       badgeColor: 'bg-[#34D399]/20 text-[#34D399]',
     },
     {
       name: 'Lane C',
-      icon: Wrench,
-      title: 'Manual Debug',
-      status: 'Testing integration',
+      icon: Bug,
+      title: 'Fix Tests',
+      status: 'Claude: fixing-e2e-tests',
       color: 'border-[#F59E0B]',
       glow: 'from-[#F59E0B]/20',
-      badge: 'Manual',
+      badge: 'Claude Code',
       badgeColor: 'bg-[#F59E0B]/20 text-[#F59E0B]',
     },
   ];
@@ -45,9 +45,9 @@ export function ProjectLanes() {
           </h2>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             Parallelism without the Context Switch. Use Git Worktrees to run
-            different features in isolated lanes. Run Claude Code in Lane A,
-            Cursor in Lane B, and debug manually in Lane C—all without touching
-            your main working directory.
+            different features in isolated lanes. Run Feature Development in Lane A,
+            review a PR in Lane B, and fix failing tests in Lane C—all 
+            without touching your main working directory.
           </p>
         </div>
 
