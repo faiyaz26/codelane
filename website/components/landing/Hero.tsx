@@ -102,7 +102,7 @@ export function Hero() {
           Stop Waiting for Your Agent.
           <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#60A5FA] to-[#34D399]">
-            Build in Parallel.
+            Build in Parallel!
           </span>
         </h1>
 
