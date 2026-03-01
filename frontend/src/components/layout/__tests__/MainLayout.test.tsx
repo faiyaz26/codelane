@@ -113,6 +113,7 @@ describe('MainLayout', () => {
         lanes={mockLanes}
         activeLaneId={activeLaneId()}
         initializedLanes={new Set()}
+        agentReloadingLanes={new Set()}
         onLaneSelect={vi.fn()}
         onLaneDeleted={vi.fn()}
         onLaneRenamed={vi.fn()}
@@ -170,12 +171,41 @@ describe('MainLayout', () => {
     expect(screen.getByText('Sidebar for Renamed Lane 1')).toBeInTheDocument();
   });
 
+  it('preserves the same AgentTerminalPanel instance when switching lanes', async () => {
+    const [activeLaneId, setActiveLaneId] = createSignal<string | null>('lane-1');
+
+    const { getByTestId } = render(() => (
+      <MainLayout
+        lanes={mockLanes}
+        activeLaneId={activeLaneId()}
+        initializedLanes={new Set(['lane-1', 'lane-2'])}
+        agentReloadingLanes={new Set()}
+        onLaneSelect={vi.fn()}
+        onLaneDeleted={vi.fn()}
+        onLaneRenamed={vi.fn()}
+        onNewLane={vi.fn()}
+        onSettingsOpen={vi.fn()}
+        onAboutOpen={vi.fn()}
+      />
+    ));
+
+    // Capture the terminal element instance
+    const terminalElement = getByTestId('agent-terminal');
+
+    // Switch to lane 2
+    setActiveLaneId('lane-2');
+
+    // Verify it is the EXACT SAME instance (no remount)
+    expect(getByTestId('agent-terminal')).toBe(terminalElement);
+  });
+
   it('shows welcome screen when no lane is active', () => {
     render(() => (
       <MainLayout
         lanes={mockLanes}
         activeLaneId={null}
         initializedLanes={new Set()}
+        agentReloadingLanes={new Set()}
         onLaneSelect={vi.fn()}
         onLaneDeleted={vi.fn()}
         onLaneRenamed={vi.fn()}
