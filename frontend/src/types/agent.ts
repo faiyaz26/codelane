@@ -1,28 +1,9 @@
+import type { AITool } from '../services/AIReviewService';
+
 /**
  * Agent type definitions for CLI agents
  */
-
 export type AgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | 'gemini' | 'shell';
-
-/**
- * Metadata for each agent type (labels, etc.)
- */
-export const AGENT_METADATA: Record<AgentType, { label: string }> = {
-  claude: { label: 'Claude Code CLI' },
-  gemini: { label: 'Gemini CLI' },
-  aider: { label: 'Aider CLI' },
-  shell: { label: 'Shell (Traditional Terminal)' },
-  cursor: { label: 'Cursor CLI' },
-  opencode: { label: 'OpenCode CLI' },
-  codex: { label: 'OpenAI Codex CLI' },
-};
-
-/**
- * Get display label for an agent type
- */
-export function getAgentTypeLabel(type: AgentType): string {
-  return AGENT_METADATA[type]?.label || type;
-}
 
 /**
  * Configuration for a CLI agent
@@ -37,114 +18,134 @@ export interface AgentConfig {
 }
 
 /**
- * Global agent settings with presets
+ * Metadata for each agent type
  */
-export interface AgentSettings {
-  defaultAgentName: string;
-  presets: Record<string, AgentConfig>;
-  installedAgents: AgentConfig[];
+export interface AgentMetadata {
+  label: string;
+  aiTool: AITool;
+  supportsHooks: boolean;
+  preset: AgentConfig;
 }
 
 /**
- * Default shell configuration
+ * Single source of truth for all supported agents
  */
-export const defaultShellAgent: AgentConfig = {
-  name: 'Shell',
-  agentType: 'shell',
-  command: '/bin/zsh',
-  args: ['-l', '-i'],
-  env: {},
-  useLaneCwd: true,
+export const AGENT_METADATA: Record<AgentType, AgentMetadata> = {
+  shell: {
+    label: 'Shell (Traditional Terminal)',
+    aiTool: 'claude',
+    supportsHooks: false,
+    preset: {
+      name: 'Shell',
+      agentType: 'shell',
+      command: '/bin/zsh',
+      args: ['-l', '-i'],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  claude: {
+    label: 'Claude Code CLI',
+    aiTool: 'claude',
+    supportsHooks: true,
+    preset: {
+      name: 'Claude Code',
+      agentType: 'claude',
+      command: 'claude',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  gemini: {
+    label: 'Gemini CLI',
+    aiTool: 'gemini',
+    supportsHooks: true,
+    preset: {
+      name: 'Gemini',
+      agentType: 'gemini',
+      command: 'gemini',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  aider: {
+    label: 'Aider CLI',
+    aiTool: 'aider',
+    supportsHooks: false,
+    preset: {
+      name: 'Aider',
+      agentType: 'aider',
+      command: 'aider',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  cursor: {
+    label: 'Cursor CLI',
+    aiTool: 'claude',
+    supportsHooks: true,
+    preset: {
+      name: 'Cursor',
+      agentType: 'cursor',
+      command: 'cursor',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  opencode: {
+    label: 'OpenCode CLI',
+    aiTool: 'opencode',
+    supportsHooks: true,
+    preset: {
+      name: 'OpenCode',
+      agentType: 'opencode',
+      command: 'opencode',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  codex: {
+    label: 'OpenAI Codex CLI',
+    aiTool: 'claude',
+    supportsHooks: true,
+    preset: {
+      name: 'Codex',
+      agentType: 'codex',
+      command: 'codex',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
 };
 
 /**
- * Claude Code preset
+ * Get display label for an agent type
  */
-export const claudePreset: AgentConfig = {
-  name: 'Claude Code',
-  agentType: 'claude',
-  command: 'claude',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
+export function getAgentTypeLabel(type: AgentType): string {
+  return AGENT_METADATA[type]?.label || type;
+}
 
 /**
- * Cursor preset
+ * Global agent settings
  */
-export const cursorPreset: AgentConfig = {
-  name: 'Cursor',
-  agentType: 'cursor',
-  command: 'cursor',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
-
-/**
- * Aider preset
- */
-export const aiderPreset: AgentConfig = {
-  name: 'Aider',
-  agentType: 'aider',
-  command: 'aider',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
-
-/**
- * OpenCode preset
- */
-export const openCodePreset: AgentConfig = {
-  name: 'OpenCode',
-  agentType: 'opencode',
-  command: 'opencode',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
-
-/**
- * Codex preset
- */
-export const codexPreset: AgentConfig = {
-  name: 'Codex',
-  agentType: 'codex',
-  command: 'codex',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
-
-/**
- * Gemini preset
- */
-export const geminiPreset: AgentConfig = {
-  name: 'Gemini',
-  agentType: 'gemini',
-  command: 'gemini',
-  args: [],
-  env: {},
-  useLaneCwd: true,
-};
+export interface AgentSettings {
+  defaultAgentName: string;
+  installedAgents: AgentConfig[];
+}
 
 /**
  * Default agent settings
  */
 export const defaultAgentSettings: AgentSettings = {
   defaultAgentName: 'Shell',
-  presets: {
-    shell: defaultShellAgent,
-    claude: claudePreset,
-    cursor: cursorPreset,
-    aider: aiderPreset,
-    opencode: openCodePreset,
-    codex: codexPreset,
-    gemini: geminiPreset,
-  },
   installedAgents: [
-    defaultShellAgent,
+    AGENT_METADATA.shell.preset,
   ],
 };
 
@@ -154,3 +155,5 @@ export const defaultAgentSettings: AgentSettings = {
 export function getDefaultAgentSettings(): AgentSettings {
   return defaultAgentSettings;
 }
+
+export const defaultShellAgent = AGENT_METADATA.shell.preset;

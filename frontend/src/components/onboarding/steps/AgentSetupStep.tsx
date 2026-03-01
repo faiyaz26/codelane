@@ -130,7 +130,6 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
                 <AgentSelector
                   value={newAgent()}
                   onChange={(config) => setNewAgent({ ...newAgent(), ...config })}
-                  presets={defaultAgentSettings.presets}
                 />
                 <div class="flex justify-end gap-2 pt-2">
                   <Button variant="secondary" size="sm" onClick={() => { setShowAddForm(false); setEditingIndex(null); }}>

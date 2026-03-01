@@ -4,8 +4,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { getStore } from './store';
-import type { AgentConfig, AgentSettings, AgentType } from '../types/agent';
-import { getDefaultAgentSettings, defaultShellAgent } from '../types/agent';
+import type { AgentConfig, AgentSettings } from '../types/agent';
+import { getDefaultAgentSettings, defaultShellAgent, AGENT_METADATA } from '../types/agent';
 import { getLane } from './lane-api';
 import type { AITool } from '../services/AIReviewService';
 
@@ -45,9 +45,9 @@ export async function getAgentSettings(): Promise<AgentSettings> {
     settings.defaultAgentName = settings.installedAgents[0]?.name || defaultSettings.defaultAgentName;
   }
 
-  // Ensure presets exists
-  if (!settings.presets) {
-    settings.presets = defaultSettings.presets;
+  // Remove presets if they exist in the saved settings (no longer needed in store)
+  if (settings.presets) {
+    delete settings.presets;
   }
 
   return settings as AgentSettings;
@@ -58,7 +58,9 @@ export async function getAgentSettings(): Promise<AgentSettings> {
  */
 export async function updateAgentSettings(settings: AgentSettings): Promise<void> {
   const store = await getStore();
-  await store.set(AGENT_SETTINGS_KEY, settings);
+  // Ensure we don't save presets to store
+  const { presets, ...toSave } = settings as any;
+  await store.set(AGENT_SETTINGS_KEY, toSave);
   await store.save();
 }
 
@@ -88,26 +90,13 @@ export async function getLaneAgentConfig(laneId: string): Promise<AgentConfig> {
 }
 
 /**
- * Map AgentType to the AITool used for code review / commit summaries.
- * Agents without a direct mapping fall back to 'claude'.
- */
-const AGENT_TO_AI_TOOL: Record<AgentType, AITool> = {
-  claude: 'claude',
-  aider: 'aider',
-  opencode: 'opencode',
-  gemini: 'gemini',
-  codex: 'claude',
-  cursor: 'claude',
-  shell: 'claude',
-};
-
-/**
  * Get the AITool that matches the user's configured default agent.
  */
 export async function getReviewTool(): Promise<AITool> {
   const settings = await getAgentSettings();
   const defaultAgent = getDefaultAgent(settings);
-  return AGENT_TO_AI_TOOL[defaultAgent.agentType] ?? 'claude';
+  const metadata = AGENT_METADATA[defaultAgent.agentType];
+  return metadata?.aiTool ?? 'claude';
 }
 
 /**

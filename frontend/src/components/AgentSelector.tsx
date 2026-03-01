@@ -1,15 +1,13 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
-import { Select } from '@kobalte/core/select';
 import { TextField } from './ui/TextField';
 import { Button } from './ui/Button';
 import type { AgentConfig, AgentType } from '../types/agent';
-import { defaultAgentSettings, AGENT_METADATA } from '../types/agent';
+import { AGENT_METADATA } from '../types/agent';
 import { checkCommandExists } from '../lib/settings-api';
 
 interface AgentSelectorProps {
   value: AgentConfig;
   onChange: (config: AgentConfig) => void;
-  presets?: Record<string, AgentConfig>;
   onValidationChange?: (isValid: boolean) => void;
 }
 
@@ -41,10 +39,10 @@ export function AgentSelector(props: AgentSelectorProps) {
   });
 
   const handleAgentTypeChange = (type: AgentType) => {
-    // When changing agent type, apply preset if available, fallback to default presets
-    const preset = props.presets?.[type] || defaultAgentSettings.presets[type];
-    if (preset) {
-      props.onChange(preset);
+    // When changing agent type, apply preset from unified metadata
+    const metadata = AGENT_METADATA[type];
+    if (metadata) {
+      props.onChange({ ...metadata.preset });
     } else {
       props.onChange({ ...props.value, agentType: type });
     }

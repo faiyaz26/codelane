@@ -163,7 +163,6 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               <AgentSelector
                 value={newAgent()}
                 onChange={(config) => setNewAgent({ ...newAgent(), ...config })}
-                presets={props.settings.presets}
               />
               <div class="flex justify-end gap-2 pt-2">
                 <Button variant="secondary" size="sm" onClick={() => { setShowAddForm(false); setEditingIndex(null); }}>
