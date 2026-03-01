@@ -1,6 +1,6 @@
 // Agents Settings Tab
 
-import { createSignal, onMount, For, Show } from 'solid-js';
+import { createSignal, onMount, For, Show, createEffect } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
 import type { AgentSettings, AgentType, AgentConfig } from '../../types/agent';
 import { getAgentTypeLabel } from '../../types/agent';
@@ -36,7 +36,13 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     const statuses = await hookService.getAllStatus();
     setHookStatuses(statuses);
     verifyAllAgents();
-    props.onValidationChange(true); // Default to valid unless AgentSelector says otherwise
+  });
+
+  // Validation effect: Ensure at least one agent exists and a default is selected
+  createEffect(() => {
+    const hasAgents = props.settings.installedAgents && props.settings.installedAgents.length > 0;
+    const hasDefault = !!props.settings.defaultAgentName;
+    props.onValidationChange(hasAgents && hasDefault);
   });
 
   const verifyAllAgents = async () => {
@@ -87,7 +93,14 @@ export function AgentsSettings(props: AgentsSettingsProps) {
       } else {
         agents.push(agent);
       }
-      return { ...s, installedAgents: agents };
+      
+      // If this is the first agent, make it the default
+      let defaultName = s.defaultAgentName;
+      if (!defaultName && agents.length > 0) {
+        defaultName = agents[0].name || '';
+      }
+
+      return { ...s, installedAgents: agents, defaultAgentName: defaultName };
     });
 
     setShowAddForm(false);
@@ -111,13 +124,16 @@ export function AgentsSettings(props: AgentsSettingsProps) {
   };
 
   const handleRemoveAgent = (index: number) => {
+    // Prevent removing the last agent
+    if (props.settings.installedAgents.length <= 1) return;
+
     props.onSettingsChange((s) => {
       if (!s) return null;
       const agents = [...(s.installedAgents || [])];
       const removedAgent = agents[index];
       agents.splice(index, 1);
       
-      // If we removed the default agent, reset default to the first one
+      // If we removed the default agent, reset default to the first available one
       let defaultName = s.defaultAgentName;
       if (removedAgent.name === s.defaultAgentName) {
         defaultName = agents[0]?.name || '';
@@ -127,8 +143,6 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     });
     verifyAllAgents();
   };
-
-
 
   return (
     <div>
@@ -200,8 +214,13 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                       </button>
                       <button
                         onClick={() => handleRemoveAgent(index())}
-                        class="p-1.5 text-zed-text-tertiary hover:text-zed-accent-red hover:bg-zed-bg-hover rounded transition-colors"
-                        title="Remove"
+                        class={`p-1.5 rounded transition-colors ${
+                          props.settings.installedAgents.length > 1
+                            ? 'text-zed-text-tertiary hover:text-zed-accent-red hover:bg-zed-bg-hover'
+                            : 'text-zed-text-disabled cursor-not-allowed opacity-50'
+                        }`}
+                        disabled={props.settings.installedAgents.length <= 1}
+                        title={props.settings.installedAgents.length > 1 ? "Remove" : "Cannot remove last agent"}
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -212,6 +231,12 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                 </div>
               )}
             </For>
+            
+            <Show when={!props.settings.installedAgents || props.settings.installedAgents.length === 0}>
+              <div class="p-8 text-center border border-dashed border-zed-border-default rounded-lg">
+                <p class="text-sm text-zed-text-tertiary">No agents installed. Please add at least one agent.</p>
+              </div>
+            </Show>
           </div>
         </div>
 
@@ -223,10 +248,15 @@ export function AgentsSettings(props: AgentsSettingsProps) {
           </p>
           
           <select
-            class="w-full h-10 px-3 py-2 bg-zed-bg-surface border border-zed-border-default rounded-md text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue"
+            class={`w-full h-10 px-3 py-2 bg-zed-bg-surface border rounded-md text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue ${
+              !props.settings.defaultAgentName ? 'border-zed-accent-red' : 'border-zed-border-default'
+            }`}
             value={props.settings.defaultAgentName}
             onChange={(e) => props.onSettingsChange((s) => s ? { ...s, defaultAgentName: e.currentTarget.value } : null)}
           >
+            <Show when={!props.settings.defaultAgentName}>
+              <option value="">Select an agent...</option>
+            </Show>
             <For each={props.settings.installedAgents || []}>
               {(agent) => {
                 const name = agent.name || getAgentTypeLabel(agent.agentType);
@@ -236,6 +266,9 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               }}
             </For>
           </select>
+          <Show when={!props.settings.defaultAgentName}>
+            <p class="mt-1 text-xs text-zed-accent-red">Please select a default agent.</p>
+          </Show>
         </div>
 
         {/* Info */}

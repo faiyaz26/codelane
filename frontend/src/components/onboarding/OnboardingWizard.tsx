@@ -116,7 +116,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     const step = currentStep();
     switch (step) {
       case 'agent':
-        return wizardData().installedAgents.length > 0;
+        return wizardData().installedAgents.length > 0 && !!wizardData().defaultAgentName;
       default:
         return true;
     }

@@ -2,7 +2,7 @@ import { createSignal, onMount, For, createEffect, Show } from 'solid-js';
 import { AgentSelector } from '../../AgentSelector';
 import type { WizardData } from '../OnboardingWizard';
 import type { AgentConfig, AgentType } from '../../../types/agent';
-import { defaultAgentSettings, defaultShellAgent, getAgentTypeLabel } from '../../../types/agent';
+import { defaultAgentSettings, getAgentTypeLabel } from '../../../types/agent';
 import { checkCommandExists } from '../../../lib/settings-api';
 import { Button } from '../../ui/Button';
 import { TextField } from '../../ui/TextField';
@@ -56,7 +56,13 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
       agents.push(agent);
     }
 
-    props.onDataChange({ installedAgents: agents });
+    // If this is the first agent added, make it the default
+    let defaultName = props.data.defaultAgentName;
+    if (!defaultName && agents.length > 0) {
+      defaultName = agents[0].name || '';
+    }
+
+    props.onDataChange({ installedAgents: agents, defaultAgentName: defaultName });
     setShowAddForm(false);
     setEditingIndex(null);
     setNewAgent({
@@ -77,6 +83,9 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
   };
 
   const handleRemoveAgent = (index: number) => {
+    // Don't allow removing the last agent
+    if (props.data.installedAgents.length <= 1) return;
+
     const agents = [...props.data.installedAgents];
     const removedAgent = agents[index];
     agents.splice(index, 1);
@@ -89,8 +98,6 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
     
     props.onDataChange({ installedAgents: agents, defaultAgentName: defaultName });
   };
-
-
 
   return (
     <div class="max-w-2xl mx-auto">
@@ -166,7 +173,12 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
                         </button>
                         <button
                           onClick={() => handleRemoveAgent(index())}
-                          class="p-1.5 text-zed-text-tertiary hover:text-zed-accent-red hover:bg-zed-bg-hover rounded transition-colors"
+                          class={`p-1.5 rounded transition-colors ${
+                            props.data.installedAgents.length > 1
+                              ? 'text-zed-text-tertiary hover:text-zed-accent-red hover:bg-zed-bg-hover'
+                              : 'text-zed-text-disabled cursor-not-allowed opacity-50'
+                          }`}
+                          disabled={props.data.installedAgents.length <= 1}
                         >
                           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -177,6 +189,12 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
                   </div>
                 )}
               </For>
+              
+              <Show when={!props.data.installedAgents || props.data.installedAgents.length === 0}>
+                <div class="p-8 text-center border border-dashed border-zed-border-default rounded-lg">
+                  <p class="text-sm text-zed-text-tertiary">No agents added yet. Please add at least one agent to continue.</p>
+                </div>
+              </Show>
             </div>
           </div>
         </div>
@@ -190,10 +208,15 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
             This agent will be used for all new lanes.
           </p>
           <select
-            class="w-full h-10 px-3 py-2 bg-zed-bg-app border border-zed-border-default rounded-md text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue transition-all"
+            class={`w-full h-10 px-3 py-2 bg-zed-bg-app border rounded-md text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue transition-all ${
+              !props.data.defaultAgentName ? 'border-zed-accent-red' : 'border-zed-border-default'
+            }`}
             value={props.data.defaultAgentName}
             onChange={(e) => props.onDataChange({ defaultAgentName: e.currentTarget.value })}
           >
+            <Show when={!props.data.defaultAgentName}>
+              <option value="">Select an agent...</option>
+            </Show>
             <For each={props.data.installedAgents || []}>
               {(agent) => {
                 const name = agent.name || getAgentTypeLabel(agent.agentType);
@@ -203,6 +226,9 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
               }}
             </For>
           </select>
+          <Show when={!props.data.defaultAgentName}>
+            <p class="mt-1 text-xs text-zed-accent-red">Please select a default agent.</p>
+          </Show>
         </div>
       </div>
 
