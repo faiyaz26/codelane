@@ -1,5 +1,4 @@
-import { createSignal, onMount, onCleanup, Show, createMemo, batch } from 'solid-js';
-import { ask } from '@tauri-apps/plugin-dialog';
+import { createSignal, onMount, onCleanup, Show, batch } from 'solid-js';
 import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MainLayout } from './components/layout';
@@ -9,7 +8,7 @@ import { AboutDialog } from './components/AboutDialog';
 import { OnboardingWizard, type WizardData } from './components/onboarding';
 import { UpdateToast } from './components/UpdateToast';
 import { updaterService } from './services/UpdaterService';
-import { listLanes, deleteLane } from './lib/lane-api';
+import { listLanes } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
 import { initPlatform } from './lib/platform';

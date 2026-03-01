@@ -4,7 +4,7 @@
  * Provides common mocks and globals needed across all tests.
  */
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
 
 // Mock localStorage for node/jsdom environment
 const localStorageMap = new Map<string, string>();
