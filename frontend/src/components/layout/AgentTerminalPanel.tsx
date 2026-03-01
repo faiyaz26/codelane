@@ -1,7 +1,7 @@
 import { Show, For, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import { TerminalView } from '../TerminalView';
 import { ProcessMonitor } from '../ProcessMonitor';
-import { Dialog, Button } from '../ui';
+import { Dialog, Button, Select } from '../ui';
 import type { Lane } from '../../types/lane';
 import { getAgentSettings } from '../../lib/settings-api';
 import { updateLaneConfig } from '../../lib/lane-api';
@@ -142,36 +142,22 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       }}
     >
       {/* Header */}
-      <div class="panel-header justify-between bg-zed-bg-panel">
+      <div class="panel-header justify-between bg-zed-bg-panel border-b border-zed-border-subtle">
         <div class="flex items-center gap-3">
           <h3 class="panel-header-title">Agent Terminal</h3>
           
           {/* Agent Switcher */}
           <Show when={agentSettings() && agentSettings()!.installedAgents.length > 1 && props.activeLaneId}>
             <div class="flex items-center">
-              <div class="h-4 w-[1px] bg-zed-border-subtle mx-1" />
-              <div class="relative flex items-center">
-                <select
-                  class="bg-transparent text-[11px] font-medium text-zed-text-tertiary hover:text-zed-text-primary transition-colors cursor-pointer outline-none border-none py-0 pl-1 pr-5 appearance-none"
-                  style={{ 'background-image': 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\' /%3E%3C/svg%3E")', 'background-repeat': 'no-repeat', 'background-position': 'right center', 'background-size': '10px' }}
-                  value={selectedAgentName()}
-                  onChange={(e) => {
-                    const agent = agentSettings()!.installedAgents.find(a => (a.name || a.agentType) === e.currentTarget.value);
-                    if (agent) handleAgentSwitch(agent);
-                  }}
-                >
-                  <For each={agentSettings()!.installedAgents}>
-                    {(agent) => {
-                      const name = agent.name || agent.agentType;
-                      return (
-                        <option value={name} class="bg-zed-bg-overlay text-zed-text-primary">
-                          {name}
-                        </option>
-                      );
-                    }}
-                  </For>
-                </select>
-              </div>
+              <div class="h-4 w-[1px] bg-zed-border-subtle mx-2" />
+              <Select
+                options={agentSettings()!.installedAgents}
+                optionValue="name"
+                optionLabel="name"
+                value={agentSettings()!.installedAgents.find(a => a.name === selectedAgentName())}
+                onChange={(agent) => handleAgentSwitch(agent)}
+                triggerClass="!h-6 !px-2 !bg-transparent !border-none hover:!bg-zed-bg-hover !text-[11px] !font-medium !text-zed-text-tertiary hover:!text-zed-text-primary"
+              />
             </div>
           </Show>
         </div>
