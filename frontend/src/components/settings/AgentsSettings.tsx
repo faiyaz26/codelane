@@ -113,8 +113,16 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     props.onSettingsChange((s) => {
       if (!s) return null;
       const agents = [...(s.installedAgents || [])];
+      const removedAgent = agents[index];
       agents.splice(index, 1);
-      return { ...s, installedAgents: agents };
+      
+      // If we removed the default agent, reset default to the first one
+      let defaultName = s.defaultAgentName;
+      if (removedAgent.name === s.defaultAgentName) {
+        defaultName = agents[0]?.name || '';
+      }
+      
+      return { ...s, installedAgents: agents, defaultAgentName: defaultName };
     });
     verifyAllAgents();
   };
@@ -136,14 +144,14 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     <div>
       <h2 class="text-xl font-semibold text-zed-text-primary mb-2">Agent Configuration</h2>
       <p class="text-sm text-zed-text-secondary mb-6">
-        Configure the default AI agent and manage installed agents.
+        Manage your installed AI agents and select your default preference.
       </p>
 
       <div class="space-y-8">
         {/* Installed Agents Section */}
         <div>
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-medium text-zed-text-primary">Available Agents</h3>
+            <h3 class="text-sm font-medium text-zed-text-primary">Installed Agents</h3>
             <Show when={!showAddForm()}>
               <Button variant="secondary" size="sm" onClick={() => setShowAddForm(true)}>
                 Add Agent
@@ -220,13 +228,22 @@ export function AgentsSettings(props: AgentsSettingsProps) {
 
         {/* Default Agent Section */}
         <div class="border-t border-zed-border-subtle pt-6">
-          <h3 class="text-sm font-medium text-zed-text-primary mb-3">Default Agent</h3>
-          <AgentSelector
-            value={props.settings.defaultAgent}
-            onChange={(config) => props.onSettingsChange((s) => s ? { ...s, defaultAgent: config } : null)}
-            presets={props.settings.presets}
-            onValidationChange={props.onValidationChange}
-          />
+          <h3 class="text-sm font-medium text-zed-text-primary mb-2">Default Preference</h3>
+          <p class="text-xs text-zed-text-tertiary mb-4">
+            New lanes will use this agent by default
+          </p>
+          
+          <select
+            class="w-full h-10 px-3 py-2 bg-zed-bg-surface border border-zed-border-default rounded-md text-zed-text-primary focus:outline-none focus:ring-2 focus:ring-zed-accent-blue"
+            value={props.settings.defaultAgentName}
+            onChange={(e) => props.onSettingsChange((s) => s ? { ...s, defaultAgentName: e.currentTarget.value } : null)}
+          >
+            <For each={props.settings.installedAgents || []}>
+              {(agent) => (
+                <option value={agent.name}>{agent.name}</option>
+              )}
+            </For>
+          </select>
         </div>
 
         {/* Info */}
@@ -238,7 +255,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
             <div>
               <h4 class="text-sm font-medium text-zed-text-primary mb-1">Per-Lane Overrides</h4>
               <p class="text-xs text-zed-text-secondary">
-                Individual lanes can override the default agent. Switch agents directly from the terminal header.
+                Switch between your installed agents directly from any terminal header.
               </p>
             </div>
           </div>

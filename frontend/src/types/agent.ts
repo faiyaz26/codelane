@@ -20,7 +20,7 @@ export interface AgentConfig {
  * Global agent settings with presets
  */
 export interface AgentSettings {
-  defaultAgent: AgentConfig;
+  defaultAgentName: string;
   presets: Record<string, AgentConfig>;
   installedAgents: AgentConfig[];
 }
@@ -113,7 +113,7 @@ export const geminiPreset: AgentConfig = {
  * Default agent settings
  */
 export const defaultAgentSettings: AgentSettings = {
-  defaultAgent: defaultShellAgent,
+  defaultAgentName: 'Shell',
   presets: {
     shell: defaultShellAgent,
     claude: claudePreset,

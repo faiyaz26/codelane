@@ -1,7 +1,7 @@
 import { createStore } from 'solid-js/store';
 import { createContext, useContext } from 'solid-js';
 import type { AgentConfig, AgentSettings } from '../types/agent';
-import { defaultAgentSettings } from '../types/agent';
+import { defaultAgentSettings, defaultShellAgent } from '../types/agent';
 
 // Types
 export interface Lane {
@@ -130,8 +130,8 @@ export const storeActions = {
     setStore('agentSettings', settings);
   },
 
-  updateDefaultAgent: (agentConfig: AgentConfig) => {
-    setStore('agentSettings', 'defaultAgent', agentConfig);
+  updateDefaultAgentName: (name: string) => {
+    setStore('agentSettings', 'defaultAgentName', name);
   },
 
   updateAgentPreset: (presetName: string, agentConfig: AgentConfig) => {
@@ -185,7 +185,11 @@ export const storeSelectors = {
     if (lane?.config?.agentOverride) {
       return lane.config.agentOverride;
     }
-    return store.agentSettings.defaultAgent;
+    
+    // Find default agent in installed agents
+    const settings = store.agentSettings;
+    const found = settings.installedAgents.find(a => a.name === settings.defaultAgentName);
+    return found || settings.installedAgents[0] || defaultShellAgent;
   },
 };
 

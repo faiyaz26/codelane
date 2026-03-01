@@ -10,7 +10,7 @@ import { Show, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { CodeReviewFileList } from './CodeReviewFileList';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { useCodeReviewTerminal } from '../../hooks/useCodeReviewTerminal';
-import { getAgentSettings } from '../../lib/settings-api';
+import { getAgentSettings, getDefaultAgent } from '../../lib/settings-api';
 
 import '@xterm/xterm/css/xterm.css';
 
@@ -34,7 +34,8 @@ export function CodeReviewSidebar(props: CodeReviewSidebarProps) {
   onMount(async () => {
     try {
       const settings = await getAgentSettings();
-      setAgentName(settings.defaultAgent.agentType || 'claude');
+      const defaultAgent = getDefaultAgent(settings);
+      setAgentName(defaultAgent.agentType || 'claude');
     } catch {
       setAgentName('claude');
     }

@@ -458,10 +458,26 @@ function App() {
     // Save agent configuration
     if (data.agent) {
       try {
-        await updateAgentSettings({
-          defaultAgent: data.agent,
-        });
-        setAgentSettings({ defaultAgent: data.agent });
+        const settings = await getAgentSettings();
+        const agentName = data.agent.name || data.agent.agentType;
+        
+        // Add to installed agents if not there
+        const installedAgents = [...settings.installedAgents];
+        const existingIdx = installedAgents.findIndex(a => a.name === agentName);
+        if (existingIdx !== -1) {
+          installedAgents[existingIdx] = data.agent;
+        } else {
+          installedAgents.push(data.agent);
+        }
+
+        const updatedSettings: AgentSettings = {
+          ...settings,
+          defaultAgentName: agentName,
+          installedAgents,
+        };
+
+        await updateAgentSettings(updatedSettings);
+        setAgentSettings(updatedSettings);
       } catch (err) {
         console.error('Failed to save agent settings:', err);
       }

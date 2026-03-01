@@ -10,7 +10,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { loadAddons } from '../lib/terminal-utils';
 import { spawn, type PtyHandle } from '../services/PortablePty';
-import { getAgentSettings } from '../lib/settings-api';
+import { getAgentSettings, getDefaultAgent } from '../lib/settings-api';
 
 export interface CodeReviewTerminalOptions {
   workingDir: string;
@@ -103,7 +103,8 @@ export function useCodeReviewTerminal(
       // Auto-start agent with review context
       try {
         const settings = await getAgentSettings();
-        const agentCmd = settings.defaultAgent.command || 'claude';
+        const defaultAgent = getDefaultAgent(settings);
+        const agentCmd = defaultAgent.command || 'claude';
 
         term.writeln('\x1b[90mStarting AI agent with review context...\x1b[0m');
         term.writeln('');
@@ -127,7 +128,8 @@ export function useCodeReviewTerminal(
 
       try {
         const settings = await getAgentSettings();
-        const agentCmd = settings.defaultAgent.command || 'claude';
+        const defaultAgent = getDefaultAgent(settings);
+        const agentCmd = defaultAgent.command || 'claude';
         term.writeln(`\x1b[90mStart your AI agent to get assistance:\x1b[0m`);
         term.writeln('');
         term.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
