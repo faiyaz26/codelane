@@ -64,6 +64,9 @@ jobs:
       - name: Run frontend tests
         run: cd frontend && pnpm test
 
+      - name: Build frontend
+        run: cd frontend && pnpm build
+
       - name: Run backend tests
         run: cd src-tauri && cargo test
 
