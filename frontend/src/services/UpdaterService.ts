@@ -54,7 +54,7 @@ export const updaterService = {
         setReleaseNotes(update.body ?? null);
 
         // Check if user muted this specific version
-        const mutedVersion = localStorage.getItem(MUTED_VERSION_KEY);
+        const mutedVersion = typeof localStorage !== 'undefined' ? localStorage.getItem(MUTED_VERSION_KEY) : null;
         if (!isManual && mutedVersion === update.version) {
           console.info(`[Updater] Auto-notification for ${update.version} is suppressed because it was muted by user.`);
           setStatus('idle');
@@ -123,7 +123,9 @@ export const updaterService = {
       });
 
       // Clear muted version on successful update
-      localStorage.removeItem(MUTED_VERSION_KEY);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(MUTED_VERSION_KEY);
+      }
 
       // Relaunch after install
       const { relaunch } = await import('@tauri-apps/plugin-process');
@@ -139,7 +141,7 @@ export const updaterService = {
   dismiss(mute = false) {
     if (status() === 'available' || status() === 'up-to-date' || status() === 'error') {
       const currentVersion = updateVersion();
-      if (mute && currentVersion) {
+      if (mute && currentVersion && typeof localStorage !== 'undefined') {
         localStorage.setItem(MUTED_VERSION_KEY, currentVersion);
       }
       setStatus('idle');
