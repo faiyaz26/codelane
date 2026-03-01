@@ -158,6 +158,9 @@ function App() {
   // Listen for agent status changes to show in-app notifications
   onMount(() => {
     const unsubscribe = agentStatusManager.onStatusChange((change) => {
+      // Don't show in-app notification if we are already in this lane
+      if (change.laneId === activeLaneId()) return;
+
       const settings = agentStatusManager.getNotificationSettings();
       
       let message: string | null = null;
