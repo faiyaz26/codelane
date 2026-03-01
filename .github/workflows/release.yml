@@ -61,6 +61,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Run frontend tests
+        run: cd frontend && pnpm test
+
+      - name: Run backend tests
+        run: cd src-tauri && cargo test
+
       - name: Determine Tag Name
         id: tag
         shell: bash
