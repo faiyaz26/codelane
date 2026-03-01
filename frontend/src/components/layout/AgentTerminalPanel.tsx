@@ -5,7 +5,7 @@ import { Dialog, Button } from '../ui';
 import type { Lane } from '../../types/lane';
 import { getAgentSettings } from '../../lib/settings-api';
 import { updateLaneConfig } from '../../lib/lane-api';
-import type { AgentConfigWithName, AgentSettings } from '../../types/agent';
+import type { AgentConfig, AgentSettings } from '../../types/agent';
 
 interface AgentTerminalPanelProps {
   lanes: Lane[];
@@ -23,7 +23,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [showReloadConfirm, setShowReloadConfirm] = createSignal(false);
   const [showSwitchConfirm, setShowSwitchConfirm] = createSignal(false);
   const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
-  const [pendingAgent, setPendingAgent] = createSignal<AgentConfigWithName | null>(null);
+  const [pendingAgent, setPendingAgent] = createSignal<AgentConfig | null>(null);
 
   onMount(async () => {
     const settings = await getAgentSettings();
@@ -44,8 +44,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
         a.command === override.command && 
         JSON.stringify(a.args) === JSON.stringify(override.args)
       );
-      if (found) return found.name;
-      return 'Custom Agent';
+      if (found) return found.name || found.agentType;
+      return override.name || 'Custom Agent';
     }
 
     // Fallback to default agent name
@@ -55,7 +55,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
         a.command === defaultAgent.command && 
         JSON.stringify(a.args) === JSON.stringify(defaultAgent.args)
       );
-      if (found) return found.name;
+      if (found) return found.name || found.agentType;
     }
 
     return 'Default';
@@ -74,9 +74,10 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     setShowReloadConfirm(false);
   };
 
-  const handleAgentSwitch = (agent: AgentConfigWithName) => {
+  const handleAgentSwitch = (agent: AgentConfig) => {
+    const name = agent.name || agent.agentType;
     // Don't do anything if it's the same agent
-    if (agent.name === currentAgentName()) return;
+    if (name === currentAgentName()) return;
     
     setPendingAgent(agent);
     setShowSwitchConfirm(true);
@@ -90,13 +91,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     try {
       const newConfig = {
         ...(lane.config || { env: [], lspServers: [] }),
-        agentOverride: {
-          agentType: agent.agentType,
-          command: agent.command,
-          args: agent.args,
-          env: agent.env,
-          useLaneCwd: agent.useLaneCwd,
-        }
+        agentOverride: { ...agent }
       };
 
       await updateLaneConfig(props.activeLaneId, newConfig);
@@ -154,16 +149,19 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                   style={{ 'background-image': 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\' /%3E%3C/svg%3E")', 'background-repeat': 'no-repeat', 'background-position': 'right center', 'background-size': '10px' }}
                   value={currentAgentName()}
                   onChange={(e) => {
-                    const agent = agentSettings()!.installedAgents.find(a => a.name === e.currentTarget.value);
+                    const agent = agentSettings()!.installedAgents.find(a => (a.name || a.agentType) === e.currentTarget.value);
                     if (agent) handleAgentSwitch(agent);
                   }}
                 >
                   <For each={agentSettings()!.installedAgents}>
-                    {(agent) => (
-                      <option value={agent.name} class="bg-zed-bg-overlay text-zed-text-primary">
-                        {agent.name}
-                      </option>
-                    )}
+                    {(agent) => {
+                      const name = agent.name || agent.agentType;
+                      return (
+                        <option value={name} class="bg-zed-bg-overlay text-zed-text-primary">
+                          {name}
+                        </option>
+                      );
+                    }}
                   </For>
                 </select>
               </div>
@@ -267,7 +265,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       >
         <div class="space-y-4">
           <p class="text-sm text-zed-text-secondary">
-            Switching to <span class="font-semibold text-zed-text-primary">{pendingAgent()?.name}</span> will terminate your current session and start a new one. 
+            Switching to <span class="font-semibold text-zed-text-primary">{pendingAgent()?.name || pendingAgent()?.agentType}</span> will terminate your current session and start a new one. 
             Unsaved work in the terminal will be lost.
           </p>
           <div class="flex justify-end gap-2">

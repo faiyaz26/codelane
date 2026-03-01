@@ -8,6 +8,7 @@ export type AgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | '
  * Configuration for a CLI agent
  */
 export interface AgentConfig {
+  name?: string; // Optional display name
   agentType: AgentType;
   command: string;
   args: string[];
@@ -16,25 +17,19 @@ export interface AgentConfig {
 }
 
 /**
- * Configuration for a CLI agent with a display name
- */
-export interface AgentConfigWithName extends AgentConfig {
-  name: string;
-}
-
-/**
  * Global agent settings with presets
  */
 export interface AgentSettings {
   defaultAgent: AgentConfig;
   presets: Record<string, AgentConfig>;
-  installedAgents: AgentConfigWithName[];
+  installedAgents: AgentConfig[];
 }
 
 /**
  * Default shell configuration
  */
 export const defaultShellAgent: AgentConfig = {
+  name: 'Shell',
   agentType: 'shell',
   command: '/bin/zsh',
   args: ['-l', '-i'],
@@ -46,6 +41,7 @@ export const defaultShellAgent: AgentConfig = {
  * Claude Code preset
  */
 export const claudePreset: AgentConfig = {
+  name: 'Claude Code',
   agentType: 'claude',
   command: 'claude',
   args: [],
@@ -57,6 +53,7 @@ export const claudePreset: AgentConfig = {
  * Cursor preset
  */
 export const cursorPreset: AgentConfig = {
+  name: 'Cursor',
   agentType: 'cursor',
   command: 'cursor',
   args: [],
@@ -68,6 +65,7 @@ export const cursorPreset: AgentConfig = {
  * Aider preset
  */
 export const aiderPreset: AgentConfig = {
+  name: 'Aider',
   agentType: 'aider',
   command: 'aider',
   args: [],
@@ -79,6 +77,7 @@ export const aiderPreset: AgentConfig = {
  * OpenCode preset
  */
 export const openCodePreset: AgentConfig = {
+  name: 'OpenCode',
   agentType: 'opencode',
   command: 'opencode',
   args: [],
@@ -90,6 +89,7 @@ export const openCodePreset: AgentConfig = {
  * Codex preset
  */
 export const codexPreset: AgentConfig = {
+  name: 'Codex',
   agentType: 'codex',
   command: 'codex',
   args: [],
@@ -101,6 +101,7 @@ export const codexPreset: AgentConfig = {
  * Gemini preset
  */
 export const geminiPreset: AgentConfig = {
+  name: 'Gemini',
   agentType: 'gemini',
   command: 'gemini',
   args: [],
@@ -123,10 +124,10 @@ export const defaultAgentSettings: AgentSettings = {
     gemini: geminiPreset,
   },
   installedAgents: [
-    { ...defaultShellAgent, name: 'Shell' },
-    { ...claudePreset, name: 'Claude Code' },
-    { ...geminiPreset, name: 'Gemini' },
-    { ...aiderPreset, name: 'Aider' },
+    defaultShellAgent,
+    claudePreset,
+    geminiPreset,
+    aiderPreset,
   ],
 };
 

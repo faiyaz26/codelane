@@ -2,7 +2,7 @@
 
 import { createSignal, onMount, For, Show } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
-import type { AgentSettings, AgentType, AgentConfigWithName } from '../../types/agent';
+import type { AgentSettings, AgentType, AgentConfig } from '../../types/agent';
 import { hookService } from '../../services/HookService';
 import type { HookStatus } from '../../types/hooks';
 import { Button } from '../ui/Button';
@@ -22,7 +22,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
   const [editingIndex, setEditingIndex] = createSignal<number | null>(null);
   const [agentStatuses, setAgentStatuses] = createSignal<Record<number, boolean>>({});
 
-  const [newAgent, setNewAgent] = createSignal<AgentConfigWithName>({
+  const [newAgent, setNewAgent] = createSignal<AgentConfig>({
     name: '',
     agentType: 'claude',
     command: '',
@@ -159,7 +159,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               <TextField
                 label="Display Name"
                 placeholder="e.g. Claude Code"
-                value={newAgent().name}
+                value={newAgent().name || ''}
                 onChange={(v) => setNewAgent({ ...newAgent(), name: v })}
               />
               <AgentSelector
@@ -187,7 +187,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                       <div class={`w-2 h-2 rounded-full ${agentStatuses()[index()] ? 'bg-green-500' : 'bg-red-500'}`} 
                            title={agentStatuses()[index()] ? 'Installed' : 'Command not found'} />
                       <div>
-                        <p class="text-sm font-medium text-zed-text-primary">{agent.name}</p>
+                        <p class="text-sm font-medium text-zed-text-primary">{agent.name || getAgentDisplayName(agent.agentType)}</p>
                         <p class="text-xs text-zed-text-tertiary font-mono">{agent.command}</p>
                       </div>
                     </div>
