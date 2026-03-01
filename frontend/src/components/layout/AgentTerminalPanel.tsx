@@ -24,6 +24,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [showSwitchConfirm, setShowSwitchConfirm] = createSignal(false);
   const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   const [pendingAgent, setPendingAgent] = createSignal<AgentConfig | null>(null);
+  const [selectedAgentName, setSelectedAgentName] = createSignal<string>('');
 
   onMount(async () => {
     const settings = await getAgentSettings();
@@ -52,6 +53,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     return settings.defaultAgentName || 'Default';
   });
 
+  // Sync selectedAgentName with currentAgentName when it changes (on lane switch or settings load)
+  createEffect(() => {
+    setSelectedAgentName(currentAgentName());
+  });
+
   const handleReloadClick = () => {
     if (props.activeLaneId) {
       setShowReloadConfirm(true);
@@ -70,8 +76,16 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     // Don't do anything if it's the same agent
     if (name === currentAgentName()) return;
     
+    setSelectedAgentName(name);
     setPendingAgent(agent);
     setShowSwitchConfirm(true);
+  };
+
+  const handleCancelSwitch = () => {
+    setShowSwitchConfirm(false);
+    setPendingAgent(null);
+    // Revert the dropdown display to the actual current agent
+    setSelectedAgentName(currentAgentName());
   };
 
   const confirmAgentSwitch = async () => {
@@ -93,6 +107,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       }
     } catch (error) {
       console.error('Failed to switch agent:', error);
+      // On error, also revert the dropdown
+      setSelectedAgentName(currentAgentName());
     } finally {
       setShowSwitchConfirm(false);
       setPendingAgent(null);
@@ -138,7 +154,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                 <select
                   class="bg-transparent text-[11px] font-medium text-zed-text-tertiary hover:text-zed-text-primary transition-colors cursor-pointer outline-none border-none py-0 pl-1 pr-5 appearance-none"
                   style={{ 'background-image': 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\' /%3E%3C/svg%3E")', 'background-repeat': 'no-repeat', 'background-position': 'right center', 'background-size': '10px' }}
-                  value={currentAgentName()}
+                  value={selectedAgentName()}
                   onChange={(e) => {
                     const agent = agentSettings()!.installedAgents.find(a => (a.name || a.agentType) === e.currentTarget.value);
                     if (agent) handleAgentSwitch(agent);
@@ -251,7 +267,9 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       {/* Switch Agent Confirmation Dialog */}
       <Dialog
         open={showSwitchConfirm()}
-        onOpenChange={setShowSwitchConfirm}
+        onOpenChange={(open) => {
+          if (!open) handleCancelSwitch();
+        }}
         title="Switch AI Agent"
       >
         <div class="space-y-4">
@@ -262,7 +280,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
           <div class="flex justify-end gap-2">
             <Button
               variant="secondary"
-              onClick={() => setShowSwitchConfirm(false)}
+              onClick={handleCancelSwitch}
             >
               Cancel
             </Button>
