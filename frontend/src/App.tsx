@@ -530,6 +530,7 @@ function App() {
           onNewLane={() => setDialogOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
           onAboutOpen={() => setAboutOpen(true)}
+          onLanesUpdated={loadLanes}
           onTerminalReady={handleTerminalReady}
           onTerminalExit={handleTerminalExit}
           onAgentFailed={handleAgentFailed}

@@ -26,6 +26,7 @@ interface MainLayoutProps {
   onNewLane: () => void;
   onSettingsOpen: () => void;
   onAboutOpen: () => void;
+  onLanesUpdated?: () => Promise<void>;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
@@ -213,6 +214,7 @@ export function MainLayout(props: MainLayoutProps) {
                       agentReloadingLanes={props.agentReloadingLanes}
                       showEditor={showEditor()}
                       panelWidth={agentPanelWidth()}
+                      onLanesUpdated={props.onLanesUpdated}
                       onTerminalReady={props.onTerminalReady}
                       onTerminalExit={props.onTerminalExit}
                       onAgentFailed={props.onAgentFailed}

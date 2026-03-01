@@ -14,6 +14,7 @@ interface AgentTerminalPanelProps {
   agentReloadingLanes: Set<string>;
   showEditor: boolean;
   panelWidth: number | null;
+  onLanesUpdated?: () => Promise<void>;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
@@ -145,6 +146,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       };
 
       await updateLaneConfig(props.activeLaneId, newConfig);
+      
+      // Refresh global lanes state so the UI reflects the change
+      if (props.onLanesUpdated) {
+        await props.onLanesUpdated();
+      }
       
       // Reload terminal with new agent
       if (props.onReloadAgentTerminal) {
