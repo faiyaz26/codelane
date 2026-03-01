@@ -55,6 +55,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
   // Sync selectedAgentName with currentAgentName when it changes (on lane switch or settings load)
   createEffect(() => {
+    // Access props.activeLaneId to ensure this re-runs on lane switch
+    props.activeLaneId;
     setSelectedAgentName(currentAgentName());
   });
 
