@@ -1,4 +1,4 @@
-import { onCleanup, onMount, createEffect, createSignal, Show } from 'solid-js';
+import { onCleanup, onMount, createEffect, createSignal, Show, untrack } from 'solid-js';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import { spawn, type PtyHandle } from '../services/PortablePty';
@@ -44,6 +44,11 @@ export function TerminalView(props: TerminalViewProps) {
   onMount(async () => {
     if (!containerRef) return;
 
+    // Use untrack to pin this terminal instance to the specific lane/cwd it was created for.
+    // This prevents switching lanes from re-running this initialization logic.
+    const laneId = untrack(() => props.laneId);
+    const cwd = untrack(() => props.cwd);
+
     // Create xterm.js instance with shared configuration
     terminal = createTerminal();
     fitAddon = createFitAddon(terminal);
@@ -69,13 +74,13 @@ export function TerminalView(props: TerminalViewProps) {
       const baseEnv: Record<string, string> = {
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        CODELANE_LANE_ID: props.laneId,
-        CODELANE_SESSION_ID: `${props.laneId}-${Date.now()}`,
+        CODELANE_LANE_ID: laneId,
+        CODELANE_SESSION_ID: `${laneId}-${Date.now()}`,
       };
 
       // Load agent config only if useAgent is true
       if (useAgent) {
-        agentConfig = await getLaneAgentConfig(props.laneId);
+        agentConfig = await getLaneAgentConfig(laneId);
 
         // Merge agent env with terminal env
         const env = {
@@ -93,7 +98,7 @@ export function TerminalView(props: TerminalViewProps) {
               pty = await spawn(commandPath, agentConfig.args, {
                 cols: terminal.cols,
                 rows: terminal.rows,
-                cwd: agentConfig.useLaneCwd ? props.cwd : undefined,
+                cwd: agentConfig.useLaneCwd ? cwd : undefined,
                 env,
               });
 
@@ -120,7 +125,7 @@ export function TerminalView(props: TerminalViewProps) {
         pty = await spawn(fallbackShell, undefined, {
           cols: terminal.cols,
           rows: terminal.rows,
-          cwd: props.cwd,
+          cwd: cwd,
           env: baseEnv,
         });
       }
@@ -129,14 +134,14 @@ export function TerminalView(props: TerminalViewProps) {
       const resolvedAgentType: DetectableAgentType = (spawnSuccess && useAgent)
         ? (agentConfig?.agentType || 'shell') as DetectableAgentType
         : 'shell';
-      agentStatusManager.registerLane(props.laneId, resolvedAgentType);
+      agentStatusManager.registerLane(laneId, resolvedAgentType);
       isAgentLane = resolvedAgentType !== 'shell';
 
       // Show notification prompt when agent first starts working
       if (isAgentLane) {
         const unsub = agentStatusManager.onStatusChange((change) => {
           if (
-            change.laneId === props.laneId &&
+            change.laneId === laneId &&
             change.newStatus === 'working' &&
             agentStatusManager.shouldShowNotificationPrompt()
           ) {
@@ -182,7 +187,7 @@ export function TerminalView(props: TerminalViewProps) {
           }
         }
         // Feed output to agent status detector
-        agentStatusManager.feedOutput(props.laneId, data);
+        agentStatusManager.feedOutput(laneId, data);
       });
 
       // Terminal input → PTY
@@ -191,7 +196,7 @@ export function TerminalView(props: TerminalViewProps) {
           pty.write(data);
         }
         // Signal user input to agent status detector (transitions out of waiting_for_input)
-        agentStatusManager.feedUserInput(props.laneId, data);
+        agentStatusManager.feedUserInput(laneId, data);
       });
 
       // Handle PTY exit
@@ -200,7 +205,7 @@ export function TerminalView(props: TerminalViewProps) {
           terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
         }
         props.onTerminalExit?.();
-        agentStatusManager.markExited(props.laneId);
+        agentStatusManager.markExited(laneId);
       });
 
       // Call ready callback with terminal ID
@@ -256,7 +261,7 @@ export function TerminalView(props: TerminalViewProps) {
       // Focus terminal and refresh rendering when its lane becomes active
       const handleTerminalFocus = (e: Event) => {
         const detail = (e as CustomEvent).detail;
-        if (detail?.laneId === props.laneId && terminal) {
+        if (detail?.laneId === laneId && terminal) {
           terminal.focus();
           // Force full re-render to fix stale WebGL texture after being hidden
           terminal.refresh(0, terminal.rows - 1);
@@ -266,7 +271,7 @@ export function TerminalView(props: TerminalViewProps) {
 
       // Cleanup
       onCleanup(() => {
-        resizeObserver.disconnect();
+        if (resizeObserver) resizeObserver.disconnect();
         window.removeEventListener('terminal-resize', handleTerminalResize);
         window.removeEventListener('terminal-focus', handleTerminalFocus);
       });
@@ -280,6 +285,8 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Cleanup on unmount
   onCleanup(async () => {
+    // Note: laneId is captured via untrack in onMount scope, 
+    // but here we can just use props.laneId as we are unmounting anyway
     agentStatusManager.unregisterLane(props.laneId);
     if (pty) {
       try {
