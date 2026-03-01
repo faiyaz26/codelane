@@ -131,6 +131,16 @@ class AgentStatusManager {
   }
 
   /**
+   * Signal that the terminal window title has changed.
+   */
+  feedWindowTitle(laneId: string, title: string): void {
+    const entry = this.lanes.get(laneId);
+    if (!entry) return;
+
+    entry.detector.feedWindowTitle(title);
+  }
+
+  /**
    * Mark a lane's process as exited. Resets detector and sets status to idle.
    */
   markExited(laneId: string): void {

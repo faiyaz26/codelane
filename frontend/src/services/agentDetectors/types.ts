@@ -18,6 +18,9 @@ export interface AgentDetector {
   /** Feed a snapshot of the terminal buffer for periodic checking */
   feedBufferSnapshot(text: string): void;
 
+  /** Signal that the terminal window title has changed */
+  feedWindowTitle(title: string): void;
+
   /** Get the current detected status */
   getStatus(): AgentStatus;
 

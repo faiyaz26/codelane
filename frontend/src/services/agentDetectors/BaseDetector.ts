@@ -82,6 +82,10 @@ export abstract class BaseDetector implements AgentDetector {
     // are static - spinner animation requires comparing across frames (feedChunk handles this)
   }
 
+  feedWindowTitle(title: string): void {
+    // Default implementation does nothing. Subclasses can override.
+  }
+
   feedChunk(text: string): void {
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);

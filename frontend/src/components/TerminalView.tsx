@@ -177,6 +177,11 @@ export function TerminalView(props: TerminalViewProps) {
       containerRef.addEventListener('wheel', () => requestAnimationFrame(updateAutoScroll));
       terminal.onScroll(updateAutoScroll);
 
+      // Listen for window title changes from the PTY (useful for Gemini CLI)
+      terminal.onTitleChange((title) => {
+        agentStatusManager.feedWindowTitle(laneId, title);
+      });
+
       // Set up event-based data flow (low latency!)
       // PTY output → terminal (with sticky scroll)
       await pty!.onData((data) => {

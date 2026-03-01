@@ -9,12 +9,27 @@ export class GeminiDetector extends BaseDetector {
   readonly agentType = 'gemini' as const;
 
   protected readonly patterns: DetectorPatterns = {
-    waitingPatterns: [/\[NORMAL\]/],
+    waitingPatterns: [
+      /\[NORMAL\]/,
+      /\[INSERT\]/,
+      /^\s*>\s*$/m,
+      /^\s*\?\s*$/m,
+    ],
     errorPatterns: [/error:/i, /failed/i],
     // Gemini uses ink-spinner (Braille patterns) and shows tool execution status symbols
     workingPatterns: [/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⊷]/],
     idleTimeoutMs: 3000,
   };
+
+  override feedWindowTitle(title: string): void {
+    const lowerTitle = title.trim().toLowerCase();
+    
+    if (lowerTitle.includes('working') || lowerTitle.includes('running')) {
+      this.transitionTo('working', `window title changed: ${title}`);
+    } else if (lowerTitle.includes('ready') || lowerTitle.includes('action required') || lowerTitle.includes('waiting')) {
+      this.transitionTo('waiting_for_input', `window title changed: ${title}`);
+    }
+  }
 
   override feedChunk(text: string): void {
     // Cursor shape sequences (\x1b[1 q = blinking block, \x1b[2 q = steady block)
