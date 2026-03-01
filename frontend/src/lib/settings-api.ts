@@ -30,18 +30,28 @@ export async function getAgentSettings(): Promise<AgentSettings> {
     if (settings.defaultAgent) {
       settings.installedAgents = [settings.defaultAgent];
     } else {
-      settings.installedAgents = defaultSettings.installedAgents;
+      settings.installedAgents = [...defaultSettings.installedAgents];
     }
   }
 
+  // Ensure all installed agents have a name (crucial for name-based lookup)
+  settings.installedAgents = settings.installedAgents.map((agent: AgentConfig) => {
+    if (!agent.name) {
+      const metadata = AGENT_METADATA[agent.agentType];
+      return { ...agent, name: metadata?.preset.name || agent.agentType };
+    }
+    return agent;
+  });
+
   // Migration: defaultAgent (object) -> defaultAgentName (string)
   if (settings.defaultAgent && typeof settings.defaultAgent === 'object') {
-    settings.defaultAgentName = settings.defaultAgent.name || settings.defaultAgent.agentType;
+    settings.defaultAgentName = settings.defaultAgent.name || AGENT_METADATA[settings.defaultAgent.agentType as AgentType]?.preset.name || settings.defaultAgent.agentType;
     delete settings.defaultAgent;
   }
 
-  // Ensure defaultAgentName exists
-  if (!settings.defaultAgentName) {
+  // Ensure defaultAgentName is not empty and matches one of the installed agents
+  const hasValidDefault = settings.defaultAgentName && settings.installedAgents.some((a: AgentConfig) => a.name === settings.defaultAgentName);
+  if (!hasValidDefault) {
     settings.defaultAgentName = settings.installedAgents[0]?.name || defaultSettings.defaultAgentName;
   }
 

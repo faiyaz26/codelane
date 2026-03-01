@@ -195,9 +195,12 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
             onChange={(e) => props.onDataChange({ defaultAgentName: e.currentTarget.value })}
           >
             <For each={props.data.installedAgents || []}>
-              {(agent) => (
-                <option value={agent.name}>{agent.name}</option>
-              )}
+              {(agent) => {
+                const name = agent.name || getAgentTypeLabel(agent.agentType);
+                return (
+                  <option value={name}>{name}</option>
+                );
+              }}
             </For>
           </select>
         </div>

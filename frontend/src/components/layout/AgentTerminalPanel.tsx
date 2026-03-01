@@ -49,16 +49,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     }
 
     // Fallback to default agent name
-    const defaultAgent = settings.defaultAgent;
-    if (defaultAgent) {
-      const found = settings.installedAgents.find(a => 
-        a.command === defaultAgent.command && 
-        JSON.stringify(a.args) === JSON.stringify(defaultAgent.args)
-      );
-      if (found) return found.name || found.agentType;
-    }
-
-    return 'Default';
+    return settings.defaultAgentName || 'Default';
   });
 
   const handleReloadClick = () => {

@@ -228,9 +228,12 @@ export function AgentsSettings(props: AgentsSettingsProps) {
             onChange={(e) => props.onSettingsChange((s) => s ? { ...s, defaultAgentName: e.currentTarget.value } : null)}
           >
             <For each={props.settings.installedAgents || []}>
-              {(agent) => (
-                <option value={agent.name}>{agent.name}</option>
-              )}
+              {(agent) => {
+                const name = agent.name || getAgentTypeLabel(agent.agentType);
+                return (
+                  <option value={name}>{name}</option>
+                );
+              }}
             </For>
           </select>
         </div>
