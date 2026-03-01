@@ -125,9 +125,6 @@ export const defaultAgentSettings: AgentSettings = {
   },
   installedAgents: [
     defaultShellAgent,
-    claudePreset,
-    geminiPreset,
-    aiderPreset,
   ],
 };
 
