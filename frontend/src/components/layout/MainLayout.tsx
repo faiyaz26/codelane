@@ -19,7 +19,7 @@ interface MainLayoutProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
-  reloadingLanes: Set<string>;
+  agentReloadingLanes: Set<string>;
   onLaneSelect: (laneId: string) => void;
   onLaneDeleted: (laneId: string) => void;
   onLaneRenamed: (lane: Lane) => void;
@@ -29,7 +29,7 @@ interface MainLayoutProps {
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
-  onReloadTerminal?: (laneId: string) => void;
+  onReloadAgentTerminal?: (laneId: string) => void;
 }
 
 // Constants for panel sizing
@@ -210,13 +210,13 @@ export function MainLayout(props: MainLayoutProps) {
                       lanes={props.lanes}
                       activeLaneId={props.activeLaneId}
                       initializedLanes={props.initializedLanes}
-                      reloadingLanes={props.reloadingLanes}
+                      agentReloadingLanes={props.agentReloadingLanes}
                       showEditor={showEditor()}
                       panelWidth={agentPanelWidth()}
                       onTerminalReady={props.onTerminalReady}
                       onTerminalExit={props.onTerminalExit}
                       onAgentFailed={props.onAgentFailed}
-                      onReloadTerminal={props.onReloadTerminal}
+                      onReloadAgentTerminal={props.onReloadAgentTerminal}
                     />
                   </div>
 
@@ -285,7 +285,6 @@ export function MainLayout(props: MainLayoutProps) {
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
                     initializedLanes={props.initializedLanes}
-                    reloadingLanes={props.reloadingLanes}
                   />
                 </Show>
               </div>

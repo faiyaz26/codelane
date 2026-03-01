@@ -11,13 +11,13 @@ interface AgentTerminalPanelProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
-  reloadingLanes: Set<string>;
+  agentReloadingLanes: Set<string>;
   showEditor: boolean;
   panelWidth: number | null;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
   onTerminalExit?: (laneId: string) => void;
   onAgentFailed?: (agentType: string, command: string) => void;
-  onReloadTerminal?: (laneId: string) => void;
+  onReloadAgentTerminal?: (laneId: string) => void;
 }
 
 export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
@@ -54,8 +54,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   };
 
   const handleConfirmReload = () => {
-    if (props.activeLaneId && props.onReloadTerminal) {
-      props.onReloadTerminal(props.activeLaneId);
+    if (props.activeLaneId && props.onReloadAgentTerminal) {
+      props.onReloadAgentTerminal(props.activeLaneId);
     }
     setShowReloadConfirm(false);
   };
@@ -88,8 +88,8 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       await updateLaneConfig(props.activeLaneId, newConfig);
       
       // Reload terminal with new agent
-      if (props.onReloadTerminal) {
-        props.onReloadTerminal(props.activeLaneId);
+      if (props.onReloadAgentTerminal) {
+        props.onReloadAgentTerminal(props.activeLaneId);
       }
     } catch (error) {
       console.error('Failed to switch agent:', error);
@@ -167,7 +167,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
         <For each={Array.from(props.initializedLanes)}>
           {(laneId) => (
-            <Show when={!props.reloadingLanes.has(laneId)}>
+            <Show when={!props.agentReloadingLanes.has(laneId)}>
               {() => {
                 const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
                 const isActive = createMemo(() => props.activeLaneId === laneId);

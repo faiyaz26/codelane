@@ -35,7 +35,7 @@ function App() {
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
   // Track which lanes are currently reloading their terminal
-  const [reloadingLanes, setReloadingLanes] = createSignal<Set<string>>(new Set());
+  const [agentReloadingLanes, setAgentReloadingLanes] = createSignal<Set<string>>(new Set());
   // Notification state
   const [notification, setNotification] = createSignal<{ 
     message: string; 
@@ -437,9 +437,9 @@ function App() {
     });
   };
 
-  const handleReloadTerminal = (laneId: string) => {
+  const handleReloadAgentTerminal = (laneId: string) => {
     // Add to reloading set first to trigger unmount in UI
-    setReloadingLanes((prev) => new Set(prev).add(laneId));
+    setAgentReloadingLanes((prev) => new Set(prev).add(laneId));
     
     // Clear terminal ID
     setTerminalIds((prev) => {
@@ -450,7 +450,7 @@ function App() {
 
     // Re-add after a short delay to allow unmount
     setTimeout(() => {
-      setReloadingLanes((prev) => {
+      setAgentReloadingLanes((prev) => {
         const newSet = new Set(prev);
         newSet.delete(laneId);
         return newSet;
@@ -523,8 +523,9 @@ function App() {
           lanes={lanes()}
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
-          reloadingLanes={reloadingLanes()}
-          onLaneSelect={handleLaneSelect}          onLaneDeleted={handleLaneDeleted}
+          agentReloadingLanes={agentReloadingLanes()}
+          onLaneSelect={handleLaneSelect}
+          onLaneDeleted={handleLaneDeleted}
           onLaneRenamed={handleLaneRenamed}
           onNewLane={() => setDialogOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
@@ -532,7 +533,7 @@ function App() {
           onTerminalReady={handleTerminalReady}
           onTerminalExit={handleTerminalExit}
           onAgentFailed={handleAgentFailed}
-          onReloadTerminal={handleReloadTerminal}
+          onReloadAgentTerminal={handleReloadAgentTerminal}
         />
       </Show>
 
