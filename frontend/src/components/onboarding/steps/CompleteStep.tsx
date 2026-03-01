@@ -34,7 +34,7 @@ export function CompleteStep(props: CompleteStepProps) {
             <div>
               <span class="text-sm font-medium text-zed-text-primary">Agent: </span>
               <span class="text-sm text-zed-text-secondary">
-                {props.data.agent?.agentType || 'Not configured'}
+                {props.data.defaultAgentName || 'Not configured'}
               </span>
             </div>
           </div>

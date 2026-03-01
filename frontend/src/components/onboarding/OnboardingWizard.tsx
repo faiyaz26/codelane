@@ -7,11 +7,13 @@ import { NotificationsStep } from './steps/NotificationsStep';
 import { ThemeSelectionStep } from './steps/ThemeSelectionStep';
 import { CompleteStep } from './steps/CompleteStep';
 import type { AgentConfig } from '../../types/agent';
+import { defaultShellAgent } from '../../types/agent';
 
 export type WizardStep = 'welcome' | 'agent' | 'hooks' | 'notifications' | 'theme' | 'tutorials' | 'complete';
 
 export interface WizardData {
-  agent: AgentConfig | null;
+  defaultAgentName: string;
+  installedAgents: AgentConfig[];
   hooksEnabled: boolean;
   notifications: {
     onTaskComplete: boolean;
@@ -32,7 +34,8 @@ interface OnboardingWizardProps {
 export function OnboardingWizard(props: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = createSignal<WizardStep>('welcome');
   const [wizardData, setWizardData] = createSignal<WizardData>({
-    agent: null,
+    defaultAgentName: 'Shell',
+    installedAgents: [defaultShellAgent],
     hooksEnabled: false,
     notifications: {
       onTaskComplete: true,
@@ -68,11 +71,12 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   };
 
   const agentSupportsHooks = (): boolean => {
-    const agent = wizardData().agent;
-    if (!agent) return false;
+    const data = wizardData();
+    const defaultAgent = data.installedAgents.find(a => a.name === data.defaultAgentName) || data.installedAgents[0];
+    if (!defaultAgent) return false;
     // Claude, Codex, and Gemini support hooks
     const supportsHooks = ['claude', 'codex', 'gemini'];
-    return supportsHooks.includes(agent.agentType.toLowerCase());
+    return supportsHooks.includes(defaultAgent.agentType.toLowerCase());
   };
 
   const goNext = () => {
@@ -112,7 +116,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     const step = currentStep();
     switch (step) {
       case 'agent':
-        return wizardData().agent !== null;
+        return wizardData().installedAgents.length > 0;
       default:
         return true;
     }

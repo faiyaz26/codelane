@@ -456,40 +456,30 @@ function App() {
 
   const handleOnboardingComplete = async (data: WizardData) => {
     // Save agent configuration
-    if (data.agent) {
-      try {
-        const settings = await getAgentSettings();
-        const agentName = data.agent.name || data.agent.agentType;
-        
-        // Add to installed agents if not there
-        const installedAgents = [...settings.installedAgents];
-        const existingIdx = installedAgents.findIndex(a => a.name === agentName);
-        if (existingIdx !== -1) {
-          installedAgents[existingIdx] = data.agent;
-        } else {
-          installedAgents.push(data.agent);
+    try {
+      const settings = await getAgentSettings();
+      const updatedSettings: AgentSettings = {
+        ...settings,
+        defaultAgentName: data.defaultAgentName,
+        installedAgents: data.installedAgents,
+      };
+
+      await updateAgentSettings(updatedSettings);
+      setAgentSettings(updatedSettings);
+
+      // Install hooks if enabled for the default agent
+      if (data.hooksEnabled) {
+        const defaultAgent = data.installedAgents.find(a => a.name === data.defaultAgentName) || data.installedAgents[0];
+        if (defaultAgent) {
+          try {
+            await hookService.installHooks(defaultAgent.agentType);
+          } catch (err) {
+            console.error('Failed to install hooks:', err);
+          }
         }
-
-        const updatedSettings: AgentSettings = {
-          ...settings,
-          defaultAgentName: agentName,
-          installedAgents,
-        };
-
-        await updateAgentSettings(updatedSettings);
-        setAgentSettings(updatedSettings);
-      } catch (err) {
-        console.error('Failed to save agent settings:', err);
       }
-    }
-
-    // Install hooks if enabled
-    if (data.hooksEnabled && data.agent) {
-      try {
-        await hookService.installHooks(data.agent.agentType);
-      } catch (err) {
-        console.error('Failed to install hooks:', err);
-      }
+    } catch (err) {
+      console.error('Failed to save agent settings:', err);
     }
 
     // Save notification settings

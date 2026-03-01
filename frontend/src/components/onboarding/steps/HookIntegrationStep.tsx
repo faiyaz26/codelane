@@ -6,7 +6,7 @@ interface HookIntegrationStepProps {
 }
 
 export function HookIntegrationStep(props: HookIntegrationStepProps) {
-  const agentName = props.data.agent?.agentType || 'your agent';
+  const agentName = props.data.defaultAgentName || 'your agent';
 
   return (
     <div class="max-w-2xl mx-auto">
