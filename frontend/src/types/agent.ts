@@ -5,6 +5,26 @@
 export type AgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | 'gemini' | 'shell';
 
 /**
+ * Metadata for each agent type (labels, etc.)
+ */
+export const AGENT_METADATA: Record<AgentType, { label: string }> = {
+  claude: { label: 'Claude Code CLI' },
+  gemini: { label: 'Gemini CLI' },
+  aider: { label: 'Aider CLI' },
+  shell: { label: 'Shell (Traditional Terminal)' },
+  cursor: { label: 'Cursor CLI' },
+  opencode: { label: 'OpenCode CLI' },
+  codex: { label: 'OpenAI Codex CLI' },
+};
+
+/**
+ * Get display label for an agent type
+ */
+export function getAgentTypeLabel(type: AgentType): string {
+  return AGENT_METADATA[type]?.label || type;
+}
+
+/**
  * Configuration for a CLI agent
  */
 export interface AgentConfig {

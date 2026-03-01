@@ -2,7 +2,7 @@ import { createSignal, onMount, For, createEffect, Show } from 'solid-js';
 import { AgentSelector } from '../../AgentSelector';
 import type { WizardData } from '../OnboardingWizard';
 import type { AgentConfig, AgentType } from '../../../types/agent';
-import { defaultAgentSettings, defaultShellAgent } from '../../../types/agent';
+import { defaultAgentSettings, defaultShellAgent, getAgentTypeLabel } from '../../../types/agent';
 import { checkCommandExists } from '../../../lib/settings-api';
 import { Button } from '../../ui/Button';
 import { TextField } from '../../ui/TextField';
@@ -90,18 +90,7 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
     props.onDataChange({ installedAgents: agents, defaultAgentName: defaultName });
   };
 
-  const getAgentDisplayName = (agentType: AgentType): string => {
-    const names: Record<AgentType, string> = {
-      claude: 'Claude Code',
-      codex: 'Codex',
-      gemini: 'Gemini',
-      aider: 'Aider',
-      cursor: 'Cursor',
-      opencode: 'OpenCode',
-      shell: 'Shell',
-    };
-    return names[agentType] || agentType;
-  };
+
 
   return (
     <div class="max-w-2xl mx-auto">
@@ -163,7 +152,7 @@ export function AgentSetupStep(props: AgentSetupStepProps) {
                         <div class={`w-2 h-2 rounded-full ${agentStatuses()[index()] ? 'bg-green-500' : 'bg-red-500'}`} 
                              title={agentStatuses()[index()] ? 'Installed' : 'Command not found'} />
                         <div>
-                          <p class="text-sm font-medium text-zed-text-primary">{agent.name || getAgentDisplayName(agent.agentType)}</p>
+                          <p class="text-sm font-medium text-zed-text-primary">{agent.name || getAgentTypeLabel(agent.agentType)}</p>
                           <p class="text-[10px] text-zed-text-tertiary font-mono opacity-70">{agent.command}</p>
                         </div>
                       </div>

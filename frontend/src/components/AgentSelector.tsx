@@ -3,7 +3,7 @@ import { Select } from '@kobalte/core/select';
 import { TextField } from './ui/TextField';
 import { Button } from './ui/Button';
 import type { AgentConfig, AgentType } from '../types/agent';
-import { defaultAgentSettings } from '../types/agent';
+import { defaultAgentSettings, AGENT_METADATA } from '../types/agent';
 import { checkCommandExists } from '../lib/settings-api';
 
 interface AgentSelectorProps {
@@ -89,13 +89,11 @@ export function AgentSelector(props: AgentSelectorProps) {
           value={props.value.agentType}
           onChange={(e) => handleAgentTypeChange(e.currentTarget.value as AgentType)}
         >
-          <option value="shell">Shell (Traditional Terminal)</option>
-          <option value="claude">Claude Code CLI</option>
-          <option value="gemini">Gemini CLI</option>
-          <option value="codex">OpenAI Codex CLI</option>
-          <option value="opencode">Opencode CLI</option>
-          <option value="cursor">Cursor CLI</option>
-          <option value="aider">Aider CLI</option>
+          <For each={Object.entries(AGENT_METADATA)}>
+            {([type, meta]) => (
+              <option value={type}>{meta.label}</option>
+            )}
+          </For>
         </select>
         <p class="mt-1 text-xs text-zed-text-tertiary">
           Select which CLI agent to use for this configuration

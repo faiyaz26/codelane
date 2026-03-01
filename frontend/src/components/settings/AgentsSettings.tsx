@@ -3,6 +3,7 @@
 import { createSignal, onMount, For, Show } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
 import type { AgentSettings, AgentType, AgentConfig } from '../../types/agent';
+import { getAgentTypeLabel } from '../../types/agent';
 import { hookService } from '../../services/HookService';
 import type { HookStatus } from '../../types/hooks';
 import { Button } from '../ui/Button';
@@ -127,18 +128,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     verifyAllAgents();
   };
 
-  const getAgentDisplayName = (agentType: AgentType): string => {
-    const names: Record<AgentType, string> = {
-      claude: 'Claude Code',
-      codex: 'Codex',
-      gemini: 'Gemini',
-      aider: 'Aider',
-      cursor: 'Cursor',
-      opencode: 'OpenCode',
-      shell: 'Shell',
-    };
-    return names[agentType] || agentType;
-  };
+
 
   return (
     <div>
@@ -195,7 +185,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                       <div class={`w-2 h-2 rounded-full ${agentStatuses()[index()] ? 'bg-green-500' : 'bg-red-500'}`} 
                            title={agentStatuses()[index()] ? 'Installed' : 'Command not found'} />
                       <div>
-                        <p class="text-sm font-medium text-zed-text-primary">{agent.name || getAgentDisplayName(agent.agentType)}</p>
+                        <p class="text-sm font-medium text-zed-text-primary">{agent.name || getAgentTypeLabel(agent.agentType)}</p>
                         <p class="text-xs text-zed-text-tertiary font-mono">{agent.command}</p>
                       </div>
                     </div>
@@ -277,7 +267,7 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                     <div class="flex items-center justify-between">
                       <div class="flex-1">
                         <p class="text-sm font-medium text-zed-text-primary">
-                          {getAgentDisplayName(agentType)}
+                          {getAgentTypeLabel(agentType)}
                         </p>
                         <p class="text-xs text-zed-text-tertiary mt-1">
                           {status()?.supported
