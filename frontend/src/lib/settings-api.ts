@@ -22,6 +22,11 @@ export async function getAgentSettings(): Promise<AgentSettings> {
     return getDefaultAgentSettings();
   }
 
+  // Migration: ensure installedAgents exists
+  if (!settings.installedAgents) {
+    settings.installedAgents = getDefaultAgentSettings().installedAgents;
+  }
+
   return settings;
 }
 

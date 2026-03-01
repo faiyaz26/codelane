@@ -1,8 +1,11 @@
-import { Show, For, createMemo, createSignal, createEffect } from 'solid-js';
+import { Show, For, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import { TerminalView } from '../TerminalView';
 import { ProcessMonitor } from '../ProcessMonitor';
 import { Dialog, Button } from '../ui';
 import type { Lane } from '../../types/lane';
+import { getAgentSettings } from '../../lib/settings-api';
+import { updateLaneConfig } from '../../lib/lane-api';
+import type { AgentConfigWithName, AgentSettings } from '../../types/agent';
 
 interface AgentTerminalPanelProps {
   lanes: Lane[];
@@ -18,6 +21,45 @@ interface AgentTerminalPanelProps {
 
 export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [showReloadConfirm, setShowReloadConfirm] = createSignal(false);
+  const [showSwitchConfirm, setShowSwitchConfirm] = createSignal(false);
+  const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
+  const [pendingAgent, setPendingAgent] = createSignal<AgentConfigWithName | null>(null);
+
+  onMount(async () => {
+    const settings = await getAgentSettings();
+    setAgentSettings(settings);
+  });
+
+  const activeLane = createMemo(() => props.lanes.find(l => l.id === props.activeLaneId));
+
+  const currentAgentName = createMemo(() => {
+    const lane = activeLane();
+    const settings = agentSettings();
+    if (!lane || !settings) return '';
+    
+    // If lane has override, try to find its name in installed agents
+    if (lane.config?.agentOverride) {
+      const override = lane.config.agentOverride;
+      const found = settings.installedAgents.find(a => 
+        a.command === override.command && 
+        JSON.stringify(a.args) === JSON.stringify(override.args)
+      );
+      if (found) return found.name;
+      return 'Custom Agent';
+    }
+
+    // Fallback to default agent name
+    const defaultAgent = settings.defaultAgent;
+    if (defaultAgent) {
+      const found = settings.installedAgents.find(a => 
+        a.command === defaultAgent.command && 
+        JSON.stringify(a.args) === JSON.stringify(defaultAgent.args)
+      );
+      if (found) return found.name;
+    }
+
+    return 'Default';
+  });
 
   const handleReloadClick = () => {
     if (props.activeLaneId) {
@@ -30,6 +72,45 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       props.onReloadTerminal(props.activeLaneId);
     }
     setShowReloadConfirm(false);
+  };
+
+  const handleAgentSwitch = (agent: AgentConfigWithName) => {
+    // Don't do anything if it's the same agent
+    if (agent.name === currentAgentName()) return;
+    
+    setPendingAgent(agent);
+    setShowSwitchConfirm(true);
+  };
+
+  const confirmAgentSwitch = async () => {
+    const lane = activeLane();
+    const agent = pendingAgent();
+    if (!lane || !agent || !props.activeLaneId) return;
+
+    try {
+      const newConfig = {
+        ...(lane.config || { env: [], lspServers: [] }),
+        agentOverride: {
+          agentType: agent.agentType,
+          command: agent.command,
+          args: agent.args,
+          env: agent.env,
+          useLaneCwd: agent.useLaneCwd,
+        }
+      };
+
+      await updateLaneConfig(props.activeLaneId, newConfig);
+      
+      // Reload terminal with new agent
+      if (props.onReloadTerminal) {
+        props.onReloadTerminal(props.activeLaneId);
+      }
+    } catch (error) {
+      console.error('Failed to switch agent:', error);
+    } finally {
+      setShowSwitchConfirm(false);
+      setPendingAgent(null);
+    }
   };
 
   // Trigger terminal refit when active lane changes (opacity-hidden terminals need refresh)
@@ -60,7 +141,36 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     >
       {/* Header */}
       <div class="panel-header justify-between bg-zed-bg-panel">
-        <h3 class="panel-header-title">Agent Terminal</h3>
+        <div class="flex items-center gap-3">
+          <h3 class="panel-header-title">Agent Terminal</h3>
+          
+          {/* Agent Switcher */}
+          <Show when={agentSettings() && agentSettings()!.installedAgents.length > 1 && props.activeLaneId}>
+            <div class="flex items-center">
+              <div class="h-4 w-[1px] bg-zed-border-subtle mx-1" />
+              <div class="relative flex items-center">
+                <select
+                  class="bg-transparent text-[11px] font-medium text-zed-text-tertiary hover:text-zed-text-primary transition-colors cursor-pointer outline-none border-none py-0 pl-1 pr-5 appearance-none"
+                  style={{ 'background-image': 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\' /%3E%3C/svg%3E")', 'background-repeat': 'no-repeat', 'background-position': 'right center', 'background-size': '10px' }}
+                  value={currentAgentName()}
+                  onChange={(e) => {
+                    const agent = agentSettings()!.installedAgents.find(a => a.name === e.currentTarget.value);
+                    if (agent) handleAgentSwitch(agent);
+                  }}
+                >
+                  <For each={agentSettings()!.installedAgents}>
+                    {(agent) => (
+                      <option value={agent.name} class="bg-zed-bg-overlay text-zed-text-primary">
+                        {agent.name}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </div>
+            </div>
+          </Show>
+        </div>
+
         <div class="flex items-center gap-2">
           {/* Reload Button */}
           <Show when={props.activeLaneId}>
@@ -144,6 +254,34 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
               onClick={handleConfirmReload}
             >
               Reload
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Switch Agent Confirmation Dialog */}
+      <Dialog
+        open={showSwitchConfirm()}
+        onOpenChange={setShowSwitchConfirm}
+        title="Switch AI Agent"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-zed-text-secondary">
+            Switching to <span class="font-semibold text-zed-text-primary">{pendingAgent()?.name}</span> will terminate your current session and start a new one. 
+            Unsaved work in the terminal will be lost.
+          </p>
+          <div class="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowSwitchConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={confirmAgentSwitch}
+            >
+              Switch Agent
             </Button>
           </div>
         </div>

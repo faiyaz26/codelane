@@ -16,11 +16,19 @@ export interface AgentConfig {
 }
 
 /**
+ * Configuration for a CLI agent with a display name
+ */
+export interface AgentConfigWithName extends AgentConfig {
+  name: string;
+}
+
+/**
  * Global agent settings with presets
  */
 export interface AgentSettings {
   defaultAgent: AgentConfig;
   presets: Record<string, AgentConfig>;
+  installedAgents: AgentConfigWithName[];
 }
 
 /**
@@ -114,6 +122,12 @@ export const defaultAgentSettings: AgentSettings = {
     codex: codexPreset,
     gemini: geminiPreset,
   },
+  installedAgents: [
+    { ...defaultShellAgent, name: 'Shell' },
+    { ...claudePreset, name: 'Claude Code' },
+    { ...geminiPreset, name: 'Gemini' },
+    { ...aiderPreset, name: 'Aider' },
+  ],
 };
 
 /**
