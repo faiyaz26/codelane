@@ -25,6 +25,7 @@ const mockCreateWorktree = vi.fn();
 const mockRemoveWorktree = vi.fn();
 const mockGetDefaultBranch = vi.fn();
 const mockFetchBranch = vi.fn();
+const mockFetchPrBranch = vi.fn();
 const mockCloneRepo = vi.fn();
 const mockGetRemoteUrl = vi.fn();
 vi.mock('../git-api', () => ({
@@ -35,6 +36,7 @@ vi.mock('../git-api', () => ({
   removeWorktree: (...args: unknown[]) => mockRemoveWorktree(...args),
   getDefaultBranch: (...args: unknown[]) => mockGetDefaultBranch(...args),
   fetchBranch: (...args: unknown[]) => mockFetchBranch(...args),
+  fetchPrBranch: (...args: unknown[]) => mockFetchPrBranch(...args),
   cloneRepo: (...args: unknown[]) => mockCloneRepo(...args),
   getRemoteUrl: (...args: unknown[]) => mockGetRemoteUrl(...args),
 }));
@@ -60,9 +62,11 @@ beforeEach(async () => {
   mockRemoveWorktree.mockReset();
   mockGetDefaultBranch.mockReset();
   mockFetchBranch.mockReset();
+  mockFetchPrBranch.mockReset();
   mockCloneRepo.mockReset();
   mockGetRemoteUrl.mockReset();
   mockFetchBranch.mockResolvedValue(undefined);
+  mockFetchPrBranch.mockResolvedValue(undefined);
   mockCloneRepo.mockResolvedValue(undefined);
   mockGetRemoteUrl.mockResolvedValue('https://github.com/owner/repo.git');
 
