@@ -34,6 +34,8 @@ function App() {
   const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
+  // Track which lanes are currently reloading their terminal
+  const [reloadingLanes, setReloadingLanes] = createSignal<Set<string>>(new Set());
   // Notification state
   const [notification, setNotification] = createSignal<{ 
     message: string; 
@@ -436,21 +438,23 @@ function App() {
   };
 
   const handleReloadTerminal = (laneId: string) => {
-    // Remove lane from initialized set to unmount the terminal
-    setInitializedLanes((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(laneId);
-      return newSet;
-    });
+    // Add to reloading set first to trigger unmount in UI
+    setReloadingLanes((prev) => new Set(prev).add(laneId));
+    
     // Clear terminal ID
     setTerminalIds((prev) => {
       const newMap = new Map(prev);
       newMap.delete(laneId);
       return newMap;
     });
+
     // Re-add after a short delay to allow unmount
     setTimeout(() => {
-      setInitializedLanes((prev) => new Set(prev).add(laneId));
+      setReloadingLanes((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(laneId);
+        return newSet;
+      });
     }, 100);
   };
 
@@ -519,8 +523,8 @@ function App() {
           lanes={lanes()}
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
-          onLaneSelect={handleLaneSelect}
-          onLaneDeleted={handleLaneDeleted}
+          reloadingLanes={reloadingLanes()}
+          onLaneSelect={handleLaneSelect}          onLaneDeleted={handleLaneDeleted}
           onLaneRenamed={handleLaneRenamed}
           onNewLane={() => setDialogOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}

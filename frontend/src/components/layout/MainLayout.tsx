@@ -19,6 +19,7 @@ interface MainLayoutProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
+  reloadingLanes: Set<string>;
   onLaneSelect: (laneId: string) => void;
   onLaneDeleted: (laneId: string) => void;
   onLaneRenamed: (lane: Lane) => void;
@@ -209,6 +210,7 @@ export function MainLayout(props: MainLayoutProps) {
                       lanes={props.lanes}
                       activeLaneId={props.activeLaneId}
                       initializedLanes={props.initializedLanes}
+                      reloadingLanes={props.reloadingLanes}
                       showEditor={showEditor()}
                       panelWidth={agentPanelWidth()}
                       onTerminalReady={props.onTerminalReady}
@@ -283,6 +285,7 @@ export function MainLayout(props: MainLayoutProps) {
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
                     initializedLanes={props.initializedLanes}
+                    reloadingLanes={props.reloadingLanes}
                   />
                 </Show>
               </div>

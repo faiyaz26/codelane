@@ -6,6 +6,7 @@ interface BottomPanelProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
+  reloadingLanes: Set<string>;
 }
 
 export function BottomPanel(props: BottomPanelProps) {
@@ -26,18 +27,22 @@ export function BottomPanel(props: BottomPanelProps) {
 
         return (
           <Show when={lane()}>
-            {(laneData) => {
-              // Capture values at render time to avoid stale accessors
-              const id = laneData().id;
-              // Use worktree path if available, otherwise use workingDir
-              const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
+            {(laneData) => (
+              <Show when={!props.reloadingLanes.has(laneId)}>
+                {() => {
+                  // Capture values at render time to avoid stale accessors
+                  const id = laneData().id;
+                  // Use worktree path if available, otherwise use workingDir
+                  const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
 
-              return (
-                <div style={{ display: isActive() ? 'contents' : 'none' }}>
-                  <TabPanel laneId={id} workingDir={effectiveWorkingDir} />
-                </div>
-              );
-            }}
+                  return (
+                    <div style={{ display: isActive() ? 'contents' : 'none' }}>
+                      <TabPanel laneId={id} workingDir={effectiveWorkingDir} />
+                    </div>
+                  );
+                }}
+              </Show>
+            )}
           </Show>
         );
       }}

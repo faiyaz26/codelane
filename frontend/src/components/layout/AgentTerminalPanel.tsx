@@ -11,6 +11,7 @@ interface AgentTerminalPanelProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
+  reloadingLanes: Set<string>;
   showEditor: boolean;
   panelWidth: number | null;
   onTerminalReady?: (laneId: string, terminalId: string) => void;
@@ -165,44 +166,48 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       {/* Terminal Content */}
       <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
         <For each={Array.from(props.initializedLanes)}>
-          {(laneId) => {
-            const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
-            const isActive = createMemo(() => props.activeLaneId === laneId);
+          {(laneId) => (
+            <Show when={!props.reloadingLanes.has(laneId)}>
+              {() => {
+                const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+                const isActive = createMemo(() => props.activeLaneId === laneId);
 
-            return (
-              <Show when={lane()}>
-                {(laneData) => {
-                  // Capture values at render time to avoid stale accessors
-                  const id = laneData().id;
-                  // Use worktree path if available, otherwise use workingDir
-                  const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
+                return (
+                  <Show when={lane()}>
+                    {(laneData) => {
+                      // Capture values at render time to avoid stale accessors
+                      const id = laneData().id;
+                      // Use worktree path if available, otherwise use workingDir
+                      const effectiveWorkingDir = laneData().worktreePath || laneData().workingDir;
 
-                  return (
-                    <div
-                      class="absolute inset-0 transition-opacity duration-150"
-                      style={{
-                        opacity: isActive() ? '1' : '0',
-                        'pointer-events': isActive() ? 'auto' : 'none',
-                        'z-index': isActive() ? '1' : '0',
-                      }}
-                    >
-                      <TerminalView
-                        laneId={id}
-                        cwd={effectiveWorkingDir}
-                        onTerminalReady={(terminalId) => {
-                          props.onTerminalReady?.(id, terminalId);
-                        }}
-                        onTerminalExit={() => {
-                          props.onTerminalExit?.(id);
-                        }}
-                        onAgentFailed={props.onAgentFailed}
-                      />
-                    </div>
-                  );
-                }}
-              </Show>
-            );
-          }}
+                      return (
+                        <div
+                          class="absolute inset-0 transition-opacity duration-150"
+                          style={{
+                            opacity: isActive() ? '1' : '0',
+                            'pointer-events': isActive() ? 'auto' : 'none',
+                            'z-index': isActive() ? '1' : '0',
+                          }}
+                        >
+                          <TerminalView
+                            laneId={id}
+                            cwd={effectiveWorkingDir}
+                            onTerminalReady={(terminalId) => {
+                              props.onTerminalReady?.(id, terminalId);
+                            }}
+                            onTerminalExit={() => {
+                              props.onTerminalExit?.(id);
+                            }}
+                            onAgentFailed={props.onAgentFailed}
+                          />
+                        </div>
+                      );
+                    }}
+                  </Show>
+                );
+              }}
+            </Show>
+          )}
         </For>
       </div>
 
