@@ -323,25 +323,25 @@ export function TerminalView(props: TerminalViewProps) {
           <span class="text-xs text-zed-text-secondary flex-1">Get notified when the agent finishes or needs your input?</span>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors"
+              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors cursor-pointer select-none"
               onClick={() => handleEnableNotification('done')}
             >
               When finished
             </button>
             <button
-              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors"
+              class="px-2.5 py-1 text-xs font-medium text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface rounded border border-zed-border-default transition-colors cursor-pointer select-none"
               onClick={() => handleEnableNotification('input')}
             >
               When needs input
             </button>
             <button
-              class="px-2.5 py-1 text-xs font-medium text-white bg-zed-accent-blue hover:bg-zed-accent-blue-hover rounded transition-colors"
+              class="px-2.5 py-1 text-xs font-medium text-white bg-zed-accent-blue hover:bg-zed-accent-blue-hover rounded transition-colors cursor-pointer select-none"
               onClick={() => handleEnableNotification('both')}
             >
               Both
             </button>
             <button
-              class="p-1 text-zed-text-tertiary hover:text-zed-text-primary transition-colors"
+              class="p-1 text-zed-text-tertiary hover:text-zed-text-primary transition-colors cursor-pointer select-none"
               onClick={handleDismissPrompt}
               title="Don't ask again"
             >

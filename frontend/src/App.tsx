@@ -558,7 +558,7 @@ function App() {
         {(notif) => (
           <div class="fixed top-4 right-4 z-50 max-w-md animate-slide-in">
             <div
-              class={`rounded-lg shadow-lg border p-4 flex items-start gap-3 transition-all ${
+              class={`rounded-lg shadow-lg border p-4 flex items-start gap-3 transition-all select-none ${
                 notif().onClick ? 'cursor-pointer hover:bg-opacity-80 active:scale-[0.98]' : ''
               } ${
                 notif().type === 'error'
@@ -585,7 +585,7 @@ function App() {
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setNotification(null); }}
-                class="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-black/20"
+                class="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-black/20 cursor-pointer select-none"
                 aria-label="Close notification"
               >
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

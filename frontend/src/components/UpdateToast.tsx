@@ -23,7 +23,7 @@ export function UpdateToast() {
             <Show when={updaterService.status() === 'available'}>
               <button
                 onClick={() => updaterService.dismiss(true)}
-                class="text-zed-text-disabled hover:text-zed-text-primary transition-colors"
+                class="text-zed-text-disabled hover:text-zed-text-primary transition-colors cursor-pointer select-none"
                 aria-label="Dismiss"
               >
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -46,13 +46,13 @@ export function UpdateToast() {
                 <div class="flex items-center gap-2">
                   <button
                     onClick={() => updaterService.downloadAndInstall()}
-                    class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium"
+                    class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium cursor-pointer select-none"
                   >
                     Download & Install
                   </button>
                   <button
                     onClick={() => updaterService.dismiss(true)}
-                    class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors"
+                    class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors cursor-pointer select-none"
                   >
                     Later
                   </button>
