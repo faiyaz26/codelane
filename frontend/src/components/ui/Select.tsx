@@ -1,11 +1,11 @@
 import { Select as KobalteSelect } from '@kobalte/core/select';
-import { splitProps } from 'solid-js';
+import { splitProps, createSignal, createEffect } from 'solid-js';
 
 interface SelectProps {
   options: any[];
   optionValue: string;
   optionLabel: string;
-  value: any;
+  value: any; // The selected object
   onChange: (value: any) => void;
   placeholder?: string;
   class?: string;
@@ -40,7 +40,7 @@ export function Select(props: SelectProps) {
       <KobalteSelect.Trigger
         class={`flex items-center justify-between px-3 h-8 bg-zed-bg-surface border border-zed-border-default rounded text-sm text-zed-text-primary hover:border-zed-border-active transition-all focus:outline-none focus:ring-2 focus:ring-zed-accent-blue/50 ${local.triggerClass || ''}`}
       >
-        <KobalteSelect.Value>
+        <KobalteSelect.Value<any>>
           {state => state.selectedOption() ? state.selectedOption()[local.optionLabel] : local.placeholder}
         </KobalteSelect.Value>
         <KobalteSelect.Icon class="ml-2 text-zed-text-tertiary">

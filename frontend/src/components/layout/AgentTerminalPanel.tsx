@@ -3,7 +3,7 @@ import { TerminalView } from '../TerminalView';
 import { ProcessMonitor } from '../ProcessMonitor';
 import { Dialog, Button, Select } from '../ui';
 import type { Lane } from '../../types/lane';
-import { getAgentSettings } from '../../lib/settings-api';
+import { getAgentSettings, getDefaultAgent } from '../../lib/settings-api';
 import { updateLaneConfig } from '../../lib/lane-api';
 import type { AgentConfig, AgentSettings } from '../../types/agent';
 
@@ -24,7 +24,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [showSwitchConfirm, setShowSwitchConfirm] = createSignal(false);
   const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   const [pendingAgent, setPendingAgent] = createSignal<AgentConfig | null>(null);
-  const [selectedAgentName, setSelectedAgentName] = createSignal<string>('');
 
   onMount(async () => {
     const settings = await getAgentSettings();
@@ -33,31 +32,18 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
   const activeLane = createMemo(() => props.lanes.find(l => l.id === props.activeLaneId));
 
-  const currentAgentName = createMemo(() => {
+  const currentAgent = createMemo(() => {
     const lane = activeLane();
     const settings = agentSettings();
-    if (!lane || !settings) return '';
+    if (!lane || !settings) return null;
     
-    // If lane has override, try to find its name in installed agents
+    // If lane has override, use it
     if (lane.config?.agentOverride) {
-      const override = lane.config.agentOverride;
-      const found = settings.installedAgents.find(a => 
-        a.command === override.command && 
-        JSON.stringify(a.args) === JSON.stringify(override.args)
-      );
-      if (found) return found.name || found.agentType;
-      return override.name || 'Custom Agent';
+      return lane.config.agentOverride;
     }
 
-    // Fallback to default agent name
-    return settings.defaultAgentName || 'Default';
-  });
-
-  // Sync selectedAgentName with currentAgentName when it changes (on lane switch or settings load)
-  createEffect(() => {
-    // Access props.activeLaneId to ensure this re-runs on lane switch
-    props.activeLaneId;
-    setSelectedAgentName(currentAgentName());
+    // Fallback to global default
+    return getDefaultAgent(settings);
   });
 
   const handleReloadClick = () => {
@@ -74,11 +60,10 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   };
 
   const handleAgentSwitch = (agent: AgentConfig) => {
-    const name = agent.name || agent.agentType;
-    // Don't do anything if it's the same agent
-    if (name === currentAgentName()) return;
+    const current = currentAgent();
+    // Don't do anything if it's the same agent (compare by name or type+command)
+    if (current && (agent.name === current.name && agent.command === current.command)) return;
     
-    setSelectedAgentName(name);
     setPendingAgent(agent);
     setShowSwitchConfirm(true);
   };
@@ -86,8 +71,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const handleCancelSwitch = () => {
     setShowSwitchConfirm(false);
     setPendingAgent(null);
-    // Revert the dropdown display to the actual current agent
-    setSelectedAgentName(currentAgentName());
   };
 
   const confirmAgentSwitch = async () => {
@@ -109,8 +92,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       }
     } catch (error) {
       console.error('Failed to switch agent:', error);
-      // On error, also revert the dropdown
-      setSelectedAgentName(currentAgentName());
     } finally {
       setShowSwitchConfirm(false);
       setPendingAgent(null);
@@ -156,7 +137,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                 options={agentSettings()!.installedAgents}
                 optionValue="name"
                 optionLabel="name"
-                value={agentSettings()!.installedAgents.find(a => a.name === selectedAgentName())}
+                value={currentAgent()}
                 onChange={(agent) => handleAgentSwitch(agent)}
                 triggerClass="!h-6 !px-2 !bg-transparent !border-none hover:!bg-zed-bg-hover !text-[11px] !font-medium !text-zed-text-tertiary hover:!text-zed-text-primary"
               />
