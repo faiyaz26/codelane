@@ -18,6 +18,7 @@ import type { AgentSettings } from './types/agent';
 import { tabManager } from './services/TabManager';
 import { resourceManager } from './services/ResourceManager';
 import { agentNotificationService } from './services/AgentNotificationService';
+import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
 import codelaneLogoWhite from './assets/codelane-logo-white.png';
 
@@ -34,7 +35,11 @@ function App() {
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
   // Notification state
-  const [notification, setNotification] = createSignal<{ message: string; type: 'error' | 'warning' | 'info' } | null>(null);
+  const [notification, setNotification] = createSignal<{ 
+    message: string; 
+    type: 'error' | 'warning' | 'info';
+    onClick?: () => void;
+  } | null>(null);
   // Track terminal IDs for process monitoring
   const [terminalIds, setTerminalIds] = createSignal<Map<string, string>>(new Map());
 
@@ -149,6 +154,50 @@ function App() {
       document.removeEventListener('paste', handleNativePaste, true);
     });
   });
+
+  // Listen for agent status changes to show in-app notifications
+  onMount(() => {
+    const unsubscribe = agentStatusManager.onStatusChange((change) => {
+      const settings = agentStatusManager.getNotificationSettings();
+      
+      let message: string | null = null;
+      let type: 'info' | 'warning' | 'error' = 'info';
+
+      if (change.newStatus === 'done' && settings.notifyOnDone) {
+        const laneName = lanes().find(l => l.id === change.laneId)?.name || 'lane';
+        message = `Agent finished task in "${laneName}". Click to switch.`;
+        type = 'info';
+      } else if (change.newStatus === 'waiting_for_input' && settings.notifyOnWaitingForInput) {
+        const laneName = lanes().find(l => l.id === change.laneId)?.name || 'lane';
+        message = `Agent needs input in "${laneName}". Click to switch.`;
+        type = 'warning';
+      } else if (change.newStatus === 'error' && settings.notifyOnError) {
+        const laneName = lanes().find(l => l.id === change.laneId)?.name || 'lane';
+        message = `Agent error in "${laneName}". Click to switch.`;
+        type = 'error';
+      }
+
+      if (message) {
+        setNotification({
+          message,
+          type,
+          onClick: () => {
+            handleLaneSelect(change.laneId);
+            setNotification(null);
+          }
+        });
+
+        // Auto-dismiss after 10 seconds
+        const currentMessage = message;
+        setTimeout(() => {
+          setNotification((prev) => prev?.message === currentMessage ? null : prev);
+        }, 10000);
+      }
+    });
+
+    onCleanup(unsubscribe);
+  });
+
 
 
 
@@ -356,13 +405,18 @@ function App() {
 
   const handleAgentFailed = (agentType: string, command: string) => {
     const notif = {
-      message: `Agent "${agentType}" (${command}) is not installed. Using shell instead. Click settings to configure.`,
+      message: `Agent "${agentType}" (${command}) is not installed. Using shell instead. Click to configure settings.`,
       type: 'warning' as const,
+      onClick: () => {
+        setSettingsOpen(true);
+        setNotification(null);
+      }
     };
     setNotification(notif);
     // Auto-dismiss after 8 seconds
+    const currentMessage = notif.message;
     setTimeout(() => {
-      setNotification(null);
+      setNotification((prev) => prev?.message === currentMessage ? null : prev);
     }, 8000);
   };
 
@@ -420,7 +474,6 @@ function App() {
     }
 
     // Save notification settings
-    const { agentStatusManager } = await import('./services/AgentStatusManager');
     agentStatusManager.updateNotificationSettings({
       notifyOnDone: data.notifications.onTaskComplete,
       notifyOnWaitingForInput: data.notifications.onNeedsInput,
@@ -505,13 +558,16 @@ function App() {
         {(notif) => (
           <div class="fixed top-4 right-4 z-50 max-w-md animate-slide-in">
             <div
-              class={`rounded-lg shadow-lg border p-4 flex items-start gap-3 ${
+              class={`rounded-lg shadow-lg border p-4 flex items-start gap-3 transition-all ${
+                notif().onClick ? 'cursor-pointer hover:bg-opacity-80 active:scale-[0.98]' : ''
+              } ${
                 notif().type === 'error'
                   ? 'bg-red-900/90 border-red-700 text-red-100'
                   : notif().type === 'warning'
                   ? 'bg-yellow-900/90 border-yellow-700 text-yellow-100'
                   : 'bg-blue-900/90 border-blue-700 text-blue-100'
               }`}
+              onClick={() => notif().onClick?.()}
             >
               <div class="flex-shrink-0 mt-0.5">
                 {notif().type === 'warning' ? (
@@ -528,8 +584,9 @@ function App() {
                 <p class="text-sm font-medium">{notif().message}</p>
               </div>
               <button
-                onClick={() => setNotification(null)}
-                class="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setNotification(null); }}
+                class="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-black/20"
+                aria-label="Close notification"
               >
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
