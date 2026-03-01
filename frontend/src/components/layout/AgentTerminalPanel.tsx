@@ -84,6 +84,26 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     return getDefaultAgent(settings);
   });
 
+  const currentAgentName = createMemo(() => {
+    const agent = currentAgent();
+    if (!agent) return '';
+    
+    if (agent.name) return agent.name;
+    
+    // Try to find name in installed agents if missing in config
+    const settings = agentSettings();
+    if (settings) {
+      const found = settings.installedAgents.find(a => 
+        a.command === agent.command && 
+        a.agentType === agent.agentType &&
+        JSON.stringify(a.args) === JSON.stringify(agent.args)
+      );
+      if (found) return found.name || found.agentType;
+    }
+    
+    return agent.agentType;
+  });
+
   const handleReloadClick = () => {
     if (props.activeLaneId) {
       setShowReloadConfirm(true);
@@ -98,9 +118,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   };
 
   const handleAgentSwitch = (agent: AgentConfig) => {
-    const current = currentAgent();
-    // Don't do anything if it's the same agent (compare by name or type+command)
-    if (current && (agent.name === current.name && agent.command === current.command)) return;
+    const currentName = currentAgentName();
+    const newName = agent.name || agent.agentType;
+    
+    // Don't do anything if it's the same agent
+    if (newName === currentName) return;
     
     setPendingAgent(agent);
     setShowSwitchConfirm(true);
@@ -126,7 +148,10 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
       
       // Reload terminal with new agent
       if (props.onReloadAgentTerminal) {
-        props.onReloadAgentTerminal(props.activeLaneId);
+        const laneId = props.activeLaneId;
+        setTimeout(() => {
+          props.onReloadAgentTerminal?.(laneId);
+        }, 0);
       }
     } catch (error) {
       console.error('Failed to switch agent:', error);
