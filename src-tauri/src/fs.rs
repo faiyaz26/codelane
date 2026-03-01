@@ -595,7 +595,7 @@ mod tests {
     async fn test_read_file_nonexistent() {
         let result = read_file("/nonexistent/path/file.txt".to_string(), None).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to read file"));
+        assert!(result.unwrap_err().contains("Failed to get file metadata"));
     }
 
     #[tokio::test]

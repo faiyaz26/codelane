@@ -52,7 +52,8 @@ describe('settings-api', () => {
   describe('getAgentSettings', () => {
     it('returns saved settings', async () => {
       const settings: AgentSettings = {
-        defaultAgent: { agentType: 'claude', command: 'claude' },
+        defaultAgentName: 'Claude Code',
+        installedAgents: [{ agentType: 'claude', command: 'claude', name: 'Claude Code', args: [], env: {}, useLaneCwd: true }],
       };
       mockStoreGet.mockResolvedValue(settings);
 
@@ -68,14 +69,16 @@ describe('settings-api', () => {
       const result = await getAgentSettings();
 
       expect(result).toBeDefined();
-      expect(result.defaultAgent).toBeDefined();
+      expect(result.defaultAgentName).toBeDefined();
+      expect(result.installedAgents).toBeDefined();
     });
   });
 
   describe('updateAgentSettings', () => {
     it('saves settings to store', async () => {
       const settings: AgentSettings = {
-        defaultAgent: { agentType: 'codex', command: 'codex' },
+        defaultAgentName: 'Codex',
+        installedAgents: [{ agentType: 'codex', command: 'codex', name: 'Codex', args: [], env: {}, useLaneCwd: true }],
       };
 
       await updateAgentSettings(settings);
@@ -87,7 +90,7 @@ describe('settings-api', () => {
 
   describe('getLaneAgentConfig', () => {
     it('returns lane override when present', async () => {
-      const override: AgentConfig = { agentType: 'gemini', command: 'gemini' };
+      const override: AgentConfig = { agentType: 'gemini', command: 'gemini', args: [], env: {}, useLaneCwd: true, name: 'Gemini' };
       mockGetLane.mockResolvedValue({
         id: 'lane-1',
         config: { agentOverride: override },
@@ -105,7 +108,8 @@ describe('settings-api', () => {
       });
 
       const globalSettings: AgentSettings = {
-        defaultAgent: { agentType: 'claude', command: 'claude' },
+        defaultAgentName: 'Claude Code',
+        installedAgents: [{ agentType: 'claude', command: 'claude', args: [], env: {}, useLaneCwd: true, name: 'Claude Code' }]
       };
       mockStoreGet.mockResolvedValue(globalSettings);
 
