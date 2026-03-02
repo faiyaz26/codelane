@@ -147,6 +147,11 @@ describe('UpdaterService', () => {
     expect(updaterService.downloadProgress()).toBe(100);
 
     await downloadPromise;
+    expect(updaterService.status()).toBe('ready-to-restart');
+    expect(relaunch).not.toHaveBeenCalled();
+
+    // Now call relaunch
+    await updaterService.relaunch();
     expect(relaunch).toHaveBeenCalled();
   });
 });

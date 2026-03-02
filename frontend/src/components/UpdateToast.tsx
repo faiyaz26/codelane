@@ -6,7 +6,9 @@ import { updaterService } from '../services/UpdaterService';
 
 export function UpdateToast() {
   const visible = () =>
-    updaterService.status() === 'available' || updaterService.status() === 'downloading';
+    updaterService.status() === 'available' || 
+    updaterService.status() === 'downloading' || 
+    updaterService.status() === 'ready-to-restart';
 
   return (
     <Show when={visible()}>
@@ -18,11 +20,13 @@ export function UpdateToast() {
               <svg class="w-4 h-4 text-zed-accent-blue flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clip-rule="evenodd" />
               </svg>
-              <span class="text-sm font-semibold text-zed-text-primary">Update Available</span>
+              <span class="text-sm font-semibold text-zed-text-primary">
+                {updaterService.status() === 'ready-to-restart' ? 'Restart Required' : 'Update Available'}
+              </span>
             </div>
-            <Show when={updaterService.status() === 'available'}>
+            <Show when={updaterService.status() === 'available' || updaterService.status() === 'ready-to-restart'}>
               <button
-                onClick={() => updaterService.dismiss(true)}
+                onClick={() => updaterService.dismiss(updaterService.status() === 'available')}
                 class="text-zed-text-disabled hover:text-zed-text-primary transition-colors cursor-pointer select-none"
                 aria-label="Dismiss"
               >
@@ -36,41 +40,65 @@ export function UpdateToast() {
           {/* Body */}
           <div class="px-4 pb-4">
             <p class="text-sm text-zed-text-secondary mb-3">
-              Codelane <span class="font-medium text-zed-text-primary">{updaterService.updateVersion()}</span> is ready to install.
+              <Show 
+                when={updaterService.status() === 'ready-to-restart'} 
+                fallback={<>Codelane <span class="font-medium text-zed-text-primary">{updaterService.updateVersion()}</span> is ready to install.</>}
+              >
+                Codelane {updaterService.updateVersion()} has been installed and is ready to use.
+              </Show>
             </p>
 
-            {/* Download action or progress bar */}
+            {/* Download action, progress bar, or restart button */}
             <Show
-              when={updaterService.status() === 'downloading'}
+              when={updaterService.status() === 'ready-to-restart'}
               fallback={
-                <div class="flex items-center gap-2">
-                  <button
-                    onClick={() => updaterService.downloadAndInstall()}
-                    class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium cursor-pointer select-none"
-                  >
-                    Download & Install
-                  </button>
-                  <button
-                    onClick={() => updaterService.dismiss(true)}
-                    class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors cursor-pointer select-none"
-                  >
-                    Later
-                  </button>
-                </div>
+                <Show
+                  when={updaterService.status() === 'downloading'}
+                  fallback={
+                    <div class="flex items-center gap-2">
+                      <button
+                        onClick={() => updaterService.downloadAndInstall()}
+                        class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium cursor-pointer select-none"
+                      >
+                        Download & Install
+                      </button>
+                      <button
+                        onClick={() => updaterService.dismiss(true)}
+                        class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors cursor-pointer select-none"
+                      >
+                        Later
+                      </button>
+                    </div>
+                  }
+                >
+                  <div>
+                    <div class="flex justify-between text-xs text-zed-text-secondary mb-1.5">
+                      <span>Downloading…</span>
+                      <span>{updaterService.downloadProgress()}%</span>
+                    </div>
+                    <div class="w-full bg-zed-bg-app rounded-full h-1">
+                      <div
+                        class="bg-zed-accent-blue h-1 rounded-full transition-all duration-200"
+                        style={{ width: `${updaterService.downloadProgress()}%` }}
+                      />
+                    </div>
+                  </div>
+                </Show>
               }
             >
-              <div>
-                <div class="flex justify-between text-xs text-zed-text-secondary mb-1.5">
-                  <span>Downloading…</span>
-                  <span>{updaterService.downloadProgress()}%</span>
-                </div>
-                <div class="w-full bg-zed-bg-app rounded-full h-1">
-                  <div
-                    class="bg-zed-accent-blue h-1 rounded-full transition-all duration-200"
-                    style={{ width: `${updaterService.downloadProgress()}%` }}
-                  />
-                </div>
-                <p class="text-xs text-zed-text-disabled mt-1.5">App will restart automatically when done.</p>
+              <div class="flex items-center gap-2">
+                <button
+                  onClick={() => updaterService.relaunch()}
+                  class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium cursor-pointer select-none"
+                >
+                  Restart Now
+                </button>
+                <button
+                  onClick={() => updaterService.dismiss(false)}
+                  class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors cursor-pointer select-none"
+                >
+                  Not Now
+                </button>
               </div>
             </Show>
           </div>

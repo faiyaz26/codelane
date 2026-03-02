@@ -3,12 +3,12 @@
 // Usage:
 //   import { updaterService } from './UpdaterService';
 //   updaterService.checkForUpdates();  // trigger a check
-//   updaterService.status()            // reactive signal: idle | checking | available | up-to-date | downloading | error
+//   updaterService.status()            // reactive signal: idle | checking | available | up-to-date | downloading | ready-to-restart | error
 
 import { createSignal } from 'solid-js';
 import type { Update } from '@tauri-apps/plugin-updater';
 
-export type UpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'error';
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready-to-restart' | 'error';
 
 const [status, setStatus] = createSignal<UpdateStatus>('idle');
 const [updateVersion, setUpdateVersion] = createSignal<string | null>(null);
@@ -21,7 +21,7 @@ let pendingUpdate: Update | null = null;
 
 function resetToIdleAfter(ms: number) {
   setTimeout(() => {
-    if (status() !== 'available' && status() !== 'downloading') {
+    if (status() !== 'available' && status() !== 'downloading' && status() !== 'ready-to-restart') {
       setStatus('idle');
     }
   }, ms);
@@ -36,7 +36,7 @@ export const updaterService = {
   errorMessage,
 
   async checkForUpdates(isManual = false): Promise<boolean> {
-    if (status() === 'checking' || status() === 'downloading') return false;
+    if (status() === 'checking' || status() === 'downloading' || status() === 'ready-to-restart') return false;
 
     console.log(`[Updater] Starting update check (manual: ${isManual})...`);
     setStatus('checking');
@@ -127,9 +127,9 @@ export const updaterService = {
         localStorage.removeItem(MUTED_VERSION_KEY);
       }
 
-      // Relaunch after install
-      const { relaunch } = await import('@tauri-apps/plugin-process');
-      await relaunch();
+      // Instead of auto-relaunching, we set status to ready-to-restart
+      // so the UI can prompt the user.
+      setStatus('ready-to-restart');
     } catch (err) {
       console.error('[Updater] Download/install failed:', err);
       setErrorMessage(String(err));
@@ -138,8 +138,19 @@ export const updaterService = {
     }
   },
 
+  async relaunch(): Promise<void> {
+    try {
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } catch (err) {
+      console.error('[Updater] Relaunch failed:', err);
+      setErrorMessage('Failed to restart. Please restart manually.');
+      setStatus('error');
+    }
+  },
+
   dismiss(mute = false) {
-    if (status() === 'available' || status() === 'up-to-date' || status() === 'error') {
+    if (status() === 'available' || status() === 'up-to-date' || status() === 'error' || status() === 'ready-to-restart') {
       const currentVersion = updateVersion();
       if (mute && currentVersion && typeof localStorage !== 'undefined') {
         localStorage.setItem(MUTED_VERSION_KEY, currentVersion);

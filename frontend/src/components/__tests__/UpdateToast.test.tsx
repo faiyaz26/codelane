@@ -11,6 +11,7 @@ vi.mock('../../services/UpdaterService', () => {
       updateVersion: vi.fn(),
       downloadProgress: vi.fn(),
       downloadAndInstall: vi.fn(),
+      relaunch: vi.fn(),
       dismiss: vi.fn(),
     },
   };
@@ -73,5 +74,23 @@ describe('UpdateToast', () => {
     fireEvent.click(laterBtn);
 
     expect(updaterService.dismiss).toHaveBeenCalledWith(true);
+  });
+
+  it('shows restart confirmation when ready to restart', () => {
+    (updaterService.status as any).mockReturnValue('ready-to-restart');
+    (updaterService.updateVersion as any).mockReturnValue('1.2.3');
+
+    render(() => <UpdateToast />);
+
+    expect(screen.getByText('Restart Required')).toBeDefined();
+    expect(screen.getByText(/1\.2\.3/)).toBeDefined();
+    expect(screen.getByText('Restart Now')).toBeDefined();
+    expect(screen.getByText('Not Now')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Restart Now'));
+    expect(updaterService.relaunch).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Not Now'));
+    expect(updaterService.dismiss).toHaveBeenCalledWith(false);
   });
 });
