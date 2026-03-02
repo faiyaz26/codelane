@@ -350,7 +350,7 @@ export function TerminalView(props: TerminalViewProps) {
       <Show when={userHasScrolledUp()}>
         <button
           onClick={scrollToBottom}
-          class="absolute bottom-6 right-8 px-3 py-1.5 bg-zed-bg-overlay border border-zed-border-default rounded-full shadow-lg flex items-center gap-2 text-xs font-medium text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-surface transition-all animate-fade-in z-10"
+          class="absolute bottom-6 right-8 px-3 py-1.5 bg-zed-bg-overlay border border-zed-border-default rounded-full shadow-lg flex items-center gap-2 text-xs font-medium text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-surface transition-all animate-fade-in z-10 group-hover:border-zed-accent-blue/50"
         >
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
