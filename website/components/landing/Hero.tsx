@@ -157,12 +157,15 @@ export function Hero() {
           </a>
         </div>
 
-        <p className="text-sm text-gray-500 mb-16">
-          Also available for{' '}
-          <a href="https://github.com/faiyaz26/codelane/releases/latest" className="text-[#60A5FA] hover:underline">
-            Windows and Linux
-          </a>
-        </p>
+        <div className="text-sm text-gray-500 mb-16 space-y-1">
+          <p>Only macOS is fully tested.</p>
+          <p>
+            <a href="https://github.com/faiyaz26/codelane/releases/latest" className="text-[#60A5FA] hover:underline">
+              Windows and Linux
+            </a>{' '}
+            versions are experimental and untested.
+          </p>
+        </div>
 
         <div className="mt-16 mb-8 relative rounded-xl border border-[#374151] bg-[#1F2937]/50 p-2 backdrop-blur-sm shadow-2xl overflow-hidden mx-auto max-w-5xl">
           <Image 

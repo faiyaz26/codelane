@@ -198,7 +198,7 @@ The backend has ~250 tests covering core functionality. Tests use `tempfile` for
 ### ⚡ Native Performance
 - **Rust Backend**: Fast, memory-safe operations via Tauri
 - **SolidJS Frontend**: Fine-grained reactivity for instant UI updates
-- **Cross-platform**: macOS, Windows, Linux with native feel
+- **Cross-platform**: Only macOS is fully tested. Windows and Linux versions are experimental and untested.
 
 ## Troubleshooting
 

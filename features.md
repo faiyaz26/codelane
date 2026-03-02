@@ -183,9 +183,9 @@
 - **IPC**: Tauri commands and events
 
 ### Platform Support
-- [x] macOS (Apple Silicon + Intel)
-- [ ] Windows (10+)
-- [ ] Linux (X11 + Wayland)
+- [x] macOS (Apple Silicon + Intel) - **Fully tested**
+- [x] Windows (10+) - **Experimental/Untested**
+- [x] Linux (X11 + Wayland) - **Experimental/Untested**
 
 ---
 
