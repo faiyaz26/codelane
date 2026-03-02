@@ -3,8 +3,8 @@
 //! Handles global application settings including agent configurations.
 
 use codelane_core::config::{AgentConfig, AgentSettings};
-use std::sync::Mutex;
 use std::process::Command;
+use std::sync::Mutex;
 use tauri::State;
 
 /// Global settings state
@@ -124,25 +124,26 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
     // On Unix, enhance PATH with common installation directories
     #[cfg(unix)]
     {
-        let home = env::var("HOME").unwrap_or_default();
+        let home_path = dirs::home_dir().unwrap_or_default();
+        let home = home_path.to_string_lossy();
         let common_paths: Vec<String> = vec![
             "/usr/local/bin".to_string(),
-            "/opt/homebrew/bin".to_string(),  // Homebrew on Apple Silicon
+            "/opt/homebrew/bin".to_string(), // Homebrew on Apple Silicon
             "/usr/bin".to_string(),
             "/bin".to_string(),
-            format!("{}/.cargo/bin", home),  // Rust tools
-            format!("{}/.local/bin", home),  // Local user binaries
-            format!("{}/bin", home),         // User bin
+            format!("{}/.cargo/bin", home), // Rust tools
+            format!("{}/.local/bin", home), // Local user binaries
+            format!("{}/bin", home),        // User bin
         ];
 
         // In production macOS/Linux app bundles, the environment PATH is very minimal.
         // Try using interactive login shells to discover the tool,
         // which loads dotfiles (.zshrc, .bashrc) configuring nvm, pyenv, cargo, etc.
         // Many dotfiles skip initialization if not interactive (-i).
-        
+
         let shell_cmd = format!("command -v {}", command);
         let current_shell = env::var("SHELL").unwrap_or_default();
-        
+
         // Build a list of shells to try. Start with the user's SHELL env var if present,
         // then try standard macOS/Linux default shells.
         let mut shells_to_try = vec![];
@@ -153,33 +154,33 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
         shells_to_try.push("/bin/bash".to_string());
 
         for shell in shells_to_try {
-            let shell_output = Command::new(&shell)
-                .arg("-lic")
-                .arg(&shell_cmd)
-                .output();
+            let shell_output = Command::new(&shell).arg("-lic").arg(&shell_cmd).output();
 
             if let Ok(out) = shell_output {
                 if out.status.success() {
                     let output_str = String::from_utf8(out.stdout).unwrap_or_default();
-                    
+
                     // .zshrc/.bashrc can be noisy. The actual path is usually the last valid file path printed.
                     // We iterate in reverse to find the command output while ignoring initialization noise.
                     for line in output_str.lines().rev() {
                         let path = line.trim();
-                        if !path.is_empty() && !path.contains("not found") && Path::new(path).is_file() {
+                        if !path.is_empty()
+                            && !path.contains("not found")
+                            && Path::new(path).is_file()
+                        {
                             return Ok(Some(path.to_string()));
                         }
                     }
                 }
             }
         }
-        
+
         // Fallback: try which with enhanced PATH
         let enhanced_path = env::var("PATH").unwrap_or_default() + ":" + &common_paths.join(":");
         if let Ok(output) = Command::new("which")
             .arg(command)
             .env("PATH", enhanced_path)
-            .output() 
+            .output()
         {
             if output.status.success() {
                 let output_str = String::from_utf8(output.stdout).unwrap_or_default();
@@ -215,7 +216,7 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
         if let Ok(output) = Command::new("where").arg(command).output() {
             if output.status.success() {
                 let output_str = String::from_utf8(output.stdout).unwrap_or_default();
-                
+
                 // 'where' returns one match per line. Find the first valid file.
                 for line in output_str.lines() {
                     let path = line.trim();
@@ -225,7 +226,7 @@ pub fn command_exists(command: &str) -> Result<Option<String>, String> {
                 }
             }
         }
-        
+
         // Fallback for Windows: check if the command itself is an absolute path
         if Path::new(command).is_file() {
             return Ok(Some(command.to_string()));
@@ -321,7 +322,8 @@ mod tests {
 
     #[test]
     fn test_check_command_exists_nonexistent() {
-        let result = check_command_exists("this_command_definitely_does_not_exist_12345".to_string());
+        let result =
+            check_command_exists("this_command_definitely_does_not_exist_12345".to_string());
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }

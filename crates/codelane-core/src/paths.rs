@@ -24,9 +24,9 @@ pub fn env_name() -> &'static str {
 ///
 /// Creates the directory if it doesn't exist.
 pub fn data_dir() -> crate::Result<PathBuf> {
-    let home = std::env::var("HOME")
-        .map_err(|_| crate::Error::Config("Could not determine home directory".into()))?;
-    let dir = PathBuf::from(home).join(".codelane").join(env_name());
+    let home = dirs::home_dir()
+        .ok_or_else(|| crate::Error::Config("Could not determine home directory".into()))?;
+    let dir = home.join(".codelane").join(env_name());
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
@@ -56,7 +56,10 @@ pub fn lanes_dir() -> crate::Result<PathBuf> {
 /// Returns the worktree path for a given project and branch.
 pub fn worktree_path(project_name: &str, branch: &str) -> crate::Result<PathBuf> {
     let safe_branch = branch.replace('/', "-");
-    Ok(data_dir()?.join("worktrees").join(project_name).join(safe_branch))
+    Ok(data_dir()?
+        .join("worktrees")
+        .join(project_name)
+        .join(safe_branch))
 }
 
 /// Returns the shared hook events directory (not environment-specific).
@@ -65,9 +68,9 @@ pub fn worktree_path(project_name: &str, branch: &str) -> crate::Result<PathBuf>
 /// Shared between dev and prod since events are transient and deleted after processing.
 /// Example: `~/.codelane/hook-events/`
 pub fn hook_events_dir() -> crate::Result<PathBuf> {
-    let home = std::env::var("HOME")
-        .map_err(|_| crate::Error::Config("Could not determine home directory".into()))?;
-    let dir = PathBuf::from(home).join(".codelane").join("hook-events");
+    let home = dirs::home_dir()
+        .ok_or_else(|| crate::Error::Config("Could not determine home directory".into()))?;
+    let dir = home.join(".codelane").join("hook-events");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

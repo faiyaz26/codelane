@@ -134,13 +134,13 @@ echo '{{}}'
 
 /// Get the configuration directory for an agent
 fn get_agent_config_dir(agent_type: AgentType) -> Result<PathBuf, String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
 
     let config_dir = match agent_type {
-        AgentType::Claude => PathBuf::from(home).join(".claude"),
-        AgentType::Codex => PathBuf::from(home).join(".codex"),
-        AgentType::Gemini => PathBuf::from(home).join(".gemini"),
+        AgentType::Claude => home.join(".claude"),
+        AgentType::Codex => home.join(".codex"),
+        AgentType::Gemini => home.join(".gemini"),
         _ => return Err(format!("Agent type {:?} does not support hooks", agent_type)),
     };
 
@@ -168,9 +168,9 @@ fn install_hook_script(script_content: &str, target_path: &Path) -> Result<(), S
 
 /// Update Claude Code settings.json to enable hooks
 fn update_claude_config(hook_script_path: &Path) -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let settings_path = PathBuf::from(home).join(".claude/settings.json");
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let settings_path = home.join(".claude/settings.json");
 
     // Read existing settings or create new
     let mut settings: serde_json::Value = if settings_path.exists() {
@@ -214,9 +214,9 @@ fn update_claude_config(hook_script_path: &Path) -> Result<(), String> {
 
 /// Update Codex config.json to enable notify hooks
 fn update_codex_config(hook_script_path: &Path) -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let config_path = PathBuf::from(home).join(".codex/config.json");
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let config_path = home.join(".codex/config.json");
 
     let mut config: serde_json::Value = if config_path.exists() {
         let content = fs::read_to_string(&config_path)
@@ -243,9 +243,9 @@ fn update_codex_config(hook_script_path: &Path) -> Result<(), String> {
 
 /// Update Gemini hooks in settings.json to enable hooks
 fn update_gemini_config(hook_script_path: &Path) -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let settings_path = PathBuf::from(home).join(".gemini/settings.json");
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let settings_path = home.join(".gemini/settings.json");
 
     // Read existing settings or create new
     let mut settings: serde_json::Value = if settings_path.exists() {
@@ -282,9 +282,9 @@ fn update_gemini_config(hook_script_path: &Path) -> Result<(), String> {
 
 /// Remove hooks from Claude Code settings
 fn remove_claude_hooks() -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let settings_path = PathBuf::from(home).join(".claude/settings.json");
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let settings_path = home.join(".claude/settings.json");
 
     if !settings_path.exists() {
         return Ok(());
@@ -310,9 +310,9 @@ fn remove_claude_hooks() -> Result<(), String> {
 
 /// Remove hooks from Codex config
 fn remove_codex_hooks() -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let config_path = PathBuf::from(home).join(".codex/config.json");
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let config_path = home.join(".codex/config.json");
 
     if !config_path.exists() {
         return Ok(());
@@ -337,16 +337,16 @@ fn remove_codex_hooks() -> Result<(), String> {
 
 /// Remove Gemini hooks from settings.json
 fn remove_gemini_hooks() -> Result<(), String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "Could not determine home directory".to_string())?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
     
     // Cleanup old hooks.yaml if it exists
-    let hooks_path = PathBuf::from(&home).join(".gemini/hooks.yaml");
+    let hooks_path = home.join(".gemini/hooks.yaml");
     if hooks_path.exists() {
         let _ = fs::remove_file(hooks_path);
     }
 
-    let settings_path = PathBuf::from(home).join(".gemini/settings.json");
+    let settings_path = home.join(".gemini/settings.json");
     if !settings_path.exists() {
         return Ok(());
     }
