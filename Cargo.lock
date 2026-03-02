@@ -642,6 +642,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "directories",
+ "dirs 5.0.1",
  "parking_lot",
  "serde",
  "serde_json",
