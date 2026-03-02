@@ -34,6 +34,7 @@ export abstract class BaseDetector implements AgentDetector {
   protected abstract readonly patterns: DetectorPatterns;
 
   private status: AgentStatus = 'idle';
+  private overrideStatus: AgentStatus | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private doneTimer: ReturnType<typeof setTimeout> | null = null;
   private doneToWorkingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,6 +58,9 @@ export abstract class BaseDetector implements AgentDetector {
     // Skip if snapshot is identical to last one (no change)
     if (text === this.lastBufferSnapshot) return;
     this.lastBufferSnapshot = text;
+
+    // Skip if override is active
+    if (this.overrideStatus !== null) return;
 
     // Strip ANSI and check for patterns (same logic as feedChunk)
     const plain = stripAnsi(text);
@@ -89,6 +93,9 @@ export abstract class BaseDetector implements AgentDetector {
   feedChunk(text: string): void {
     // Strip ANSI escape sequences for pattern matching (TUI agents like Claude/Gemini emit styled output)
     const plain = stripAnsi(text);
+
+    // Skip if override is active
+    if (this.overrideStatus !== null) return;
 
     // Reset idle timer on any output
     this.clearIdleTimer();
@@ -189,11 +196,29 @@ export abstract class BaseDetector implements AgentDetector {
   }
 
   getStatus(): AgentStatus {
-    return this.status;
+    return this.overrideStatus !== null ? this.overrideStatus : this.status;
+  }
+
+  setOverride(status: AgentStatus | null): void {
+    this.overrideStatus = status;
+    if (status !== null) {
+      // Clear all heuristic timers when high-priority override arrives
+      this.clearIdleTimer();
+      this.clearDoneTimer();
+      this.clearDoneToWorkingTimer();
+      this.pendingOutputBytes = 0;
+      this.userInputPending = false;
+      this.transitionTo(status, `status override applied: ${status}`);
+    } else {
+      // When override is cleared, we revert to current heuristic status.
+      // Re-trigger callbacks to ensure external state is in sync.
+      this.onStatusChangeCb?.(this.status);
+    }
   }
 
   reset(): void {
     this.status = 'idle';
+    this.overrideStatus = null;
     this.clearIdleTimer();
     this.clearDoneTimer();
     this.clearDoneToWorkingTimer();
@@ -213,6 +238,7 @@ export abstract class BaseDetector implements AgentDetector {
     this.lastSpinnerChar = null;
     this.lastSpinnerTime = 0;
     this.lastBufferSnapshot = '';
+    this.overrideStatus = null;
     this.onStatusChangeCb = null;
   }
 

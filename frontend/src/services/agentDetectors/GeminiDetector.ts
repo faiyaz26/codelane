@@ -24,10 +24,14 @@ export class GeminiDetector extends BaseDetector {
   override feedWindowTitle(title: string): void {
     const lowerTitle = title.trim().toLowerCase();
     
-    if (lowerTitle.includes('working') || lowerTitle.includes('running')) {
-      this.transitionTo('working', `window title changed: ${title}`);
+    if (lowerTitle.includes('working') || lowerTitle.includes('running') || lowerTitle.includes('thinking')) {
+      this.setOverride('working');
     } else if (lowerTitle.includes('ready') || lowerTitle.includes('action required') || lowerTitle.includes('waiting')) {
-      this.transitionTo('waiting_for_input', `window title changed: ${title}`);
+      this.setOverride('waiting_for_input');
+    } else {
+      // If title doesn't contain a known state, we clear the title override
+      // and let heuristics (or other overrides like hooks) take over.
+      this.setOverride(null);
     }
   }
 

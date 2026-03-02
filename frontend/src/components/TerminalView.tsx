@@ -134,7 +134,7 @@ export function TerminalView(props: TerminalViewProps) {
       const resolvedAgentType: DetectableAgentType = (spawnSuccess && useAgent)
         ? (agentConfig?.agentType || 'shell') as DetectableAgentType
         : 'shell';
-      agentStatusManager.registerLane(laneId, resolvedAgentType);
+      await agentStatusManager.registerLane(laneId, resolvedAgentType);
       isAgentLane = resolvedAgentType !== 'shell';
 
       // Show notification prompt when agent first starts working

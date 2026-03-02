@@ -33,6 +33,7 @@ interface LaneEntry {
 class AgentStatusManager {
   private readonly decoder = new TextDecoder();
   private readonly lanes = new Map<string, LaneEntry>();
+  private readonly verifiedHooks = new Map<string, boolean>();
   private listeners: StatusChangeListener[] = [];
 
   /** Reactive store: laneId -> AgentStatus */
@@ -55,13 +56,18 @@ class AgentStatusManager {
    * Register a lane for agent status tracking.
    * If the lane already exists it is unregistered first.
    */
-  registerLane(laneId: string, agentType: DetectableAgentType): void {
+  async registerLane(laneId: string, agentType: DetectableAgentType): Promise<void> {
     // Clean up existing detector if present
     if (this.lanes.has(laneId)) {
       this.unregisterLane(laneId);
     }
 
     const detector = createDetector(agentType);
+    
+    // Check if hooks are installed for this agent to prioritize signals
+    const hookStatus = await hookService.checkStatus(agentType);
+    const isHooked = hookStatus.isInstalled;
+    this.verifiedHooks.set(laneId, isHooked);
 
     const entry: LaneEntry = {
       status: 'idle',
@@ -71,6 +77,9 @@ class AgentStatusManager {
     };
 
     detector.setOnStatusChange((newStatus: AgentStatus) => {
+      // If hook is verified and active, heuristic status changes from the detector
+      // are ignored by the store/listeners because the detector's getStatus() 
+      // is already overridden.
       const previousStatus = entry.status;
       if (previousStatus === newStatus) return;
 
@@ -94,6 +103,12 @@ class AgentStatusManager {
     });
 
     this.lanes.set(laneId, entry);
+    
+    // If hooks are verified, we start in 'idle' with a high-priority signal
+    if (isHooked) {
+      detector.setOverride('idle');
+    }
+    
     this.setStore(laneId, 'idle');
   }
 
@@ -162,6 +177,7 @@ class AgentStatusManager {
 
     entry.detector.dispose();
     this.lanes.delete(laneId);
+    this.verifiedHooks.delete(laneId);
     this.setStore(laneId, undefined!);
   }
 
@@ -197,31 +213,26 @@ class AgentStatusManager {
     const entry = this.lanes.get(event.laneId);
     if (!entry) return;
 
-    // Hook events for permission/input always transition to waiting_for_input
+    let newStatus: AgentStatus | null = null;
+
+    // Map hook event types to AgentStatus
     if (
       event.eventType === 'permission_prompt' ||
       event.eventType === 'idle_prompt' ||
       event.eventType === 'waiting_for_input'
     ) {
-      const previousStatus = entry.status;
-      entry.status = 'waiting_for_input';
-      entry.lastChange = Date.now();
+      newStatus = 'waiting_for_input';
+    } else if (event.eventType === 'done' || event.eventType === 'finished') {
+      newStatus = 'done';
+    } else if (event.eventType === 'working' || event.eventType === 'processing') {
+      newStatus = 'working';
+    } else if (event.eventType === 'error') {
+      newStatus = 'error';
+    }
 
-      // Update reactive store
-      this.setStore(event.laneId, 'waiting_for_input');
-
-      // Notify listeners
-      const change: AgentStatusChange = {
-        laneId: event.laneId,
-        previousStatus,
-        newStatus: 'waiting_for_input',
-        agentType: event.agentType as DetectableAgentType,
-        timestamp: entry.lastChange,
-      };
-
-      for (const listener of this.listeners) {
-        listener(change);
-      }
+    if (newStatus) {
+      // Apply override to detector so heuristic detection is ignored
+      entry.detector.setOverride(newStatus);
     }
   }
 

@@ -30,6 +30,9 @@ export interface AgentDetector {
   /** Reset the detector state */
   reset(): void;
 
+  /** Set an explicit status override (e.g. from hooks). If null, revert to heuristic detection. */
+  setOverride(status: AgentStatus | null): void;
+
   /** Dispose any timers or resources */
   dispose(): void;
 }
