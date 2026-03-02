@@ -26,12 +26,12 @@ export function TerminalView(props: TerminalViewProps) {
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
   let pty: PtyHandle | undefined;
-  let autoScroll = true;
 
   const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
   const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
   const [onboardingAgentType, setOnboardingAgentType] = createSignal<AgentType>('claude');
   const [userHasScrolledUp, setUserHasScrolledUp] = createSignal(false);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = createSignal(true);
   let isAgentLane = false;
 
   // Watch for theme changes and update terminal
@@ -170,23 +170,28 @@ export function TerminalView(props: TerminalViewProps) {
       attachKeyHandlers(terminal, (data) => pty!.write(data));
 
       // Sticky scroll detection
-      const checkIfAtBottom = () => {
-        if (!terminal) return true;
-        const buffer = terminal.buffer.active;
-        // Check if we are within 1 row of the bottom to be lenient
-        return buffer.baseY + terminal.rows >= buffer.length - 1;
-      };
-
       const updateScrollState = () => {
-        const atBottom = checkIfAtBottom();
-        autoScroll = atBottom;
+        if (!terminal) return;
+        const buffer = terminal.buffer.active;
+        // viewportY is current scroll position, baseY is the maximum possible scroll position (the bottom)
+        const atBottom = buffer.viewportY >= buffer.baseY;
+        
+        setIsAutoScrollEnabled(atBottom);
         setUserHasScrolledUp(!atBottom);
       };
 
-      // Listen for scroll events (both manual and programmatic)
+      // Listen for scroll events
       terminal.onScroll(() => {
         updateScrollState();
       });
+
+      // Also listen for wheel events to catch manual scroll-up faster
+      const handleWheel = () => {
+        // Use requestAnimationFrame to allow xterm to update its internal scroll position
+        // before we check the state.
+        requestAnimationFrame(updateScrollState);
+      };
+      containerRef.addEventListener('wheel', handleWheel, { passive: true });
 
       // Listen for window title changes from the PTY (useful for Gemini CLI)
       terminal.onTitleChange((title) => {
@@ -198,7 +203,7 @@ export function TerminalView(props: TerminalViewProps) {
       await pty!.onData((data) => {
         if (terminal) {
           terminal.write(data);
-          if (autoScroll) {
+          if (isAutoScrollEnabled()) {
             terminal.scrollToBottom();
           }
         }
@@ -290,6 +295,9 @@ export function TerminalView(props: TerminalViewProps) {
         if (resizeObserver) resizeObserver.disconnect();
         window.removeEventListener('terminal-resize', handleTerminalResize);
         window.removeEventListener('terminal-focus', handleTerminalFocus);
+        if (containerRef) {
+          containerRef.removeEventListener('wheel', handleWheel);
+        }
       });
     } catch (error) {
       console.error('Failed to create PTY:', error);
@@ -335,7 +343,7 @@ export function TerminalView(props: TerminalViewProps) {
   const scrollToBottom = () => {
     if (terminal) {
       terminal.scrollToBottom();
-      autoScroll = true;
+      setIsAutoScrollEnabled(true);
       setUserHasScrolledUp(false);
     }
   };
@@ -350,10 +358,10 @@ export function TerminalView(props: TerminalViewProps) {
       <Show when={userHasScrolledUp()}>
         <button
           onClick={scrollToBottom}
-          class="absolute bottom-6 right-8 px-3 py-1.5 bg-zed-bg-overlay border border-zed-border-default rounded-full shadow-lg flex items-center gap-2 text-xs font-medium text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-surface transition-all animate-fade-in z-10 group-hover:border-zed-accent-blue/50"
+          class="absolute bottom-10 right-10 px-4 py-2 bg-zed-accent-blue text-white rounded-full shadow-xl flex items-center gap-2 text-sm font-semibold hover:bg-zed-accent-blue-hover transition-all animate-bounce-in z-20 cursor-pointer"
         >
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
           </svg>
           Scroll to Bottom
         </button>
