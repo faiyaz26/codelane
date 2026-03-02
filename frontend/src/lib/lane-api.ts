@@ -41,6 +41,8 @@ export async function migrateLanesToBackend(): Promise<void> {
     try {
       await invoke('lane_batch_create', { lanesToCreate: lanes });
       console.info(`[LaneAPI] Successfully migrated ${lanes.length} lanes to backend.`);
+      // Cleanup: remove the lanes from the local store since they are now in the backend
+      await store.delete(LANES_KEY);
     } catch (e) {
       console.error('[LaneAPI] Migration failed:', e);
       // Don't mark as done if it failed, so we can retry
