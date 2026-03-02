@@ -7,9 +7,11 @@
 //! - Checking hook installation status
 
 use codelane_core::config::AgentType;
+use codelane_core::hooks::{HookEvent, HookEventType};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::Emitter;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -470,6 +472,29 @@ pub async fn hooks_check_status(agent_type: String) -> Result<HookStatus, String
         installed,
         supported,
     })
+}
+
+/// Trigger a test hook event for an agent.
+#[tauri::command]
+pub async fn hooks_test(
+    app: tauri::AppHandle,
+    agent_type: String,
+    lane_id: Option<String>,
+) -> Result<(), String> {
+    let lane_id = lane_id.unwrap_or_else(|| "test-lane".to_string());
+    
+    // We create a HookEvent directly and emit it.
+    // This bypasses the file system watcher but tests the frontend's listener.
+    let event = HookEvent::new(
+        lane_id,
+        agent_type,
+        HookEventType::WaitingForInput,
+    );
+
+    app.emit("hook-event", &event)
+        .map_err(|e| format!("Failed to emit test hook event: {}", e))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -137,6 +137,7 @@ pub fn run() {
             hooks::hooks_install,
             hooks::hooks_uninstall,
             hooks::hooks_check_status,
+            hooks::hooks_test,
         ])
         // Window setup
         .setup(|app| {

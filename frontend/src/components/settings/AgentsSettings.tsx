@@ -1,6 +1,6 @@
 // Agents Settings Tab
 
-import { createSignal, onMount, For, Show, createEffect } from 'solid-js';
+import { createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import { AgentSelector } from '../AgentSelector';
 import type { AgentSettings, AgentType, AgentConfig } from '../../types/agent';
 import { getAgentTypeLabel } from '../../types/agent';
@@ -19,6 +19,7 @@ interface AgentsSettingsProps {
 export function AgentsSettings(props: AgentsSettingsProps) {
   const [hookStatuses, setHookStatuses] = createSignal<Record<string, HookStatus>>({});
   const [loadingHook, setLoadingHook] = createSignal<string | null>(null);
+  const [testStatus, setTestStatus] = createSignal<Record<string, 'success' | 'error' | null>>({});
   const [showAddForm, setShowAddForm] = createSignal(false);
   const [editingIndex, setEditingIndex] = createSignal<number | null>(null);
   const [agentStatuses, setAgentStatuses] = createSignal<Record<number, boolean>>({});
@@ -36,6 +37,19 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     const statuses = await hookService.getAllStatus();
     setHookStatuses(statuses);
     verifyAllAgents();
+
+    // Listen for hook events to verify test
+    const unsub = hookService.onHookEvent((event) => {
+      if (event.laneId === 'test-lane') {
+        setTestStatus({ ...testStatus(), [event.agentType]: 'success' });
+        // Clear status after 3 seconds
+        setTimeout(() => {
+          setTestStatus({ ...testStatus(), [event.agentType]: null });
+        }, 3000);
+      }
+    });
+
+    onCleanup(unsub);
   });
 
   // Validation effect: Ensure at least one agent exists and a default is selected
@@ -76,6 +90,18 @@ export function AgentsSettings(props: AgentsSettingsProps) {
       setHookStatuses({ ...hookStatuses(), [agentType]: status });
     } catch (error) {
       alert(`Failed to uninstall hooks: ${error}`);
+    } finally {
+      setLoadingHook(null);
+    }
+  };
+
+  const handleTestHook = async (agentType: AgentType) => {
+    setLoadingHook(agentType);
+    try {
+      await hookService.test(agentType, 'test-lane');
+    } catch (error) {
+      alert(`Failed to test hook: ${error}`);
+      setTestStatus({ ...testStatus(), [agentType]: 'error' });
     } finally {
       setLoadingHook(null);
     }
@@ -314,26 +340,49 @@ export function AgentsSettings(props: AgentsSettingsProps) {
                       </div>
 
                       <Show when={status()?.supported}>
-                        <Show
-                          when={status()?.installed}
-                          fallback={
+                        <div class="flex gap-2">
+                          <Show when={status()?.installed}>
                             <button
-                              onClick={() => handleInstallHook(agentType)}
+                              onClick={() => handleTestHook(agentType)}
                               disabled={loadingHook() === agentType}
-                              class="px-3 py-1.5 text-sm bg-zed-accent-blue text-white hover:bg-zed-accent-blue/90 rounded transition-colors disabled:opacity-50"
+                              class={`px-3 py-1.5 text-sm rounded transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                                testStatus()[agentType] === 'success'
+                                  ? 'bg-green-600 text-white'
+                                  : testStatus()[agentType] === 'error'
+                                  ? 'bg-red-600 text-white'
+                                  : 'bg-zed-bg-hover text-zed-text-primary hover:bg-zed-bg-surface border border-zed-border-default'
+                              }`}
                             >
-                              {loadingHook() === agentType ? 'Installing...' : 'Install'}
+                              <Show when={testStatus()[agentType] === 'success'}>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </Show>
+                              {loadingHook() === agentType ? 'Testing...' : testStatus()[agentType] === 'success' ? 'Verified' : 'Test Hook'}
                             </button>
-                          }
-                        >
-                          <button
-                            onClick={() => handleUninstallHook(agentType)}
-                            disabled={loadingHook() === agentType}
-                            class="px-3 py-1.5 text-sm text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors disabled:opacity-50"
+                          </Show>
+
+                          <Show
+                            when={status()?.installed}
+                            fallback={
+                              <button
+                                onClick={() => handleInstallHook(agentType)}
+                                disabled={loadingHook() === agentType}
+                                class="px-3 py-1.5 text-sm bg-zed-accent-blue text-white hover:bg-zed-accent-blue/90 rounded transition-colors disabled:opacity-50"
+                              >
+                                {loadingHook() === agentType ? 'Installing...' : 'Install'}
+                              </button>
+                            }
                           >
-                            {loadingHook() === agentType ? 'Removing...' : 'Uninstall'}
-                          </button>
-                        </Show>
+                            <button
+                              onClick={() => handleUninstallHook(agentType)}
+                              disabled={loadingHook() === agentType}
+                              class="px-3 py-1.5 text-sm text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded transition-colors disabled:opacity-50"
+                            >
+                              {loadingHook() === agentType ? 'Removing...' : 'Uninstall'}
+                            </button>
+                          </Show>
+                        </div>
                       </Show>
                     </div>
                   </div>

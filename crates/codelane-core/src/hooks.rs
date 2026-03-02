@@ -15,6 +15,16 @@ pub enum HookEventType {
     IdlePrompt,
     /// Generic waiting for user input
     WaitingForInput,
+    /// Agent finished task
+    Done,
+    /// Agent finished task (alternative name)
+    Finished,
+    /// Agent is working/processing
+    Working,
+    /// Agent is working/processing (alternative name)
+    Processing,
+    /// Agent encountered an error
+    Error,
 }
 
 /// Hook event payload sent from agent hook scripts

@@ -50,6 +50,13 @@ class HookService {
   }
 
   /**
+   * Send a test hook event to verify integration.
+   */
+  async test(agentType: AgentType, laneId?: string): Promise<void> {
+    await invoke('hooks_test', { agentType, laneId });
+  }
+
+  /**
    * Listen for hook events from agents.
    * Returns an unsubscribe function.
    */
