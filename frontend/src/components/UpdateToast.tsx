@@ -21,7 +21,7 @@ export function UpdateToast() {
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clip-rule="evenodd" />
               </svg>
               <span class="text-sm font-semibold text-zed-text-primary">
-                {updaterService.status() === 'ready-to-restart' ? 'Restart Required' : 'Update Available'}
+                {updaterService.status() === 'ready-to-restart' ? 'Update Installed' : 'Update Available'}
               </span>
             </div>
             <Show when={updaterService.status() === 'available' || updaterService.status() === 'ready-to-restart'}>
@@ -44,7 +44,7 @@ export function UpdateToast() {
                 when={updaterService.status() === 'ready-to-restart'} 
                 fallback={<>Codelane <span class="font-medium text-zed-text-primary">{updaterService.updateVersion()}</span> is ready to install.</>}
               >
-                Codelane {updaterService.updateVersion()} has been installed and is ready to use.
+                Update downloaded and installed. Restart the app to apply changes.
               </Show>
             </p>
 
@@ -91,13 +91,13 @@ export function UpdateToast() {
                   onClick={() => updaterService.relaunch()}
                   class="flex-1 px-3 py-1.5 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-sm rounded transition-colors font-medium cursor-pointer select-none"
                 >
-                  Restart Now
+                  Restart
                 </button>
                 <button
                   onClick={() => updaterService.dismiss(false)}
                   class="px-3 py-1.5 text-sm text-zed-text-tertiary hover:text-zed-text-secondary transition-colors cursor-pointer select-none"
                 >
-                  Not Now
+                  Later
                 </button>
               </div>
             </Show>

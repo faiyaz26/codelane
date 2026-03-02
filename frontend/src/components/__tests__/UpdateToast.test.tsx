@@ -82,15 +82,15 @@ describe('UpdateToast', () => {
 
     render(() => <UpdateToast />);
 
-    expect(screen.getByText('Restart Required')).toBeDefined();
-    expect(screen.getByText(/1\.2\.3/)).toBeDefined();
-    expect(screen.getByText('Restart Now')).toBeDefined();
-    expect(screen.getByText('Not Now')).toBeDefined();
+    expect(screen.getByText('Update Installed')).toBeDefined();
+    expect(screen.getByText(/Update downloaded and installed/)).toBeDefined();
+    expect(screen.getByText('Restart')).toBeDefined();
+    expect(screen.getByText('Later')).toBeDefined();
 
-    fireEvent.click(screen.getByText('Restart Now'));
+    fireEvent.click(screen.getByText('Restart'));
     expect(updaterService.relaunch).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText('Not Now'));
+    fireEvent.click(screen.getByText('Later'));
     expect(updaterService.dismiss).toHaveBeenCalledWith(false);
   });
 });
