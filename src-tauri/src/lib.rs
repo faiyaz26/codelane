@@ -63,6 +63,10 @@ pub fn run() {
             lane::lane_get,
             lane::lane_update,
             lane::lane_delete,
+            lane::lane_batch_create,
+            lane::lane_update_config,
+            lane::lane_touch,
+            lane::lane_update_type,
             // Settings commands
             settings::settings_get_agents,
             settings::settings_update_agents,

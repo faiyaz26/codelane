@@ -12,6 +12,53 @@ use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
 
+/// Tab type - what kind of content the tab displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TabType {
+    Terminal,
+    Extension,
+}
+
+/// Tab configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tab {
+    pub id: String,
+    pub r#type: TabType,
+    pub title: String,
+    pub sort_order: i32,
+    pub created_at: i64,
+}
+
+/// Lane type classification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaneType {
+    Feature,
+    PrReview,
+}
+
+/// Pull request metadata stored on PR review lanes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrMetadata {
+    pub number: i32,
+    pub title: String,
+    pub author: String,
+    pub base_branch: String,
+    pub head_branch: String,
+    pub head_sha: String,
+    pub pr_url: String,
+    pub repo_url: String,
+    pub repo_name: String,
+    pub body: String,
+    pub state: String,
+    pub files_changed: i32,
+    pub additions: i32,
+    pub deletions: i32,
+}
+
 /// Lane configuration
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +74,14 @@ pub struct LaneConfig {
     /// LSP servers to enable
     #[serde(default)]
     pub lsp_servers: Vec<String>,
+
+    /// Tabs in this lane
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tabs: Option<Vec<Tab>>,
+
+    /// Active tab ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_tab_id: Option<String>,
 }
 
 /// Represents a lane (project workspace)
@@ -39,6 +94,30 @@ pub struct Lane {
     pub created_at: i64,
     pub updated_at: i64,
 
+    /// Worktree path (if branch specified)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_path: Option<String>,
+
+    /// Branch name (if using worktree)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+
+    /// Lane type (defaults to feature)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lane_type: Option<LaneType>,
+
+    /// PR metadata (only for pr_review lanes)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_metadata: Option<PrMetadata>,
+
+    /// Last accessed time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_accessed: Option<i64>,
+
+    /// Manual sort order
+    #[serde(default)]
+    pub sort_order: i32,
+
     /// Lane-specific configuration
     #[serde(default)]
     pub config: LaneConfig,
@@ -46,7 +125,14 @@ pub struct Lane {
 
 impl Lane {
     /// Creates a new lane with a unique ID and timestamps
-    pub fn new(name: String, working_dir: String) -> Self {
+    pub fn new(
+        name: String,
+        working_dir: String,
+        worktree_path: Option<String>,
+        branch: Option<String>,
+        lane_type: Option<LaneType>,
+        pr_metadata: Option<PrMetadata>,
+    ) -> Self {
         let now = chrono::Utc::now().timestamp();
         Self {
             id: Uuid::new_v4().to_string(),
@@ -54,17 +140,35 @@ impl Lane {
             working_dir,
             created_at: now,
             updated_at: now,
+            worktree_path,
+            branch,
+            lane_type,
+            pr_metadata,
+            last_accessed: Some(now),
+            sort_order: 0,
             config: LaneConfig::default(),
         }
     }
 
     /// Updates the lane and refreshes the updated_at timestamp
-    pub fn update(&mut self, name: Option<String>, working_dir: Option<String>) {
+    pub fn update(
+        &mut self,
+        name: Option<String>,
+        working_dir: Option<String>,
+        last_accessed: Option<i64>,
+        sort_order: Option<i32>,
+    ) {
         if let Some(n) = name {
             self.name = n;
         }
         if let Some(wd) = working_dir {
             self.working_dir = wd;
+        }
+        if let Some(la) = last_accessed {
+            self.last_accessed = Some(la);
+        }
+        if let Some(so) = sort_order {
+            self.sort_order = so;
         }
         self.updated_at = chrono::Utc::now().timestamp();
     }
@@ -139,6 +243,10 @@ impl LaneState {
 pub fn lane_create(
     name: String,
     working_dir: String,
+    worktree_path: Option<String>,
+    branch: Option<String>,
+    lane_type: Option<LaneType>,
+    pr_metadata: Option<PrMetadata>,
     state: State<LaneState>,
 ) -> Result<Lane, String> {
     // Validate working directory exists
@@ -147,7 +255,14 @@ pub fn lane_create(
         return Err(format!("Working directory does not exist: {}", working_dir));
     }
 
-    let lane = Lane::new(name, working_dir);
+    let lane = Lane::new(
+        name,
+        working_dir,
+        worktree_path,
+        branch,
+        lane_type,
+        pr_metadata,
+    );
 
     // Save to disk
     state.save_lane(&lane)?;
@@ -165,10 +280,36 @@ pub fn lane_list(state: State<LaneState>) -> Result<Vec<Lane>, String> {
     let lanes = state.lanes.lock().unwrap();
     let mut lane_list: Vec<Lane> = lanes.values().cloned().collect();
 
-    // Sort by updated_at (most recent first)
-    lane_list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    // Sort by sort_order (ascending), then last_accessed or updated_at (most recent first)
+    lane_list.sort_by(|a, b| {
+        if a.sort_order != b.sort_order {
+            a.sort_order.cmp(&b.sort_order)
+        } else {
+            let a_time = a.last_accessed.unwrap_or(a.updated_at);
+            let b_time = b.last_accessed.unwrap_or(b.updated_at);
+            b_time.cmp(&a_time)
+        }
+    });
 
     Ok(lane_list)
+}
+
+/// Batch creates multiple lanes (for migration)
+#[tauri::command]
+pub fn lane_batch_create(
+    lanes_to_create: Vec<Lane>,
+    state: State<LaneState>,
+) -> Result<(), String> {
+    let mut lanes = state.lanes.lock().unwrap();
+
+    for lane in lanes_to_create {
+        // Save to disk
+        state.save_lane(&lane)?;
+        // Store in memory
+        lanes.insert(lane.id.clone(), lane.clone());
+    }
+
+    Ok(())
 }
 
 /// Gets a specific lane by ID
@@ -187,6 +328,9 @@ pub fn lane_update(
     lane_id: String,
     name: Option<String>,
     working_dir: Option<String>,
+    last_accessed: Option<i64>,
+    sort_order: Option<i32>,
+    lane_type: Option<LaneType>,
     state: State<LaneState>,
 ) -> Result<Lane, String> {
     let mut lanes = state.lanes.lock().unwrap();
@@ -203,12 +347,81 @@ pub fn lane_update(
         }
     }
 
-    lane.update(name, working_dir);
+    if let Some(lt) = lane_type {
+        lane.lane_type = Some(lt);
+    }
+
+    lane.update(name, working_dir, last_accessed, sort_order);
 
     // Save to disk
     state.save_lane(lane)?;
 
     Ok(lane.clone())
+}
+
+/// Updates lane type and optionally clears PR metadata
+#[tauri::command]
+pub fn lane_update_type(
+    lane_id: String,
+    lane_type: LaneType,
+    clear_pr_metadata: bool,
+    state: State<LaneState>,
+) -> Result<Lane, String> {
+    let mut lanes = state.lanes.lock().unwrap();
+
+    let lane = lanes
+        .get_mut(&lane_id)
+        .ok_or_else(|| format!("Lane not found: {}", lane_id))?;
+
+    lane.lane_type = Some(lane_type);
+    if clear_pr_metadata {
+        lane.pr_metadata = None;
+    }
+    lane.updated_at = chrono::Utc::now().timestamp();
+
+    // Save to disk
+    state.save_lane(lane)?;
+
+    Ok(lane.clone())
+}
+
+/// Updates lane configuration
+#[tauri::command]
+pub fn lane_update_config(
+    lane_id: String,
+    config: LaneConfig,
+    state: State<LaneState>,
+) -> Result<Lane, String> {
+    let mut lanes = state.lanes.lock().unwrap();
+
+    let lane = lanes
+        .get_mut(&lane_id)
+        .ok_or_else(|| format!("Lane not found: {}", lane_id))?;
+
+    lane.config = config;
+    lane.updated_at = chrono::Utc::now().timestamp();
+
+    // Save to disk
+    state.save_lane(lane)?;
+
+    Ok(lane.clone())
+}
+
+/// Update last accessed time for a lane
+#[tauri::command]
+pub fn lane_touch(lane_id: String, state: State<LaneState>) -> Result<(), String> {
+    let mut lanes = state.lanes.lock().unwrap();
+
+    let lane = lanes
+        .get_mut(&lane_id)
+        .ok_or_else(|| format!("Lane not found: {}", lane_id))?;
+
+    lane.last_accessed = Some(chrono::Utc::now().timestamp());
+
+    // Save to disk
+    state.save_lane(lane)?;
+
+    Ok(())
 }
 
 /// Deletes a lane
@@ -255,6 +468,8 @@ mod tests {
             agent_override: None,
             env: vec![("KEY".to_string(), "VALUE".to_string())],
             lsp_servers: vec!["rust-analyzer".to_string()],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("Should serialize");
@@ -291,6 +506,8 @@ mod tests {
             agent_override: None,
             env: vec![("A".to_string(), "B".to_string())],
             lsp_servers: vec!["lsp1".to_string(), "lsp2".to_string()],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let cloned = config.clone();
@@ -302,7 +519,14 @@ mod tests {
 
     #[test]
     fn test_lane_new() {
-        let lane = Lane::new("Test Lane".to_string(), "/path/to/project".to_string());
+        let lane = Lane::new(
+            "Test Lane".to_string(),
+            "/path/to/project".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         assert!(!lane.id.is_empty());
         assert_eq!(lane.name, "Test Lane");
@@ -313,21 +537,42 @@ mod tests {
 
     #[test]
     fn test_lane_new_unique_ids() {
-        let lane1 = Lane::new("Lane 1".to_string(), "/path1".to_string());
-        let lane2 = Lane::new("Lane 2".to_string(), "/path2".to_string());
+        let lane1 = Lane::new(
+            "Lane 1".to_string(),
+            "/path1".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
+        let lane2 = Lane::new(
+            "Lane 2".to_string(),
+            "/path2".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         assert_ne!(lane1.id, lane2.id, "Each lane should have a unique ID");
     }
 
     #[test]
     fn test_lane_update_name() {
-        let mut lane = Lane::new("Original".to_string(), "/path".to_string());
+        let mut lane = Lane::new(
+            "Original".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let original_updated_at = lane.updated_at;
 
         // Small delay to ensure timestamp changes
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        lane.update(Some("Updated Name".to_string()), None);
+        lane.update(Some("Updated Name".to_string()), None, None, None);
 
         assert_eq!(lane.name, "Updated Name");
         assert_eq!(lane.working_dir, "/path");
@@ -336,9 +581,16 @@ mod tests {
 
     #[test]
     fn test_lane_update_working_dir() {
-        let mut lane = Lane::new("Lane".to_string(), "/old/path".to_string());
+        let mut lane = Lane::new(
+            "Lane".to_string(),
+            "/old/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
-        lane.update(None, Some("/new/path".to_string()));
+        lane.update(None, Some("/new/path".to_string()), None, None);
 
         assert_eq!(lane.name, "Lane");
         assert_eq!(lane.working_dir, "/new/path");
@@ -346,11 +598,20 @@ mod tests {
 
     #[test]
     fn test_lane_update_both() {
-        let mut lane = Lane::new("Old Name".to_string(), "/old/path".to_string());
+        let mut lane = Lane::new(
+            "Old Name".to_string(),
+            "/old/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         lane.update(
             Some("New Name".to_string()),
             Some("/new/path".to_string()),
+            None,
+            None,
         );
 
         assert_eq!(lane.name, "New Name");
@@ -359,11 +620,18 @@ mod tests {
 
     #[test]
     fn test_lane_update_none() {
-        let mut lane = Lane::new("Name".to_string(), "/path".to_string());
+        let mut lane = Lane::new(
+            "Name".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let original_name = lane.name.clone();
         let original_path = lane.working_dir.clone();
 
-        lane.update(None, None);
+        lane.update(None, None, None, None);
 
         assert_eq!(lane.name, original_name);
         assert_eq!(lane.working_dir, original_path);
@@ -371,7 +639,14 @@ mod tests {
 
     #[test]
     fn test_lane_serialization() {
-        let lane = Lane::new("My Project".to_string(), "/home/user/project".to_string());
+        let lane = Lane::new(
+            "My Project".to_string(),
+            "/home/user/project".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let json = serde_json::to_string(&lane).expect("Should serialize");
 
@@ -402,7 +677,14 @@ mod tests {
 
     #[test]
     fn test_lane_clone() {
-        let lane = Lane::new("Clone Test".to_string(), "/clone/path".to_string());
+        let lane = Lane::new(
+            "Clone Test".to_string(),
+            "/clone/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let cloned = lane.clone();
 
         assert_eq!(cloned.id, lane.id);
@@ -413,7 +695,14 @@ mod tests {
 
     #[test]
     fn test_lane_with_config() {
-        let mut lane = Lane::new("Configured".to_string(), "/path".to_string());
+        let mut lane = Lane::new(
+            "Configured".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         lane.config.env = vec![("NODE_ENV".to_string(), "development".to_string())];
         lane.config.lsp_servers = vec!["rust-analyzer".to_string()];
 
@@ -459,7 +748,14 @@ mod tests {
     #[test]
     fn test_lane_state_save_and_list() {
         let state = LaneState::new();
-        let lane = Lane::new("Test Save".to_string(), "/tmp".to_string());
+        let lane = Lane::new(
+            "Test Save".to_string(),
+            "/tmp".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         // Save the lane
         state.save_lane(&lane).expect("Should save lane");
@@ -497,6 +793,12 @@ mod tests {
                 working_dir: "/old".to_string(),
                 created_at: 1000,
                 updated_at: 1000,
+                worktree_path: None,
+                branch: None,
+                lane_type: None,
+                pr_metadata: None,
+                last_accessed: None,
+                sort_order: 0,
                 config: LaneConfig::default(),
             },
             Lane {
@@ -505,6 +807,12 @@ mod tests {
                 working_dir: "/new".to_string(),
                 created_at: 2000,
                 updated_at: 3000,
+                worktree_path: None,
+                branch: None,
+                lane_type: None,
+                pr_metadata: None,
+                last_accessed: None,
+                sort_order: 0,
                 config: LaneConfig::default(),
             },
             Lane {
@@ -513,6 +821,12 @@ mod tests {
                 working_dir: "/middle".to_string(),
                 created_at: 1500,
                 updated_at: 2000,
+                worktree_path: None,
+                branch: None,
+                lane_type: None,
+                pr_metadata: None,
+                last_accessed: None,
+                sort_order: 0,
                 config: LaneConfig::default(),
             },
         ];
@@ -529,7 +843,14 @@ mod tests {
 
     #[test]
     fn test_lane_id_is_valid_uuid() {
-        let lane = Lane::new("UUID Test".to_string(), "/test".to_string());
+        let lane = Lane::new(
+            "UUID Test".to_string(),
+            "/test".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         // The ID should be a valid UUID format
         assert!(uuid::Uuid::parse_str(&lane.id).is_ok());
@@ -539,13 +860,27 @@ mod tests {
 
     #[test]
     fn test_lane_empty_name() {
-        let lane = Lane::new("".to_string(), "/path".to_string());
+        let lane = Lane::new(
+            "".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         assert_eq!(lane.name, "");
     }
 
     #[test]
     fn test_lane_unicode_name() {
-        let lane = Lane::new("项目 🚀 Проект".to_string(), "/path".to_string());
+        let lane = Lane::new(
+            "项目 🚀 Проект".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         assert_eq!(lane.name, "项目 🚀 Проект");
 
         // Should serialize/deserialize correctly
@@ -557,7 +892,14 @@ mod tests {
     #[test]
     fn test_lane_long_path() {
         let long_path = "/".to_string() + &"a".repeat(500);
-        let lane = Lane::new("Long Path".to_string(), long_path.clone());
+        let lane = Lane::new(
+            "Long Path".to_string(),
+            long_path.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
         assert_eq!(lane.working_dir, long_path);
     }
 
@@ -578,6 +920,8 @@ mod tests {
             }),
             env: vec![],
             lsp_servers: vec![],
+            tabs: None,
+            active_tab_id: None,
         };
 
         assert!(config.agent_override.is_some());
@@ -600,6 +944,8 @@ mod tests {
             }),
             env: vec![("PATH".to_string(), "/usr/bin".to_string())],
             lsp_servers: vec!["rust-analyzer".to_string()],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("Should serialize");
@@ -614,7 +960,14 @@ mod tests {
 
     #[test]
     fn test_lane_timestamps_are_recent() {
-        let lane = Lane::new("Test".to_string(), "/tmp".to_string());
+        let lane = Lane::new(
+            "Test".to_string(),
+            "/tmp".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let now = chrono::Utc::now().timestamp();
 
         // Timestamps should be within 1 second of now
@@ -626,13 +979,20 @@ mod tests {
 
     #[test]
     fn test_lane_update_changes_timestamp() {
-        let mut lane = Lane::new("Test".to_string(), "/path".to_string());
+        let mut lane = Lane::new(
+            "Test".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let original = lane.updated_at;
 
         // Wait a tiny bit to ensure timestamp changes
         std::thread::sleep(std::time::Duration::from_millis(5));
 
-        lane.update(Some("New Name".to_string()), None);
+        lane.update(Some("New Name".to_string()), None, None, None);
 
         // updated_at should be >= original (may be same if very fast)
         assert!(lane.updated_at >= original);
@@ -649,7 +1009,14 @@ mod tests {
     #[test]
     fn test_lane_state_save_creates_file() {
         let state = LaneState::new();
-        let lane = Lane::new("File Test".to_string(), "/tmp".to_string());
+        let lane = Lane::new(
+            "File Test".to_string(),
+            "/tmp".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         state.save_lane(&lane).expect("Should save");
 
@@ -663,7 +1030,14 @@ mod tests {
     #[test]
     fn test_lane_state_delete_removes_file() {
         let state = LaneState::new();
-        let lane = Lane::new("Delete Test".to_string(), "/tmp".to_string());
+        let lane = Lane::new(
+            "Delete Test".to_string(),
+            "/tmp".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         state.save_lane(&lane).expect("Should save");
 
@@ -678,7 +1052,14 @@ mod tests {
 
     #[test]
     fn test_lane_json_uses_camel_case() {
-        let lane = Lane::new("Test".to_string(), "/path".to_string());
+        let lane = Lane::new(
+            "Test".to_string(),
+            "/path".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
         let json = serde_json::to_string(&lane).expect("Should serialize");
 
         assert!(json.contains("workingDir"));
@@ -694,6 +1075,8 @@ mod tests {
             agent_override: None,
             env: vec![],
             lsp_servers: vec!["test".to_string()],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("Should serialize");
@@ -706,7 +1089,14 @@ mod tests {
     #[test]
     fn test_lane_state_list_returns_clones() {
         let state = LaneState::new();
-        let lane = Lane::new("Clone Test".to_string(), "/tmp".to_string());
+        let lane = Lane::new(
+            "Clone Test".to_string(),
+            "/tmp".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         {
             let mut lanes = state.lanes.lock().unwrap();
@@ -740,7 +1130,14 @@ mod tests {
         ];
 
         for name in special_names {
-            let lane = Lane::new(name.to_string(), "/tmp".to_string());
+            let lane = Lane::new(
+                name.to_string(),
+                "/tmp".to_string(),
+                None,
+                None,
+                None,
+                None,
+            );
             let json = serde_json::to_string(&lane).expect("Should serialize");
             let deserialized: Lane = serde_json::from_str(&json).expect("Should deserialize");
             assert_eq!(deserialized.name, name);
@@ -750,7 +1147,14 @@ mod tests {
     #[test]
     fn test_lane_whitespace_in_path() {
         let path = "/path/with spaces/project".to_string();
-        let lane = Lane::new("Test".to_string(), path.clone());
+        let lane = Lane::new(
+            "Test".to_string(),
+            path.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let json = serde_json::to_string(&lane).expect("Should serialize");
         let deserialized: Lane = serde_json::from_str(&json).expect("Should deserialize");
@@ -768,6 +1172,8 @@ mod tests {
                 ("EDITOR".to_string(), "vim".to_string()),
             ],
             lsp_servers: vec![],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("Should serialize");
@@ -786,6 +1192,8 @@ mod tests {
                 "typescript-language-server".to_string(),
                 "pylsp".to_string(),
             ],
+            tabs: None,
+            active_tab_id: None,
         };
 
         let json = serde_json::to_string(&config).expect("Should serialize");

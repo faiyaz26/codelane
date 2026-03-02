@@ -1,13 +1,14 @@
 /**
- * Lane API - Store-based lane management
+ * Lane API - Backend-based lane management
  */
 
+import { invoke } from '@tauri-apps/api/core';
 import { getStore } from './store';
 import type { Lane, LaneConfig, CreateLaneParams, UpdateLaneParams } from '../types/lane';
-import { v4 as uuidv4 } from 'uuid';
 import { isGitRepo, branchExists, createBranch, createWorktree, removeWorktree, getDefaultBranch, fetchBranch, cloneRepo, getRemoteUrl, fetchPrBranch } from './git-api';
 
 const LANES_KEY = 'lanes';
+const MIGRATION_DONE_KEY = 'lanes_migration_done';
 
 /**
  * Normalizes a git URL for comparison (removes protocol, .git suffix, and trailing slashes)
@@ -23,19 +24,33 @@ function normalizeGitUrl(url: string): string {
 }
 
 /**
- * Load lanes array from store
+ * Migrate lanes from local store to backend
  */
-async function loadLanes(): Promise<Lane[]> {
+export async function migrateLanesToBackend(): Promise<void> {
   const store = await getStore();
-  return (await store.get<Lane[]>(LANES_KEY)) || [];
-}
+  const isMigrated = await store.get<boolean>(MIGRATION_DONE_KEY);
+  
+  if (isMigrated) {
+    return;
+  }
 
-/**
- * Save lanes array to store
- */
-async function saveLanes(lanes: Lane[]): Promise<void> {
-  const store = await getStore();
-  await store.set(LANES_KEY, lanes);
+  console.info('[LaneAPI] Starting migration of lanes to backend...');
+  const lanes = (await store.get<Lane[]>(LANES_KEY)) || [];
+  
+  if (lanes.length > 0) {
+    try {
+      await invoke('lane_batch_create', { lanesToCreate: lanes });
+      console.info(`[LaneAPI] Successfully migrated ${lanes.length} lanes to backend.`);
+    } catch (e) {
+      console.error('[LaneAPI] Migration failed:', e);
+      // Don't mark as done if it failed, so we can retry
+      return;
+    }
+  } else {
+    console.info('[LaneAPI] No lanes to migrate.');
+  }
+
+  await store.set(MIGRATION_DONE_KEY, true);
   await store.save();
 }
 
@@ -43,9 +58,6 @@ async function saveLanes(lanes: Lane[]): Promise<void> {
  * Creates a new lane
  */
 export async function createLane(params: CreateLaneParams): Promise<Lane> {
-  const now = Math.floor(Date.now() / 1000);
-  const id = uuidv4();
-
   // Validate working directory (basic check)
   if (!params.workingDir || params.workingDir.trim() === '') {
     throw new Error('Working directory is required');
@@ -63,9 +75,6 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     const isRepo = await isGitRepo(workingDir);
     if (!isRepo) {
       needsClone = true;
-      // If the directory is not a repo and it exists, we might want to clone into a subfolder
-      // to avoid git clone failure if the directory is not empty.
-      // For simplicity, if it's not a repo, we'll append the repo name if we need to clone.
       const repoName = params.prMetadata.repoName.split('/').pop() || 'repo';
       if (!workingDir.endsWith(repoName)) {
         workingDir = `${workingDir.replace(/\/$/, '')}/${repoName}`;
@@ -83,8 +92,6 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
           workingDir = `${workingDir.replace(/\/$/, '')}/${repoName}`;
         }
       } catch (e) {
-        // If we can't get remote URL but it's a repo, maybe it's a fresh init or different remote name
-        // We'll try to continue or clone if it's really not matching
         needsClone = true;
       }
     }
@@ -102,20 +109,18 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
     // Check if directory is a git repo
     const isRepo = await isGitRepo(workingDir);
     if (isRepo) {
-      // For PR review lanes, fetch the remote branch first so we get the actual PR commits
+      // For PR review lanes, fetch the remote branch first
       if (params.laneType === 'pr_review' && params.prMetadata) {
         try {
-          // Use the pull request refspec to fetch the branch reliably (even from forks)
           await fetchPrBranch(workingDir, params.prMetadata.number, branch);
         } catch (e) {
           console.warn('Failed to fetch remote PR branch, continuing with local:', e);
         }
-        // Also fetch the base branch to ensure diff works correctly
         if (params.prMetadata?.baseBranch) {
           try {
             await fetchBranch(workingDir, params.prMetadata.baseBranch);
           } catch {
-            // Base branch is likely already available locally
+            // Base branch likely available
           }
         }
       }
@@ -123,134 +128,79 @@ export async function createLane(params: CreateLaneParams): Promise<Lane> {
       // Check if branch exists, create if not
       const exists = await branchExists(workingDir, branch);
       if (!exists) {
-        // Create branch from default branch (main/master) instead of HEAD
         let baseBranch: string | undefined;
         try {
           baseBranch = await getDefaultBranch(workingDir);
         } catch {
-          // Fall back to creating from HEAD if we can't determine default branch
+          // Fall back to creating from HEAD
         }
         await createBranch(workingDir, branch, baseBranch);
       }
 
-      // Create worktree - backend computes path in ~/.codelane/worktrees/
+      // Create worktree
       worktreePath = await createWorktree(workingDir, branch);
     } else {
-      // Not a git repo, ignore branch
       branch = undefined;
     }
   }
 
-  const lane: Lane = {
-    id,
+  // Create in backend
+  const lane = await invoke<Lane>('lane_create', {
     name: params.name,
-    workingDir: workingDir,
-    worktreePath,
-    branch,
-    ...(params.laneType && { laneType: params.laneType }),
-    ...(params.prMetadata && { prMetadata: params.prMetadata }),
-    createdAt: now,
-    updatedAt: now,
-    config: {
-      env: [],
-      lspServers: [],
-    },
-  };
-
-  const lanes = await loadLanes();
-  lanes.push(lane);
-  await saveLanes(lanes);
+    workingDir,
+    worktreePath: worktreePath || null,
+    branch: branch || null,
+    laneType: params.laneType || 'feature',
+    prMetadata: params.prMetadata || null,
+  });
 
   return lane;
 }
 
 /**
- * Lists all lanes, sorted by sort_order (or updated_at if sort_order is null)
+ * Lists all lanes
  */
 export async function listLanes(): Promise<Lane[]> {
-  const lanes = await loadLanes();
-
-  // Ensure config defaults and backfill laneType for legacy PR lanes
-  return lanes.map(lane => ({
-    ...lane,
-    worktreePath: lane.worktreePath || undefined,
-    branch: lane.branch || undefined,
-    laneType: lane.laneType || (lane.prMetadata ? 'pr_review' : undefined),
-    prMetadata: lane.prMetadata || undefined,
-    config: {
-      agentOverride: lane.config?.agentOverride,
-      env: lane.config?.env || [],
-      lspServers: lane.config?.lspServers || [],
-      tabs: lane.config?.tabs,
-      activeTabId: lane.config?.activeTabId,
-    },
-  }));
+  await migrateLanesToBackend();
+  return await invoke<Lane[]>('lane_list');
 }
 
 /**
  * Gets a specific lane by ID
  */
 export async function getLane(laneId: string): Promise<Lane> {
-  const lanes = await loadLanes();
-  const lane = lanes.find(l => l.id === laneId);
-
-  if (!lane) {
-    throw new Error(`Lane not found: ${laneId}`);
-  }
-
-  return {
-    ...lane,
-    worktreePath: lane.worktreePath || undefined,
-    branch: lane.branch || undefined,
-    laneType: lane.laneType || (lane.prMetadata ? 'pr_review' : undefined),
-    prMetadata: lane.prMetadata || undefined,
-    config: {
-      agentOverride: lane.config?.agentOverride,
-      env: lane.config?.env || [],
-      lspServers: lane.config?.lspServers || [],
-      tabs: lane.config?.tabs,
-      activeTabId: lane.config?.activeTabId,
-    },
-  };
+  return await invoke<Lane>('lane_get', { laneId });
 }
 
 /**
  * Updates a lane
  */
 export async function updateLane(params: UpdateLaneParams): Promise<Lane> {
-  const now = Math.floor(Date.now() / 1000);
-  const lanes = await loadLanes();
-  const index = lanes.findIndex(l => l.id === params.laneId);
-
-  if (index === -1) {
-    throw new Error(`Lane not found: ${params.laneId}`);
-  }
-
-  if (params.name !== undefined) {
-    lanes[index].name = params.name;
-  }
-  if (params.workingDir !== undefined) {
-    lanes[index].workingDir = params.workingDir;
-  }
-  lanes[index].updatedAt = now;
-
-  await saveLanes(lanes);
-  return getLane(params.laneId);
+  return await invoke<Lane>('lane_update', {
+    laneId: params.laneId,
+    name: params.name || null,
+    workingDir: params.workingDir || null,
+    lastAccessed: null,
+    sortOrder: null,
+    laneType: null,
+  });
 }
 
 /**
  * Deletes a lane
- * Removes the lane from the store immediately, then cleans up worktree in the background.
  */
 export async function deleteLane(laneId: string): Promise<void> {
-  const lanes = await loadLanes();
-  const lane = lanes.find(l => l.id === laneId);
+  // Get lane info first to clean up worktree
+  let lane: Lane | undefined;
+  try {
+    lane = await getLane(laneId);
+  } catch (e) {
+    // Ignore if not found
+  }
 
-  // Remove from store immediately so the UI updates fast
-  const filtered = lanes.filter(l => l.id !== laneId);
-  await saveLanes(filtered);
+  await invoke('lane_delete', { laneId });
 
-  // Clean up worktree in the background (don't block UI)
+  // Clean up worktree in the background
   if (lane?.worktreePath && lane?.branch) {
     removeWorktree(lane.workingDir, lane.worktreePath).catch((e) => {
       console.warn('Failed to remove worktree:', e);
@@ -262,73 +212,42 @@ export async function deleteLane(laneId: string): Promise<void> {
  * Update last accessed time for a lane
  */
 export async function touchLane(laneId: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  const lanes = await loadLanes();
-  const lane = lanes.find(l => l.id === laneId);
-
-  if (lane) {
-    (lane as Lane & { lastAccessed?: number }).lastAccessed = now;
-    await saveLanes(lanes);
-  }
+  await invoke('lane_touch', { laneId });
 }
 
 /**
  * Update sort order for lanes
  */
 export async function updateLaneOrder(laneIds: string[]): Promise<void> {
-  const lanes = await loadLanes();
-
-  // Sort lanes according to the given order
-  const ordered: Lane[] = [];
-  for (const id of laneIds) {
-    const lane = lanes.find(l => l.id === id);
-    if (lane) ordered.push(lane);
-  }
-
-  // Add any lanes not in the order list at the end
-  for (const lane of lanes) {
-    if (!laneIds.includes(lane.id)) {
-      ordered.push(lane);
-    }
-  }
-
-  await saveLanes(ordered);
+  // Update each lane with its new sort order
+  await Promise.all(
+    laneIds.map((id, index) => 
+      invoke('lane_update', {
+        laneId: id,
+        name: null,
+        workingDir: null,
+        lastAccessed: null,
+        sortOrder: index,
+        laneType: null,
+      })
+    )
+  );
 }
 
 /**
- * Update lane configuration
- */
-/**
- * Convert a PR review lane to a feature lane (keeps branch/worktree, removes PR metadata)
+ * Convert a PR review lane to a feature lane
  */
 export async function convertToFeatureLane(laneId: string): Promise<Lane> {
-  const now = Math.floor(Date.now() / 1000);
-  const lanes = await loadLanes();
-  const lane = lanes.find(l => l.id === laneId);
-
-  if (!lane) {
-    throw new Error(`Lane not found: ${laneId}`);
-  }
-
-  delete lane.laneType;
-  delete lane.prMetadata;
-  lane.updatedAt = now;
-  await saveLanes(lanes);
-
-  return getLane(laneId);
+  return await invoke<Lane>('lane_update_type', { 
+    laneId, 
+    laneType: 'feature',
+    clearPrMetadata: true 
+  });
 }
 
 /**
  * Update lane configuration
  */
 export async function updateLaneConfig(laneId: string, config: LaneConfig): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  const lanes = await loadLanes();
-  const lane = lanes.find(l => l.id === laneId);
-
-  if (lane) {
-    lane.config = config;
-    lane.updatedAt = now;
-    await saveLanes(lanes);
-  }
+  await invoke('lane_update_config', { laneId, config });
 }
