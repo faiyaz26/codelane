@@ -31,6 +31,7 @@ export function TerminalView(props: TerminalViewProps) {
   const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
   const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
   const [onboardingAgentType, setOnboardingAgentType] = createSignal<AgentType>('claude');
+  const [userHasScrolledUp, setUserHasScrolledUp] = createSignal(false);
   let isAgentLane = false;
 
   // Watch for theme changes and update terminal
@@ -168,14 +169,24 @@ export function TerminalView(props: TerminalViewProps) {
       // Attach custom key handlers (Shift+Enter, etc.)
       attachKeyHandlers(terminal, (data) => pty!.write(data));
 
-      // Sticky scroll: detect user scroll via wheel events
-      const updateAutoScroll = () => {
-        if (!terminal) return;
+      // Sticky scroll detection
+      const checkIfAtBottom = () => {
+        if (!terminal) return true;
         const buffer = terminal.buffer.active;
-        autoScroll = buffer.baseY + terminal.rows >= buffer.length;
+        // Check if we are within 1 row of the bottom to be lenient
+        return buffer.baseY + terminal.rows >= buffer.length - 1;
       };
-      containerRef.addEventListener('wheel', () => requestAnimationFrame(updateAutoScroll));
-      terminal.onScroll(updateAutoScroll);
+
+      const updateScrollState = () => {
+        const atBottom = checkIfAtBottom();
+        autoScroll = atBottom;
+        setUserHasScrolledUp(!atBottom);
+      };
+
+      // Listen for scroll events (both manual and programmatic)
+      terminal.onScroll(() => {
+        updateScrollState();
+      });
 
       // Listen for window title changes from the PTY (useful for Gemini CLI)
       terminal.onTitleChange((title) => {
@@ -321,12 +332,33 @@ export function TerminalView(props: TerminalViewProps) {
     setShowNotificationPrompt(false);
   };
 
+  const scrollToBottom = () => {
+    if (terminal) {
+      terminal.scrollToBottom();
+      autoScroll = true;
+      setUserHasScrolledUp(false);
+    }
+  };
+
   return (
-    <div class="relative w-full h-full">
+    <div class="relative w-full h-full group">
       <div
         ref={containerRef}
         class="w-full h-full bg-zed-bg-panel"
       />
+
+      <Show when={userHasScrolledUp()}>
+        <button
+          onClick={scrollToBottom}
+          class="absolute bottom-6 right-8 px-3 py-1.5 bg-zed-bg-overlay border border-zed-border-default rounded-full shadow-lg flex items-center gap-2 text-xs font-medium text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-surface transition-all animate-fade-in z-10"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+          </svg>
+          Scroll to Bottom
+        </button>
+      </Show>
+
       <Show when={showNotificationPrompt()}>
         <div class="absolute top-3 left-3 right-3 flex items-center gap-3 px-4 py-3 rounded-lg bg-zed-bg-overlay border border-zed-border-default shadow-lg animate-slide-down z-10">
           <svg class="w-4 h-4 text-zed-accent-blue shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
