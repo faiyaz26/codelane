@@ -502,6 +502,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_hook_event_type_serialization() {
+        use codelane_core::hooks::HookEventType;
+        
+        let cases = vec![
+            (HookEventType::WaitingForInput, "waiting_for_input"),
+            (HookEventType::Done, "done"),
+            (HookEventType::Working, "working"),
+            (HookEventType::Error, "error"),
+        ];
+        
+        for (event_type, expected) in cases {
+            let json = serde_json::to_string(&event_type).unwrap();
+            assert_eq!(json, format!("\"{}\"", expected));
+        }
+    }
+
+    #[test]
     fn test_generate_claude_script() {
         let script = generate_claude_script("/tmp/hooks");
         assert!(script.contains("#!/bin/bash"));

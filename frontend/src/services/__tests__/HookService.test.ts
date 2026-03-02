@@ -154,6 +154,30 @@ describe('HookService', () => {
     });
   });
 
+  describe('test', () => {
+    it('invokes hooks_test with agent type and optional lane id', async () => {
+      mockInvoke.mockResolvedValue(undefined);
+
+      await hookService.test('claude', 'test-lane');
+
+      expect(mockInvoke).toHaveBeenCalledWith('hooks_test', { agentType: 'claude', laneId: 'test-lane' });
+    });
+
+    it('works without lane id', async () => {
+      mockInvoke.mockResolvedValue(undefined);
+
+      await hookService.test('gemini');
+
+      expect(mockInvoke).toHaveBeenCalledWith('hooks_test', { agentType: 'gemini', laneId: undefined });
+    });
+
+    it('propagates errors', async () => {
+      mockInvoke.mockRejectedValue(new Error('Test failed'));
+
+      await expect(hookService.test('claude')).rejects.toThrow('Test failed');
+    });
+  });
+
   describe('onHookEvent', () => {
     it('registers a listener for hook-event', () => {
       mockListen.mockResolvedValue(() => {});
