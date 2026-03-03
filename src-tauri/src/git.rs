@@ -101,23 +101,16 @@ fn validate_git_path(path: &str) -> Result<String, String> {
 
 /// Run a git command without a specific working directory, using the login shell on Unix
 fn run_git_simple(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Output, String> {
+    let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let mut command = if cfg!(unix) {
-        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut full_cmd = "git".to_string();
-        for arg in args {
-            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-        }
-        let mut cmd = Command::new(login_shell);
-        cmd.arg("-li").arg("-c").arg(full_cmd);
+        let (shell, shell_args) = build_unix_cmd("git", string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     } else {
-        // On Windows, wrap in cmd /C
-        let mut full_cmd = "git".to_string();
-        for arg in args {
-            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-        }
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg(full_cmd);
+        let (shell, shell_args) = build_windows_cmd("git", string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     };
 
@@ -146,23 +139,16 @@ fn find_repo_root(path: &str) -> Result<String, String> {
 
 /// Run a git command and return the output
 fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
+    let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let mut command = if cfg!(unix) {
-        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut full_cmd = "git".to_string();
-        for arg in args {
-            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-        }
-        let mut cmd = Command::new(login_shell);
-        cmd.arg("-li").arg("-c").arg(full_cmd);
+        let (shell, shell_args) = build_unix_cmd("git", string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     } else {
-        // On Windows, wrap in cmd /C
-        let mut full_cmd = "git".to_string();
-        for arg in args {
-            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-        }
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg(full_cmd);
+        let (shell, shell_args) = build_windows_cmd("git", string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     };
 
@@ -176,6 +162,35 @@ fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Build Unix command args using a login interactive shell
+fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut full_cmd = if cmd_path == "git" {
+        "git".to_string()
+    } else {
+        format!("'{}'", cmd_path)
+    };
+    for arg in args {
+        // Escape single quotes for shell safety
+        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+    }
+    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
+}
+
+/// Build Windows command args using cmd /C
+fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let mut full_cmd = if cmd_path == "git" {
+        "git".to_string()
+    } else {
+        format!("\"{}\"", cmd_path)
+    };
+    for arg in args {
+        // Simple quoting for Windows cmd
+        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
+    }
+    ("cmd".to_string(), vec!["/C".to_string(), full_cmd])
 }
 
 // ============================================================================
@@ -1309,7 +1324,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(git_status(temp.path().to_str().unwrap().to_string()));
 
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "git_status failed: {:?}", result.err());
         let status = result.unwrap();
         // Default branch is usually "main" or "master"
         assert!(status.branch.is_some());
@@ -1765,5 +1780,17 @@ mod tests {
         assert!(json.contains("\"path\":\"/path/to/worktree\""));
         assert!(json.contains("\"branch\":\"feature\""));
         assert!(json.contains("\"is_main\":false"));
+    }
+
+    #[test]
+    fn test_build_windows_git_cmd() {
+        let args = vec!["status".to_string(), "-s".to_string()];
+        let (shell, shell_args) = build_windows_cmd("git", args);
+        
+        assert_eq!(shell, "cmd");
+        assert_eq!(shell_args[0], "/C");
+        assert!(shell_args[1].contains("git"));
+        assert!(shell_args[1].contains("\"status\""));
+        assert!(shell_args[1].contains("\"-s\""));
     }
 }

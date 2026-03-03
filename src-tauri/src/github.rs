@@ -95,23 +95,17 @@ fn run_gh(args: &[&str]) -> Result<String, String> {
         _ => "gh".to_string(), // Fallback to bare command
     };
 
+    let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
     let mut command = if cfg!(unix) {
-        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut full_cmd = format!("'{}'", gh_path);
-        for arg in args {
-            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-        }
-        let mut cmd = Command::new(login_shell);
-        cmd.arg("-li").arg("-c").arg(full_cmd);
+        let (shell, shell_args) = build_unix_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     } else {
-        // On Windows, wrap in cmd /C to handle batch files and shims
-        let mut full_cmd = format!("\"{}\"", gh_path);
-        for arg in args {
-            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-        }
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg(full_cmd);
+        let (shell, shell_args) = build_windows_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     };
 
@@ -124,6 +118,25 @@ fn run_gh(args: &[&str]) -> Result<String, String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Build Unix command args using a login interactive shell
+fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut full_cmd = format!("'{}'", cmd_path);
+    for arg in args {
+        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+    }
+    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
+}
+
+/// Build Windows command args using cmd /C
+fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let mut full_cmd = format!("\"{}\"", cmd_path);
+    for arg in args {
+        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
+    }
+    ("cmd".to_string(), vec!["/C".to_string(), full_cmd])
 }
 
 // ============================================================================
@@ -152,8 +165,20 @@ pub async fn github_check_status() -> Result<GhCliStatus, String> {
         .and_then(|v| v.lines().next().map(|l| l.to_string()));
 
     // 3. Check authentication
-    let auth_output = Command::new(&gh_path)
-        .args(["auth", "status"])
+    let string_args = vec!["auth".to_string(), "status".to_string()];
+    let mut auth_cmd = if cfg!(unix) {
+        let (shell, shell_args) = build_unix_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
+        cmd
+    } else {
+        let (shell, shell_args) = build_windows_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
+        cmd
+    };
+
+    let auth_output = auth_cmd
         .output()
         .map_err(|e| format!("Failed to run gh auth status: {}", e))?;
 
@@ -347,10 +372,29 @@ pub async fn github_submit_review_with_comments(
 
     let endpoint = format!("repos/{}/pulls/{}/reviews", repo_name, pr_number);
     let payload_str = payload.to_string();
+    let string_args = vec![
+        "api".to_string(), 
+        endpoint, 
+        "--method".to_string(), 
+        "POST".to_string(), 
+        "--input".to_string(), 
+        "-".to_string()
+    ];
 
     // Pipe JSON payload via stdin
-    let mut child = Command::new(gh_path)
-        .args(["api", &endpoint, "--method", "POST", "--input", "-"])
+    let mut child_cmd = if cfg!(unix) {
+        let (shell, shell_args) = build_unix_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
+        cmd
+    } else {
+        let (shell, shell_args) = build_windows_cmd(&gh_path, string_args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
+        cmd
+    };
+
+    let mut child = child_cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -389,5 +433,29 @@ fn extract_repo_name(url: &str) -> String {
         format!("{}/{}", parts[3], parts[4])
     } else {
         String::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_repo_name() {
+        assert_eq!(extract_repo_name("https://github.com/owner/repo/pull/123"), "owner/repo");
+        assert_eq!(extract_repo_name("https://github.com/faiyaz26/codelane"), "faiyaz26/codelane");
+        assert_eq!(extract_repo_name("invalid-url"), "");
+    }
+
+    #[test]
+    fn test_build_windows_gh_cmd() {
+        let args = vec!["pr".to_string(), "view".to_string()];
+        let (shell, shell_args) = build_windows_cmd("C:\\bin\\gh.exe", args);
+        
+        assert_eq!(shell, "cmd");
+        assert_eq!(shell_args[0], "/C");
+        assert!(shell_args[1].contains("\"C:\\bin\\gh.exe\""));
+        assert!(shell_args[1].contains("\"pr\""));
+        assert!(shell_args[1].contains("\"view\""));
     }
 }

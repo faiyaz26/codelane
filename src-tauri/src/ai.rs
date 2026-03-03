@@ -79,28 +79,14 @@ fn run_command(
         .ok_or_else(|| format!("{} not found. Please ensure it is installed and in your PATH.", cmd_name))?;
 
     let mut command = if cfg!(unix) {
-        // Use login shell to ensure .zshrc/.bashrc is sourced
-        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        
-        let mut full_cmd = format!("'{}'", cmd_path);
-        for arg in args {
-            // Escape single quotes for shell safety
-            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-        }
-
-        let mut cmd = Command::new(login_shell);
-        cmd.arg("-li").arg("-c").arg(full_cmd);
+        let (shell, shell_args) = build_unix_cmd(&cmd_path, args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     } else {
-        // On Windows, wrap in cmd /C to handle batch files and shims (.cmd, .bat)
-        let mut full_cmd = format!("\"{}\"", cmd_path);
-        for arg in args {
-            // Simple quoting for Windows cmd (may need more complex escaping for some chars)
-            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-        }
-
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg(full_cmd);
+        let (shell, shell_args) = build_windows_cmd(&cmd_path, args);
+        let mut cmd = Command::new(shell);
+        cmd.args(shell_args);
         cmd
     };
 
@@ -134,6 +120,27 @@ fn run_command(
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("{} error: {}", cmd_name, stderr))
     }
+}
+
+/// Build Unix command args using a login interactive shell
+fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut full_cmd = format!("'{}'", cmd_path);
+    for arg in args {
+        // Escape single quotes for shell safety
+        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+    }
+    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
+}
+
+/// Build Windows command args using cmd /C
+fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let mut full_cmd = format!("\"{}\"", cmd_path);
+    for arg in args {
+        // Simple quoting for Windows cmd
+        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
+    }
+    ("cmd".to_string(), vec!["/C".to_string(), full_cmd])
 }
 
 /// Execute Claude Code CLI
@@ -222,4 +229,56 @@ pub async fn ai_get_available_tools() -> Result<Vec<String>, String> {
     }
 
     Ok(available)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_unix_cmd() {
+        let cmd_path = "/usr/bin/claude";
+        let args = vec!["--model".to_string(), "sonnet".to_string()];
+        let (shell, shell_args) = build_unix_cmd(cmd_path, args);
+
+        assert!(!shell.is_empty());
+        assert_eq!(shell_args[0], "-li");
+        assert_eq!(shell_args[1], "-c");
+        assert!(shell_args[2].contains("'/usr/bin/claude'"));
+        assert!(shell_args[2].contains("'--model'"));
+        assert!(shell_args[2].contains("'sonnet'"));
+    }
+
+    #[test]
+    fn test_build_unix_cmd_escaping() {
+        let cmd_path = "ai";
+        let args = vec!["it's a test".to_string()];
+        let (_, shell_args) = build_unix_cmd(cmd_path, args);
+
+        // it's -> 'it'\''s'
+        assert!(shell_args[2].contains("'it'\\''s a test'"));
+    }
+
+    #[test]
+    fn test_build_windows_cmd() {
+        let cmd_path = "C:\\bin\\gemini.cmd";
+        let args = vec!["--prompt".to_string(), "hello world".to_string()];
+        let (shell, shell_args) = build_windows_cmd(cmd_path, args);
+
+        assert_eq!(shell, "cmd");
+        assert_eq!(shell_args[0], "/C");
+        assert!(shell_args[1].contains("\"C:\\bin\\gemini.cmd\""));
+        assert!(shell_args[1].contains("\"--prompt\""));
+        assert!(shell_args[1].contains("\"hello world\""));
+    }
+
+    #[test]
+    fn test_build_windows_cmd_escaping() {
+        let cmd_path = "node";
+        let args = vec!["say \"hello\"".to_string()];
+        let (_, shell_args) = build_windows_cmd(cmd_path, args);
+
+        // "hello" -> ""hello""
+        assert!(shell_args[1].contains("\"say \"\"hello\"\"\""));
+    }
 }
