@@ -5,7 +5,8 @@
  * Shows/hides tabs based on active state.
  */
 
-import { createSignal, createEffect, For, Show, ErrorBoundary, Dynamic } from 'solid-js';
+import { createSignal, createEffect, For, Show, ErrorBoundary } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { Tab } from '../../types/lane';
 import { TerminalContainer } from '../terminal/TerminalContainer';
 import { extensionLoader } from '../../services/ExtensionLoader';

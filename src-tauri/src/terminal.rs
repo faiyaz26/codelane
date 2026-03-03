@@ -288,13 +288,14 @@ pub async fn create_terminal(
 
     let id_clone = terminal_id.clone();
     let app_clone = app.clone();
+    let extension_state = app.state::<crate::extension::ExtensionState>();
+    let ext_state_inner = extension_state.inner().clone();
 
     // Spawn a background thread to read PTY output and emit events
     thread::Builder::new()
         .name(format!("pty-read-{}", &terminal_id[..8]))
         .spawn(move || {
-            let extension_state = app_clone.state::<crate::extension::ExtensionState>();
-            read_pty_output(reader, id_clone, app_clone, extension_state.inner());
+            read_pty_output(reader, id_clone, app_clone, ext_state_inner);
         })
         .map_err(|e| format!("Failed to spawn PTY reader thread: {}", e))?;
 
@@ -340,7 +341,7 @@ fn read_pty_output(
     mut reader: Box<dyn Read + Send>,
     terminal_id: String,
     app: AppHandle,
-    extension_state: &crate::extension::ExtensionState,
+    extension_state: crate::extension::ExtensionState,
 ) {
     let mut buf = [0u8; 4096];
     let mut consecutive_errors = 0;

@@ -27,11 +27,11 @@ pub async fn extension_start(
 }
 
 #[tauri::command]
-pub fn extension_stop(
+pub async fn extension_stop(
     state: tauri::State<'_, ExtensionState>,
     id: String
 ) -> Result<(), String> {
-    state.stop_extension(&id).map_err(|e| e.to_string())
+    state.stop_extension(&id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

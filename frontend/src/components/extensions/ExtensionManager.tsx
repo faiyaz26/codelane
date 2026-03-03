@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, Show } from 'solid-js';
+import { createSignal, onMount, For, Show, Switch, Match } from 'solid-js';
 import { 
   listExtensions, 
   startExtension, 
@@ -259,6 +259,3 @@ export function ExtensionManager() {
     </div>
   );
 }
-
-// Add Switch and Match to solid-js imports if they are not there
-import { Switch, Match } from 'solid-js';
