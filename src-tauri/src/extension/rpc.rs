@@ -51,7 +51,7 @@ pub async fn handle_request(
             if let Some(term_id) = request.params.get("id").and_then(|v| v.as_str()) {
                 let extension_state = app_handle.state::<crate::extension::ExtensionState>();
                 let topic = format!("terminal.output.{}", term_id);
-                extension_state.subscribe(extension_id.to_string(), topic);
+                extension_state.subscribe(extension_id.to_string(), topic).await;
                 Ok(serde_json::json!(null))
             } else {
                 Err(serde_json::json!("Missing terminal id"))

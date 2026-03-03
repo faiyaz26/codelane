@@ -388,19 +388,17 @@ fn read_pty_output(
                 let ext_state = extension_state.clone();
                 let tid = terminal_id.clone();
                 
-                // Use the current tokio runtime to spawn the broadcast task
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    handle.spawn(async move {
-                        ext_state.broadcast(
-                            &topic,
-                            "codelane.terminal.onOutput",
-                            serde_json::json!({
-                                "id": tid,
-                                "data": String::from_utf8_lossy(&data)
-                            })
-                        ).await;
-                    });
-                }
+                // Use Tauri's async runtime to spawn the broadcast task
+                tauri::async_runtime::spawn(async move {
+                    ext_state.broadcast(
+                        &topic,
+                        "codelane.terminal.onOutput",
+                        serde_json::json!({
+                            "id": tid,
+                            "data": String::from_utf8_lossy(&data)
+                        })
+                    ).await;
+                });
             }
             Err(e) => {
                 // Check if it's a would-block error (non-blocking I/O)
