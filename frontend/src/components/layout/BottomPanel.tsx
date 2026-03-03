@@ -6,7 +6,6 @@ interface BottomPanelProps {
   lanes: Lane[];
   activeLaneId: string | null;
   initializedLanes: Set<string>;
-  isExtensionTabActive?: boolean;
 }
 
 export function BottomPanel(props: BottomPanelProps) {
@@ -35,7 +34,7 @@ export function BottomPanel(props: BottomPanelProps) {
 
               return (
                 <div style={{ display: isActive() ? 'contents' : 'none' }}>
-                  <TabPanel laneId={id} workingDir={effectiveWorkingDir} isExtensionTabActive={props.isExtensionTabActive} />
+                  <TabPanel laneId={id} workingDir={effectiveWorkingDir} />
                 </div>
               );
             }}

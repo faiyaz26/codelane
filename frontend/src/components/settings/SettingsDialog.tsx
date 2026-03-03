@@ -12,6 +12,7 @@ import { AgentsSettings } from './AgentsSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { CodeReviewSettings } from './CodeReviewSettings';
+import { ExtensionManager } from '../extensions/ExtensionManager';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
 
@@ -174,6 +175,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   {/* Appearance Tab */}
                   <Show when={activeTab() === 'appearance'}>
                     <AppearanceSettings />
+                  </Show>
+
+                  {/* Extensions Tab */}
+                  <Show when={activeTab() === 'extensions'}>
+                    <div class="h-full flex flex-col -m-6">
+                      <ExtensionManager />
+                    </div>
                   </Show>
                 </Show>
               </div>

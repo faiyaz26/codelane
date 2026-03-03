@@ -1,6 +1,6 @@
 // Settings module types and constants
 
-export type SettingsTab = 'general' | 'agents' | 'code-review' | 'notifications' | 'appearance';
+export type SettingsTab = 'general' | 'agents' | 'code-review' | 'notifications' | 'appearance' | 'extensions';
 
 export interface NavItem {
   id: SettingsTab;
@@ -14,4 +14,5 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'code-review', label: 'Code Review', icon: 'code-review' },
   { id: 'notifications', label: 'Notifications', icon: 'notifications' },
   { id: 'appearance', label: 'Appearance', icon: 'appearance' },
+  { id: 'extensions', label: 'Extensions', icon: 'extensions' },
 ];

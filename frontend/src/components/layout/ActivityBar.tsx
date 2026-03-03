@@ -9,7 +9,6 @@ export enum ActivityView {
   Search = 'search',
   GitManager = 'git-manager',
   CodeReview = 'code-review',
-  Extensions = 'extensions',
 }
 
 interface ActivityBarProps {
@@ -47,11 +46,6 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
     id: ActivityView.GitManager,
     icon: 'folder-git',
     label: 'Git Manager',
-  },
-  {
-    id: ActivityView.Extensions,
-    icon: 'extensions',
-    label: 'Extensions',
   },
 ];
 
@@ -141,12 +135,7 @@ export function ActivityBar(props: ActivityBarProps) {
   const currentTheme = themeManager.getTheme();
   const logoSrc = () => currentTheme() === 'light' ? codelaneLogoDark : codelaneLogoWhite;
 
-  const filteredItems = () => ACTIVITY_ITEMS.filter(item => {
-    if (item.id === ActivityView.Extensions) {
-      return isDev();
-    }
-    return true;
-  });
+  const filteredItems = () => ACTIVITY_ITEMS;
 
   return (
     <div class="w-14 bg-zed-bg-panel border-l border-zed-border-subtle flex flex-col">

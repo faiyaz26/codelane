@@ -4,7 +4,6 @@ import { FileExplorer } from '../explorer/FileExplorer';
 import { SearchPanel } from '../search';
 import { CodeReviewChanges } from './CodeReviewChanges';
 import { CodeReviewSidebar } from '../review/CodeReviewSidebar';
-import { ExtensionManager } from '../extensions/ExtensionManager';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -30,8 +29,6 @@ export function Sidebar(props: SidebarProps) {
         return 'Git Manager';
       case ActivityView.CodeReview:
         return 'Code Review';
-      case ActivityView.Extensions:
-        return 'Extensions';
       default:
         return 'Explorer';
     }
@@ -84,9 +81,6 @@ export function Sidebar(props: SidebarProps) {
               workingDir={props.effectiveWorkingDir}
               isPrReview={props.lane.laneType === 'pr_review' || !!props.lane.prMetadata}
             />
-          </Match>
-          <Match when={props.activeView === ActivityView.Extensions}>
-            <ExtensionManager />
           </Match>
         </Switch>
         </div>

@@ -11,7 +11,6 @@ import { ProjectPanel } from './ProjectPanel';
 import { EditorPanel } from '../editor';
 import { CodeReviewLayout, ReviewErrorBoundary } from '../review';
 import { editorStateManager } from '../../services/EditorStateManager';
-import { useTabManager } from '../../hooks/useTabManager';
 import type { Lane } from '../../types/lane';
 import { fetchBranch } from '../../lib/git-api';
 import { codeReviewStore } from '../../services/CodeReviewStore';
@@ -45,8 +44,6 @@ const AGENT_PANEL_MIN_WIDTH = 300;
 const AGENT_PANEL_MAX_WIDTH = 800;
 
 export function MainLayout(props: MainLayoutProps) {
-  const tabManager = useTabManager();
-
   // Panel state
   const [projectPanelWidth, setProjectPanelWidth] = createSignal(PROJECT_PANEL_DEFAULT_WIDTH);
   const [sidebarWidth, setSidebarWidth] = createSignal(SIDEBAR_DEFAULT_WIDTH);
@@ -59,23 +56,6 @@ export function MainLayout(props: MainLayoutProps) {
 
   // Derived state
   const activeLane = createMemo(() => props.lanes.find((l) => l.id === props.activeLaneId));
-
-  const isExtensionTabActive = createMemo(() => {
-    const laneId = props.activeLaneId;
-    if (!laneId) return false;
-    
-    try {
-      const activeTabId = tabManager.getActiveTab(laneId)();
-      const tabs = tabManager.getTabs(laneId)();
-      const activeTab = tabs.find(t => t.id === activeTabId);
-      const isExt = activeTab?.type === 'extension';
-      console.info(`[MainLayout] isExtensionTabActive for lane ${laneId}: ${isExt} (tab: ${activeTabId}, type: ${activeTab?.type})`);
-      return isExt;
-    } catch (e) {
-      console.error('[MainLayout] Error checking extension tab state:', e);
-      return false;
-    }
-  });
 
   const activeView = createMemo(() => {
     const laneId = props.activeLaneId;
@@ -225,8 +205,8 @@ export function MainLayout(props: MainLayoutProps) {
               <div class="flex-1 flex flex-col overflow-hidden min-w-0">
                 {/* Main content row */}
                 <div class="flex-1 flex overflow-hidden">
-                  {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, extension tabs, and PR review lanes */}
-                  <Show when={!(activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || isExtensionTabActive() || currentLane().laneType === 'pr_review' || !!currentLane().prMetadata)}>
+                  {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, and PR review lanes */}
+                  <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || currentLane().laneType === 'pr_review' || !!currentLane().prMetadata) ? 'none' : 'contents' }}>
                     <AgentTerminalPanel
                       lanes={props.lanes}
                       activeLaneId={props.activeLaneId}
@@ -240,7 +220,7 @@ export function MainLayout(props: MainLayoutProps) {
                       onAgentFailed={props.onAgentFailed}
                       onReloadAgentTerminal={props.onReloadAgentTerminal}
                     />
-                  </Show>
+                  </div>
 
                   {/* Code Review - takes over main content area */}
                   <Show when={activeView() === ActivityView.CodeReview}>
@@ -254,7 +234,7 @@ export function MainLayout(props: MainLayoutProps) {
                   </Show>
 
                   {/* Editor - Center (shared by non-review views) */}
-                  <Show when={activeView() !== ActivityView.CodeReview && !isExtensionTabActive() && showEditor() && props.activeLaneId}>
+                  <Show when={activeView() !== ActivityView.CodeReview && showEditor() && props.activeLaneId}>
                     <ResizeHandle direction="left" onResize={handleAgentPanelResize} />
                     <div class="flex flex-col overflow-hidden min-w-0 flex-1">
                       <EditorPanel
@@ -267,7 +247,7 @@ export function MainLayout(props: MainLayoutProps) {
                   </Show>
 
                   {/* Empty state for Git Manager or PR lanes when no file is selected */}
-                  <Show when={(activeView() === ActivityView.GitManager || ((currentLane().laneType === 'pr_review' || !!currentLane().prMetadata) && activeView() !== ActivityView.CodeReview)) && !isExtensionTabActive() && !(showEditor() && props.activeLaneId)}>
+                  <Show when={(activeView() === ActivityView.GitManager || ((currentLane().laneType === 'pr_review' || !!currentLane().prMetadata) && activeView() !== ActivityView.CodeReview)) && !(showEditor() && props.activeLaneId)}>
                     <div class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zed-bg-app">
                       <svg class="w-16 h-16 mb-4 text-zed-text-tertiary opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -285,22 +265,20 @@ export function MainLayout(props: MainLayoutProps) {
                   </Show>
 
                   {/* Sidebar resize handle */}
-                  <Show when={!sidebarCollapsed() && !isExtensionTabActive()}>
+                  <Show when={!sidebarCollapsed()}>
                     <ResizeHandle direction="right" onResize={handleSidebarResize} />
                   </Show>
 
                   {/* Sidebar (shared by all views) */}
-                  <div style={{ display: isExtensionTabActive() ? 'none' : 'contents' }}>
-                    <Sidebar
-                      lane={currentLane()}
-                      effectiveWorkingDir={getEffectiveWorkingDir(currentLane())}
-                      activeView={activeView()}
-                      width={sidebarWidth()}
-                      collapsed={sidebarCollapsed()}
-                      onFileSelect={setSelectedFile}
-                      onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
-                    />
-                  </div>
+                  <Sidebar
+                    lane={currentLane()}
+                    effectiveWorkingDir={getEffectiveWorkingDir(currentLane())}
+                    activeView={activeView()}
+                    width={sidebarWidth()}
+                    collapsed={sidebarCollapsed()}
+                    onFileSelect={setSelectedFile}
+                    onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed())}
+                  />
                 </div>
 
                 {/* Bottom Panel - Don't show for Code Review (terminal is in sidebar) */}
@@ -309,7 +287,6 @@ export function MainLayout(props: MainLayoutProps) {
                     lanes={props.lanes}
                     activeLaneId={props.activeLaneId}
                     initializedLanes={props.initializedLanes}
-                    isExtensionTabActive={isExtensionTabActive()}
                   />
                 </Show>
               </div>
