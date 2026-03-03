@@ -24,7 +24,13 @@ fn main() {
         )
         .with(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("codelane=debug,codelane_tauri=debug,codelane_git=debug,info"))
+                .unwrap_or_else(|_| {
+                    if cfg!(debug_assertions) {
+                        EnvFilter::new("codelane=debug,codelane_tauri=debug,codelane_git=debug,info")
+                    } else {
+                        EnvFilter::new("codelane=info,codelane_tauri=info,codelane_git=info,warn")
+                    }
+                })
         )
         .init();
 
