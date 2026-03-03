@@ -22,6 +22,7 @@ pub struct JsonRpcResponse {
 
 pub async fn handle_request(
     app_handle: &AppHandle,
+    extension_id: &str,
     request: JsonRpcRequest,
     permissions: &[String],
 ) -> Result<serde_json::Value, serde_json::Value> {
@@ -46,6 +47,16 @@ pub async fn handle_request(
 
     match request.method.as_str() {
         "codelane.ping" => Ok(serde_json::json!("pong")),
+        "codelane.terminal.subscribe" => {
+            if let Some(term_id) = request.params.get("id").and_then(|v| v.as_str()) {
+                let extension_state = app_handle.state::<crate::extension::ExtensionState>();
+                let topic = format!("terminal.output.{}", term_id);
+                extension_state.subscribe(extension_id.to_string(), topic);
+                Ok(serde_json::json!(null))
+            } else {
+                Err(serde_json::json!("Missing terminal id"))
+            }
+        }
         "codelane.agent.getTerminal" => {
             if let Some(lane_id) = request.params.get("laneId").and_then(|v| v.as_str()) {
                 let terminal_state = app_handle.state::<crate::terminal::TerminalState>();

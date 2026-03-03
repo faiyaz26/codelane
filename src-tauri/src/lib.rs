@@ -62,6 +62,8 @@ pub fn run() {
             extension::extension_list,
             extension::extension_start,
             extension::extension_stop,
+            extension::extension_install,
+            extension::extension_get_registry,
             // Store commands
             store::get_store_path,
             // Lane commands

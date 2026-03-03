@@ -293,7 +293,8 @@ pub async fn create_terminal(
     thread::Builder::new()
         .name(format!("pty-read-{}", &terminal_id[..8]))
         .spawn(move || {
-            read_pty_output(reader, id_clone, app_clone);
+            let extension_state = app_clone.state::<crate::extension::ExtensionState>();
+            read_pty_output(reader, id_clone, app_clone, extension_state.inner());
         })
         .map_err(|e| format!("Failed to spawn PTY reader thread: {}", e))?;
 
@@ -335,7 +336,12 @@ pub async fn create_terminal(
 }
 
 /// Read PTY output in a background thread and emit events to the frontend
-fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: AppHandle) {
+fn read_pty_output(
+    mut reader: Box<dyn Read + Send>,
+    terminal_id: String,
+    app: AppHandle,
+    extension_state: &crate::extension::ExtensionState,
+) {
     let mut buf = [0u8; 4096];
     let mut consecutive_errors = 0;
 
@@ -362,7 +368,7 @@ fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: A
                     "terminal-output",
                     TerminalOutputPayload {
                         id: terminal_id.clone(),
-                        data,
+                        data: data.clone(),
                     },
                 ) {
                     tracing::warn!("Failed to emit terminal-output event for {}: {}", terminal_id, e);
@@ -375,6 +381,25 @@ fn read_pty_output(mut reader: Box<dyn Read + Send>, terminal_id: String, app: A
                     }
                 } else {
                     consecutive_errors = 0;
+                }
+
+                // Broadcast to extensions
+                let topic = format!("terminal.output.{}", terminal_id);
+                let ext_state = extension_state.clone();
+                let tid = terminal_id.clone();
+                
+                // Use the current tokio runtime to spawn the broadcast task
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        ext_state.broadcast(
+                            &topic,
+                            "codelane.terminal.onOutput",
+                            serde_json::json!({
+                                "id": tid,
+                                "data": String::from_utf8_lossy(&data)
+                            })
+                        ).await;
+                    });
                 }
             }
             Err(e) => {
