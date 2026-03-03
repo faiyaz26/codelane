@@ -89,6 +89,11 @@ export function TopBar(props: TopBarProps) {
     }
   };
 
+  const truncate = (str: string, max: number) => {
+    if (str.length <= max) return str;
+    return str.slice(0, max - 1) + '…';
+  };
+
   return (
     <div class="h-11 bg-zed-bg-panel border-b border-zed-border-subtle flex items-center select-none">
       {/* macOS traffic light spacer (left side) */}
@@ -104,11 +109,19 @@ export function TopBar(props: TopBarProps) {
       >
         <Show when={props.activeLaneName}>
           <div class="flex items-center gap-2 text-sm" data-tauri-drag-region>
-            <span class="font-medium text-zed-text-primary">{props.activeLaneName}</span>
+            <span 
+              class="font-medium text-zed-text-primary" 
+              title={props.activeLaneName}
+            >
+              {truncate(props.activeLaneName!, 25)}
+            </span>
             <Show when={gitWatcher.gitStatus()?.branch}>
               <span class="text-zed-text-tertiary">|</span>
-              <span class="text-zed-text-tertiary cursor-default">
-                {gitWatcher.gitStatus()!.branch}
+              <span 
+                class="text-zed-text-tertiary cursor-default"
+                title={gitWatcher.gitStatus()!.branch}
+              >
+                {truncate(gitWatcher.gitStatus()!.branch!, 20)}
               </span>
             </Show>
             <Show when={projectName()}>
@@ -117,7 +130,7 @@ export function TopBar(props: TopBarProps) {
                 class="text-zed-text-tertiary cursor-default"
                 title={props.effectiveWorkingDir}
               >
-                {projectName()}
+                {truncate(projectName()!, 20)}
               </span>
             </Show>
           </div>
