@@ -111,10 +111,13 @@ fn run_git_simple(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Out
         cmd.arg("-li").arg("-c").arg(full_cmd);
         cmd
     } else {
-        let mut cmd = Command::new("git");
+        // On Windows, wrap in cmd /C
+        let mut full_cmd = "git".to_string();
         for arg in args {
-            cmd.arg(arg);
+            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
         }
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(full_cmd);
         cmd
     };
 
@@ -153,10 +156,13 @@ fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
         cmd.arg("-li").arg("-c").arg(full_cmd);
         cmd
     } else {
-        let mut cmd = Command::new("git");
+        // On Windows, wrap in cmd /C
+        let mut full_cmd = "git".to_string();
         for arg in args {
-            cmd.arg(arg);
+            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
         }
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(full_cmd);
         cmd
     };
 

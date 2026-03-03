@@ -92,10 +92,15 @@ fn run_command(
         cmd.arg("-li").arg("-c").arg(full_cmd);
         cmd
     } else {
-        let mut cmd = Command::new(cmd_path);
+        // On Windows, wrap in cmd /C to handle batch files and shims (.cmd, .bat)
+        let mut full_cmd = format!("\"{}\"", cmd_path);
         for arg in args {
-            cmd.arg(arg);
+            // Simple quoting for Windows cmd (may need more complex escaping for some chars)
+            full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
         }
+
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(full_cmd);
         cmd
     };
 
