@@ -651,16 +651,33 @@ pub async fn get_terminal_pid_by_lane(
         .lock()
         .map_err(|e| format!("Failed to lock terminal state: {}", e))?;
 
-    // Find terminal with matching lane_id
-    for instance in terminals.values() {
-        if let Some(ref id) = instance.lane_id {
-            if id == &lane_id {
-                return Ok(Some(instance.pid));
-            }
-        }
-    }
+    Ok(terminals
+        .values()
+        .find(|inst| inst.lane_id.as_deref() == Some(&lane_id))
+        .map(|inst| inst.pid))
+}
 
-    Ok(None)
+/// Get the terminal ID for a terminal by lane ID
+///
+/// # Arguments
+/// * `lane_id` - The lane ID to search for
+///
+/// # Returns
+/// The terminal ID if found, or None
+#[tauri::command]
+pub async fn get_terminal_id_by_lane(
+    state: State<'_, TerminalState>,
+    lane_id: String,
+) -> Result<Option<String>, String> {
+    let terminals = state
+        .terminals
+        .lock()
+        .map_err(|e| format!("Failed to lock terminal state: {}", e))?;
+
+    Ok(terminals
+        .iter()
+        .find(|(_, inst)| inst.lane_id.as_deref() == Some(&lane_id))
+        .map(|(id, _)| id.clone()))
 }
 
 /// Initialize the terminal module and return the command handlers

@@ -21,6 +21,10 @@ pub fn worktree_path(project_name: &str, branch: &str) -> PathBuf {
         .expect("Failed to resolve worktree path")
 }
 
+pub fn extensions_dir() -> PathBuf {
+    data_dir().join("extensions")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,6 +48,11 @@ mod tests {
     #[test]
     fn test_lanes_dir_exists() {
         assert!(lanes_dir().exists());
+    }
+
+    #[test]
+    fn test_extensions_dir_exists() {
+        assert!(extensions_dir().exists());
     }
 
     #[test]

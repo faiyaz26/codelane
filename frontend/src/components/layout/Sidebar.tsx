@@ -4,6 +4,7 @@ import { FileExplorer } from '../explorer/FileExplorer';
 import { SearchPanel } from '../search';
 import { CodeReviewChanges } from './CodeReviewChanges';
 import { CodeReviewSidebar } from '../review/CodeReviewSidebar';
+import { ExtensionManager } from '../extensions/ExtensionManager';
 import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 
@@ -85,12 +86,7 @@ export function Sidebar(props: SidebarProps) {
             />
           </Match>
           <Match when={props.activeView === ActivityView.Extensions}>
-            <PlaceholderView
-              icon={
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-              }
-              message="Extensions coming soon"
-            />
+            <ExtensionManager />
           </Match>
         </Switch>
         </div>

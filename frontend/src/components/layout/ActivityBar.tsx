@@ -47,6 +47,11 @@ const ACTIVITY_ITEMS: ActivityItem[] = [
     icon: 'folder-git',
     label: 'Git Manager',
   },
+  {
+    id: ActivityView.Extensions,
+    icon: 'extensions',
+    label: 'Extensions',
+  },
 ];
 
 function ActivityIcon(props: { icon: string; class?: string }) {

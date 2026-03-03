@@ -3,6 +3,7 @@
 //! This module contains all Tauri commands and plugin setup for the Codelane application.
 //! Commands are organized by domain: lane, git, and filesystem operations.
 
+pub mod extension;
 pub mod lane;
 pub mod paths;
 pub mod settings;
@@ -41,6 +42,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
+        // Manage extension state
+        .manage(extension::ExtensionState::new())
         // Manage lane state
         .manage(lane::LaneState::new())
         // Manage settings state
@@ -55,6 +58,10 @@ pub fn run() {
         .manage(hook_monitor::HookMonitorState::new())
         // Register commands
         .invoke_handler(tauri::generate_handler![
+            // Extension commands
+            extension::extension_list,
+            extension::extension_start,
+            extension::extension_stop,
             // Store commands
             store::get_store_path,
             // Lane commands
@@ -133,6 +140,7 @@ pub fn run() {
             terminal::get_terminal_info,
             terminal::list_terminals,
             terminal::get_terminal_pid_by_lane,
+            terminal::get_terminal_id_by_lane,
             // Search commands
             search::search_start,
             search::search_cancel,
