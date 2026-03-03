@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use tokio::process::Child;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::process::{Child, ChildStdin};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionManifest {
@@ -18,4 +19,5 @@ pub struct Extension {
     pub manifest: ExtensionManifest,
     pub path: PathBuf,
     pub child_process: Option<Arc<Mutex<Child>>>,
+    pub stdin: Option<Arc<Mutex<ChildStdin>>>,
 }

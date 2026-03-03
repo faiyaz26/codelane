@@ -14,6 +14,21 @@ export interface ExtensionManifest {
   permissions: string[];
 }
 
+export interface RegistryExtension {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  repository: string;
+  download_url: string;
+  sha256: string;
+  permissions: string[];
+}
+
+export interface ExtensionRegistry {
+  extensions: RegistryExtension[];
+}
+
 /**
  * Lists all discovered extensions
  */
@@ -33,4 +48,18 @@ export async function startExtension(id: string): Promise<void> {
  */
 export async function stopExtension(id: string): Promise<void> {
   await invoke('extension_stop', { id });
+}
+
+/**
+ * Fetches the extension registry from GitHub
+ */
+export async function getExtensionRegistry(): Promise<ExtensionRegistry> {
+  return await invoke<ExtensionRegistry>('extension_get_registry');
+}
+
+/**
+ * Installs an extension from a URL
+ */
+export async function installExtension(downloadUrl: string, sha256: string): Promise<void> {
+  await invoke('extension_install', { downloadUrl, sha256 });
 }
