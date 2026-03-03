@@ -11,6 +11,15 @@ Build a fast, efficient Agentic Development Environment that:
 - Feels native and responsive
 - Follows security best practices
 
+## Mandates for AI Agents
+
+1. **Release Notes**: When bumping versions or completing major features, MUST create/update `changelogs/v<VERSION>.md`. This is required for automated GitHub releases.
+2. **Backend-Only Storage**: Lanes MUST be stored and managed by the Rust backend. Frontend MUST NOT have its own persistent lane store.
+3. **Robust Command Execution**: 
+   - Unix: Use interactive login shells (`-li`) to load user environments.
+   - Windows: Wrap in `cmd /C` for batch/shim compatibility.
+4. **Terminal Behavior**: Honor manual scrolling by pausing auto-scroll and showing a "Scroll to Bottom" button.
+
 ## Documentation Guidelines
 
 **DO NOT create these types of files:**

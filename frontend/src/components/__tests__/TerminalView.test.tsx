@@ -79,6 +79,7 @@ const mockTerminal = {
   rows: 24,
   buffer: {
     active: {
+      viewportY: 0,
       baseY: 0,
       rows: 24,
       length: 24,
@@ -103,6 +104,7 @@ describe('TerminalView Scrolling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     scrollCallback = null;
+    mockTerminal.buffer.active.viewportY = 0;
     mockTerminal.buffer.active.baseY = 0;
     mockTerminal.buffer.active.length = 24;
   });
@@ -114,8 +116,9 @@ describe('TerminalView Scrolling', () => {
     const { agentStatusManager } = await import('../../services/AgentStatusManager');
     await waitFor(() => expect(agentStatusManager.registerLane).toHaveBeenCalled());
 
-    // Simulate user scrolling up
-    mockTerminal.buffer.active.baseY = 0;
+    // Simulate user scrolling up: baseY increases, viewportY stays at 0
+    mockTerminal.buffer.active.baseY = 76; 
+    mockTerminal.buffer.active.viewportY = 0;
     mockTerminal.buffer.active.length = 100;
     
     // Trigger the scroll callback
@@ -133,7 +136,8 @@ describe('TerminalView Scrolling', () => {
     await waitFor(() => expect(agentStatusManager.registerLane).toHaveBeenCalled());
 
     // Scroll up
-    mockTerminal.buffer.active.baseY = 0;
+    mockTerminal.buffer.active.baseY = 76;
+    mockTerminal.buffer.active.viewportY = 0;
     mockTerminal.buffer.active.length = 100;
     if (scrollCallback) scrollCallback();
 
@@ -153,14 +157,15 @@ describe('TerminalView Scrolling', () => {
     await waitFor(() => expect(agentStatusManager.registerLane).toHaveBeenCalled());
 
     // Scroll up
-    mockTerminal.buffer.active.baseY = 0;
+    mockTerminal.buffer.active.baseY = 76;
+    mockTerminal.buffer.active.viewportY = 0;
     mockTerminal.buffer.active.length = 100;
     if (scrollCallback) scrollCallback();
 
     expect(await screen.findByText('Scroll to Bottom')).toBeDefined();
 
-    // Scroll back to bottom
-    mockTerminal.buffer.active.baseY = 76; // 76 + 24 = 100
+    // Scroll back to bottom: viewportY catches up to baseY
+    mockTerminal.buffer.active.viewportY = 76;
     if (scrollCallback) scrollCallback();
 
     await waitFor(() => expect(screen.queryByText('Scroll to Bottom')).toBeNull());
