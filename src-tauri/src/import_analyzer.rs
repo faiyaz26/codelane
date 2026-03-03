@@ -3,7 +3,7 @@
 //! Extracts import/use statements from source files to build dependency graphs
 //! for smart file ordering in code review.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tree_sitter::{Language, Parser};
 
 /// Supported languages for import analysis
@@ -290,6 +290,7 @@ pub fn resolve_import_path(
             } else {
                 None
             }
+        }
         AnalysisLanguage::Python => {
             // Handle relative imports
             if import_specifier.starts_with('.') {
