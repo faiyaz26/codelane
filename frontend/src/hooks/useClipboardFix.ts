@@ -16,7 +16,12 @@ export function useClipboardFix() {
 
       const target = e.target as HTMLElement;
       // Skip if target is inside a terminal (xterm handles its own clipboard)
-      if (target?.closest?.('.xterm') || target?.classList?.contains('xterm')) return;
+      if (
+        target?.closest?.('.xterm') || 
+        target?.classList?.contains('xterm') ||
+        target?.classList?.contains('xterm-helper-textarea') ||
+        target?.closest?.('.xterm-helper-textarea')
+      ) return;
 
       if (e.key === 'c' || e.key === 'x') {
         const selection = window.getSelection();
@@ -103,7 +108,12 @@ export function useClipboardFix() {
       const target = e.target as HTMLElement;
       
       // Skip terminals (xterm handles its own clipboard)
-      if (target?.closest?.('.xterm') || target?.classList?.contains('xterm')) return;
+      if (
+        target?.closest?.('.xterm') || 
+        target?.classList?.contains('xterm') ||
+        target?.classList?.contains('xterm-helper-textarea') ||
+        target?.closest?.('.xterm-helper-textarea')
+      ) return;
 
       // Prevent the native paste action
       e.preventDefault();
