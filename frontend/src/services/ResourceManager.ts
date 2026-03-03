@@ -21,6 +21,8 @@ export interface ProcessStats {
   cpuUsage: number;
   memoryUsage: number;
   memoryUsageMb: number;
+  virtualMemory: number;
+  childrenCount: number;
 }
 
 // Thresholds for adaptive throttling

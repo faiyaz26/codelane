@@ -23,8 +23,10 @@ fn get_system() -> std::sync::MutexGuard<'static, Option<System>> {
 pub struct ProcessStats {
     pub pid: u32,
     pub cpu_usage: f32,      // Percentage
-    pub memory_usage: u64,   // Bytes
+    pub memory_usage: u64,   // Bytes (RSS)
     pub memory_usage_mb: f64, // Megabytes for display
+    pub virtual_memory: u64,  // Virtual memory in bytes
+    pub children_count: u32,  // Number of child processes included
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,7 +120,9 @@ pub fn get_process_stats(pid: u32) -> Result<ProcessStats, String> {
     }
 
     let mut total_memory: u64 = 0;
+    let mut total_virtual_memory: u64 = 0;
     let mut total_cpu: f32 = 0.0;
+    let mut children_count: u32 = 0;
 
     // Find all child processes recursively
     let mut pids_to_check = vec![root_pid];
@@ -132,7 +136,12 @@ pub fn get_process_stats(pid: u32) -> Result<ProcessStats, String> {
 
         if let Some(process) = system.process(current_pid) {
             total_memory += process.memory();
+            total_virtual_memory += process.virtual_memory();
             total_cpu += process.cpu_usage();
+            
+            if current_pid != root_pid {
+                children_count += 1;
+            }
 
             // Find immediate children of this process
             for (child_pid, child_process) in system.processes() {
@@ -150,6 +159,8 @@ pub fn get_process_stats(pid: u32) -> Result<ProcessStats, String> {
         cpu_usage: total_cpu,
         memory_usage: total_memory,
         memory_usage_mb: memory_mb,
+        virtual_memory: total_virtual_memory,
+        children_count,
     })
 }
 
