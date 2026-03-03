@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe('useClipboardFix', () => {
-  it('should NOT call readText on Cmd+V keydown (to avoid double paste)', async () => {
+  it('should call readText and preventDefault on Cmd+V keydown', async () => {
     mockReadText.mockResolvedValue('pasted content');
 
     await createRoot(async (dispose) => {
@@ -68,11 +68,17 @@ describe('useClipboardFix', () => {
         key: 'v',
         metaKey: true,
         bubbles: true,
+        cancelable: true,
       });
       input.dispatchEvent(event);
 
-      // Should NOT have called readText from keydown
-      expect(mockReadText).not.toHaveBeenCalled();
+      // Need to wait for async clipboard read
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Should HAVE called readText from keydown and prevented default
+      expect(mockReadText).toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+      expect(input.value).toBe('pasted content');
       
       dispose();
     });

@@ -9,9 +9,7 @@ import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 export function useClipboardFix() {
   onMount(() => {
     /**
-     * Intercept keyboard shortcuts for Copy/Cut/SelectAll.
-     * Paste (Cmd+V) is intentionally handled via the 'paste' event (handleNativePaste)
-     * to avoid double-pasting and ensure compatibility with Edit menu actions.
+     * Intercept keyboard shortcuts for Copy/Cut/SelectAll/Paste.
      */
     const handleKeyboardShortcuts = async (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -33,6 +31,15 @@ export function useClipboardFix() {
             }
           }
         }
+      } else if (e.key === 'v') {
+        // ALWAYS prevent default for Cmd+V.
+        // If we don't, the browser will perform a native paste AND also 
+        // trigger a 'paste' event which we also handle, leading to double-paste.
+        // By preventing it here, we handle the paste once.
+        e.preventDefault();
+        
+        // Manual paste trigger
+        handleManualPaste(target);
       } else if (e.key === 'a') {
         // Cmd+A: ensure it works in input fields
         if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
@@ -40,27 +47,15 @@ export function useClipboardFix() {
           return;
         }
       }
-      // Note: 'v' is NOT handled here to prevent double-pasting. 
-      // Most browsers trigger a 'paste' event even when Cmd+V is prevented on keydown,
-      // or they trigger 'paste' if we don't prevent it.
     };
 
     /**
-     * Intercept native paste events (from Cmd+V, Edit menu, context menu).
-     * We use the Tauri clipboard API to prevent WebKit's native NSPasteboard access 
-     * which can crash on macOS due to stale pointer bugs.
+     * Common paste logic used by both keyboard shortcut and native paste event.
      */
-    const handleNativePaste = async (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement;
+    const handleManualPaste = async (target: HTMLElement) => {
+      if (!target) return;
       
-      // Skip terminals (xterm handles its own clipboard)
-      if (target?.closest?.('.xterm')) return;
-
-      // Prevent the native paste action
-      e.preventDefault();
-      e.stopPropagation();
-
-      // Read text from Tauri clipboard API (more reliable than event.clipboardData in this context)
+      // Read text from Tauri clipboard API
       const text = await readText();
       if (!text) return;
 
@@ -92,11 +87,30 @@ export function useClipboardFix() {
       }
     };
 
-    document.addEventListener('keydown', handleKeyboardShortcuts);
+    /**
+     * Intercept native paste events (from Edit menu, context menu).
+     * We use the Tauri clipboard API to prevent WebKit's native NSPasteboard access 
+     * which can crash on macOS due to stale pointer bugs.
+     */
+    const handleNativePaste = async (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Skip terminals (xterm handles its own clipboard)
+      if (target?.closest?.('.xterm')) return;
+
+      // Prevent the native paste action
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Handle the paste
+      handleManualPaste(target);
+    };
+
+    document.addEventListener('keydown', handleKeyboardShortcuts, true); // capture phase
     document.addEventListener('paste', handleNativePaste, true); // capture phase
     
     onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyboardShortcuts);
+      document.removeEventListener('keydown', handleKeyboardShortcuts, true);
       document.removeEventListener('paste', handleNativePaste, true);
     });
   });
