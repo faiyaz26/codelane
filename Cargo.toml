@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 license = "AGPL-3.0"
 repository = "https://github.com/codelane/codelane"
@@ -23,7 +23,7 @@ alacritty_terminal = "0.24"
 portable-pty = "0.8"
 
 # Git
-gix = { version = "0.68", default-features = false, features = ["basic", "blob-diff"] }
+gix = { version = "0.68", features = ["max-performance", "blob-diff", "revision"] }
 
 # LSP
 tower-lsp = "0.20"
