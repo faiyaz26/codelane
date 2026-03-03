@@ -12,11 +12,14 @@ export type ReviewScope = 'working_changes' | 'branch_diff';
 
 interface ReviewScopeSelectorProps {
   currentScope: ReviewScope;
+  currentBranch?: string;
   baseBranch: string;
   onScopeChange: (scope: ReviewScope) => void;
 }
 
 export function ReviewScopeSelector(props: ReviewScopeSelectorProps) {
+  const isBaseBranch = () => props.currentBranch === props.baseBranch;
+
   return (
     <div class="flex items-center gap-3 px-4 py-2 border-b border-zed-border-subtle bg-zed-bg-panel">
       <span class="text-xs text-zed-text-tertiary font-medium">Reviewing:</span>
@@ -35,9 +38,13 @@ export function ReviewScopeSelector(props: ReviewScopeSelectorProps) {
           class={`px-3 py-1 text-xs rounded transition-colors ${
             props.currentScope === 'branch_diff'
               ? 'bg-zed-bg-hover text-zed-text-primary font-medium'
+              : isBaseBranch()
+              ? 'text-zed-text-disabled cursor-not-allowed opacity-50'
               : 'text-zed-text-secondary hover:text-zed-text-primary'
           }`}
+          disabled={isBaseBranch()}
           onClick={() => props.onScopeChange('branch_diff')}
+          title={isBaseBranch() ? `Already on the default branch (${props.baseBranch})` : `Review all commits on this branch compared to ${props.baseBranch}`}
         >
           Branch vs {props.baseBranch}
         </button>

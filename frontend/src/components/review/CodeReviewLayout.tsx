@@ -384,6 +384,7 @@ export function CodeReviewLayout(props: CodeReviewLayoutProps) {
       <Show when={!isPrReview()}>
         <ReviewScopeSelector
           currentScope={reviewScope()}
+          currentBranch={gitWatcher.gitStatus()?.branch}
           baseBranch={baseBranch()}
           onScopeChange={handleScopeChange}
         />
