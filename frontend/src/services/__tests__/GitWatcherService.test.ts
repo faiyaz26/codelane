@@ -18,13 +18,6 @@ vi.mock('../FileWatchService', () => ({
   },
 }));
 
-// Mock ResourceManager
-vi.mock('../ResourceManager', () => ({
-  resourceManager: {
-    isHighLoad: () => () => false,
-  },
-}));
-
 let gitWatcherService: typeof import('../GitWatcherService')['gitWatcherService'];
 
 beforeEach(async () => {

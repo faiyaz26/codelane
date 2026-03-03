@@ -1,6 +1,5 @@
 import { Show, For, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import { TerminalView } from '../TerminalView';
-import { ProcessMonitor } from '../ProcessMonitor';
 import { Dialog, Button, Select } from '../ui';
 import type { Lane } from '../../types/lane';
 import { getAgentSettings, getDefaultAgent } from '../../lib/settings-api';
@@ -227,7 +226,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
               </svg>
             </button>
           </Show>
-          <ProcessMonitor laneId={props.activeLaneId} />
         </div>
       </div>
 

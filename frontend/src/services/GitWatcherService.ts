@@ -4,19 +4,17 @@
  * Provides a single source of truth for git status across the app.
  * - One watcher per lane (not per component)
  * - Event-driven (file changes trigger refresh, not polling)
- * - Debounced with adaptive timing based on system load
+ * - Debounced for efficiency
  * - Broadcasts status to all subscribers via signals
  */
 
-import { createSignal, createRoot, batch, type Accessor } from 'solid-js';
+import { createSignal, createRoot, type Accessor } from 'solid-js';
 import { isGitRepo, getGitStatus, getChangesWithStats } from '../lib/git-api';
 import { fileWatchService, type FileWatchEvent } from './FileWatchService';
-import { resourceManager } from './ResourceManager';
 import type { GitStatusResult } from '../types/git';
 
 // Debounce timings
-const DEBOUNCE_NORMAL = 500; // 500ms debounce for file changes
-const DEBOUNCE_HIGH_LOAD = 1500; // 1.5s debounce when system is under load
+const DEBOUNCE_TIME = 500; // 500ms debounce for file changes
 
 interface LaneGitState {
   isRepo: boolean | null;
@@ -129,16 +127,11 @@ function handleFileChange(laneId: string, event: FileWatchEvent): void {
     clearTimeout(entry.debounceTimeout);
   }
 
-  // Get appropriate debounce time based on system load
-  const debounceMs = resourceManager.isHighLoad()()
-    ? DEBOUNCE_HIGH_LOAD
-    : DEBOUNCE_NORMAL;
-
   // Schedule refresh
   entry.debounceTimeout = setTimeout(() => {
     entry.debounceTimeout = null;
     loadGitStatus(entry);
-  }, debounceMs);
+  }, DEBOUNCE_TIME);
 }
 
 async function startWatching(laneId: string, entry: LaneWatchEntry): Promise<void> {

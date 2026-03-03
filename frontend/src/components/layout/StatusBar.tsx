@@ -1,7 +1,13 @@
-import { Show, createMemo } from 'solid-js';
-import { resourceManager } from '../../services/ResourceManager';
+import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { invoke } from '@tauri-apps/api/core';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { ActivityView } from './ActivityBar';
+
+interface AppResourceUsage {
+  cpuPercent: number;
+  memoryMb: number;
+  memoryPercent: number;
+}
 
 interface StatusBarProps {
   activeView?: ActivityView;
@@ -9,8 +15,22 @@ interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps) {
-  // Use centralized resource manager instead of own polling
-  const resourceUsage = resourceManager.getAppResources();
+  const [resourceUsage, setResourceUsage] = createSignal<AppResourceUsage | null>(null);
+
+  const fetchResources = async () => {
+    try {
+      const usage = await invoke<AppResourceUsage>('get_app_resource_usage');
+      setResourceUsage(usage);
+    } catch {
+      // Ignore resource fetch errors
+    }
+  };
+
+  onMount(() => {
+    fetchResources();
+    const interval = setInterval(fetchResources, 5000);
+    onCleanup(() => clearInterval(interval));
+  });
 
   // Check if we should show code review keyboard shortcuts
   const showCodeReviewShortcuts = createMemo(() => {
@@ -51,14 +71,14 @@ export function StatusBar(props: StatusBarProps) {
         <Show when={resourceUsage()}>
           <div class="flex items-center gap-2 text-zed-text-tertiary">
             {/* CPU */}
-            <span class="flex items-center gap-1" title="CPU Usage">
+            <span class="flex items-center gap-1" title="App CPU Usage (excludes terminal)">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
               </svg>
               <span>{resourceUsage()!.cpuPercent.toFixed(1)}%</span>
             </span>
             {/* Memory */}
-            <span class="flex items-center gap-1" title="Memory Usage">
+            <span class="flex items-center gap-1" title="App Memory Usage (excludes terminal)">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>

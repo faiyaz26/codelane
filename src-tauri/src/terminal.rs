@@ -40,6 +40,12 @@ impl TerminalState {
             terminals: Mutex::new(HashMap::new()),
         }
     }
+
+    /// Lists all active terminal IDs with their PIDs
+    pub fn list_terminals_with_pids(&self) -> Result<Vec<(String, u32)>, String> {
+        let terminals = self.terminals.lock().map_err(|e| e.to_string())?;
+        Ok(terminals.iter().map(|(id, t)| (id.clone(), t.pid)).collect())
+    }
 }
 
 impl Default for TerminalState {

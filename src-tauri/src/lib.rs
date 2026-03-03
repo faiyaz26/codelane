@@ -74,7 +74,6 @@ pub fn run() {
             settings::lane_update_agent_config,
             settings::check_command_exists,
             // Process monitoring
-            process::get_process_stats,
             process::find_process_by_lane,
             process::get_app_resource_usage,
             // Git commands

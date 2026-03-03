@@ -15,10 +15,6 @@ vi.mock('../../TerminalView', () => ({
   TerminalView: (props: any) => TerminalViewSpy(props)
 }));
 
-vi.mock('../../ProcessMonitor', () => ({
-  ProcessMonitor: () => <div data-testid="process-monitor" />
-}));
-
 // Mock the UI components
 vi.mock('../../ui', () => ({
   Dialog: (props: any) => {

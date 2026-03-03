@@ -14,7 +14,6 @@ import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
 import { initPlatform } from './lib/platform';
 
 import { tabManager } from './services/TabManager';
-import { resourceManager } from './services/ResourceManager';
 import { agentNotificationService } from './services/AgentNotificationService';
 import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
@@ -69,9 +68,6 @@ function App() {
     // Initialize platform detection (static, only done once)
     await initPlatform();
 
-    // Start centralized resource monitoring
-    resourceManager.start();
-
     // Load agent settings
     try {
       const settings = await getAgentSettings();
@@ -94,11 +90,6 @@ function App() {
     if (savedActiveLaneId) {
       await handleLaneSelect(savedActiveLaneId);
     }
-
-    // Cleanup resource monitoring on unmount
-    onCleanup(() => {
-      resourceManager.stop();
-    });
   });
 
   // Start agent notification service
