@@ -264,19 +264,32 @@ pub fn resolve_import_path(
             // Convert Rust module path to file path
             // "crate::module::submodule" -> "src/module/submodule.rs"
             if import_specifier.starts_with("crate::") {
+                // Handle crate:: (project root)
                 let path = import_specifier
                     .trim_start_matches("crate::")
                     .replace("::", "/");
-                Some(format!("src/{}.rs", path))
+
+                // Use PathBuf for platform-neutral path construction
+                let mut resolved = PathBuf::from("src");
+                for part in path.split('/') {
+                    resolved.push(part);
+                }
+                resolved.set_extension("rs");
+                resolved.to_str().map(|s| s.to_string())
             } else if import_specifier.starts_with("super::") {
                 // Handle super:: (parent module)
                 let parent = importing_dir.parent()?;
                 let path = import_specifier.trim_start_matches("super::").replace("::", "/");
-                Some(format!("{}/{}.rs", parent.display(), path))
+
+                let mut resolved = parent.to_path_buf();
+                for part in path.split('/') {
+                    resolved.push(part);
+                }
+                resolved.set_extension("rs");
+                resolved.to_str().map(|s| s.to_string())
             } else {
                 None
             }
-        }
         AnalysisLanguage::Python => {
             // Handle relative imports
             if import_specifier.starts_with('.') {
@@ -289,11 +302,14 @@ pub fn resolve_import_path(
                 }
 
                 let module_path = module.replace('.', "/");
-                let resolved = current_dir.join(&module_path);
+                let mut resolved = current_dir.to_path_buf();
+                for part in module_path.split('/') {
+                    resolved.push(part);
+                }
 
-                // Try .py or __init__.py
-                let resolved_str = resolved.to_str()?.to_string();
-                Some(format!("{}.py", resolved_str))
+                // Try .py
+                resolved.set_extension("py");
+                resolved.to_str().map(|s| s.to_string())
             } else {
                 None
             }
