@@ -23,6 +23,7 @@ dist/
 # Build outputs
 /frontend/dist
 /assets/tailwind.css
+/test_artifacts
 
 # Test coverage
 coverage/
