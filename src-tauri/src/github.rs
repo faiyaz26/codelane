@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::check_command_exists;
+use crate::process::{build_unix_cmd, build_windows_cmd};
 
 // ============================================================================
 // Result Types
@@ -118,28 +119,6 @@ fn run_gh(args: &[&str]) -> Result<String, String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-/// Build Unix command args using a login interactive shell
-fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut full_cmd = format!("'{}'", cmd_path);
-    for arg in args {
-        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-    }
-    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
-}
-
-/// Build Windows command args using cmd /C
-fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let mut full_cmd = format!("\"{}\"", cmd_path);
-    for arg in args {
-        // Simple escaping for Windows cmd: escape double quotes by doubling them
-        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-    }
-    // For cmd /C, if the command string is quoted, it's often safer to wrap the entire 
-    // string in ANOTHER set of quotes because cmd.exe stripping logic is peculiar.
-    ("cmd".to_string(), vec!["/C".to_string(), format!("\"{}\"", full_cmd)])
 }
 
 // ============================================================================

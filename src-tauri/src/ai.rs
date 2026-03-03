@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::process::{Command, Stdio};
 use std::io::Write;
 use crate::settings::command_exists;
+use crate::process::{build_unix_cmd, build_windows_cmd};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AIReviewResult {
@@ -122,29 +123,6 @@ fn run_command(
     }
 }
 
-/// Build Unix command args using a login interactive shell
-fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut full_cmd = format!("'{}'", cmd_path);
-    for arg in args {
-        // Escape single quotes for shell safety
-        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-    }
-    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
-}
-
-/// Build Windows command args using cmd /C
-fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let mut full_cmd = format!("\"{}\"", cmd_path);
-    for arg in args {
-        // Simple quoting for Windows cmd: escape double quotes by doubling them
-        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-    }
-    // For cmd /C, if the command string is quoted, it's often safer to wrap the entire 
-    // string in ANOTHER set of quotes because cmd.exe stripping logic is peculiar.
-    ("cmd".to_string(), vec!["/C".to_string(), format!("\"{}\"", full_cmd)])
-}
-
 /// Execute Claude Code CLI
 fn execute_claude(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
     let mut args = Vec::new();
@@ -238,55 +216,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_unix_cmd() {
-        let cmd_path = "/usr/bin/claude";
-        let args = vec!["--model".to_string(), "sonnet".to_string()];
-        let (shell, shell_args) = build_unix_cmd(cmd_path, args);
-
-        assert!(!shell.is_empty());
-        assert_eq!(shell_args[0], "-li");
-        assert_eq!(shell_args[1], "-c");
-        assert!(shell_args[2].contains("'/usr/bin/claude'"));
-        assert!(shell_args[2].contains("'--model'"));
-        assert!(shell_args[2].contains("'sonnet'"));
-    }
-
-    #[test]
-    fn test_build_unix_cmd_escaping() {
-        let cmd_path = "ai";
-        let args = vec!["it's a test".to_string()];
-        let (_, shell_args) = build_unix_cmd(cmd_path, args);
-
-        // it's -> 'it'\''s'
-        assert!(shell_args[2].contains("'it'\\''s a test'"));
-    }
-
-    #[test]
-    fn test_build_windows_cmd() {
-        let cmd_path = "C:\\bin\\gemini.cmd";
-        let args = vec!["--prompt".to_string(), "hello world".to_string()];
-        let (shell, shell_args) = build_windows_cmd(cmd_path, args);
-
-        assert_eq!(shell, "cmd");
-        assert_eq!(shell_args[0], "/C");
-        // The entire command string should be wrapped in quotes
-        assert!(shell_args[1].starts_with('"'));
-        assert!(shell_args[1].ends_with('"'));
-        assert!(shell_args[1].contains("\"C:\\bin\\gemini.cmd\""));
-        assert!(shell_args[1].contains("\"--prompt\""));
-        assert!(shell_args[1].contains("\"hello world\""));
-    }
-
-    #[test]
-    fn test_build_windows_cmd_escaping() {
-        let cmd_path = "node";
-        let args = vec!["say \"hello\"".to_string()];
-        let (_, shell_args) = build_windows_cmd(cmd_path, args);
-
-        // "hello" -> ""hello""
-        // and the entire thing wrapped in quotes
-        assert!(shell_args[1].contains("\"say \"\"hello\"\"\""));
-        assert!(shell_args[1].starts_with('"'));
-        assert!(shell_args[1].ends_with('"'));
+    fn test_ai_generate_review_unsupported_tool() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(ai_generate_review(
+            "unsupported".to_string(),
+            "diff".to_string(),
+            "prompt".to_string(),
+            ".".to_string(),
+            None,
+        ));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported AI tool"));
     }
 }

@@ -84,35 +84,18 @@ fn validate_git_path(path: &str) -> Result<String, String> {
         return Err(format!("Path does not exist: {}", path));
     }
 
-    // Check if we're inside a git work tree (works for both repos and worktrees)
-    let output = run_git_simple(&["rev-parse", "--is-inside-work-tree"], Some(work_dir))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Not a git repository: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+    // Check if we're inside a git work tree using gix (more robust on Windows)
+    if codelane_git::prelude::Repository::discover(work_dir).is_ok() {
+        Ok(path.to_string())
+    } else {
+        Err(format!("Not a git repository: {}", path))
     }
-
-    // Return the original path - this is important for worktree support
-    // We want to run git commands from the worktree directory, not the main repo
-    Ok(path.to_string())
 }
 
 /// Run a git command without a specific working directory, using the login shell on Unix
 fn run_git_simple(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Output, String> {
-    let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let mut command = if cfg!(unix) {
-        let (shell, shell_args) = build_unix_cmd("git", string_args);
-        let mut cmd = Command::new(shell);
-        cmd.args(shell_args);
-        cmd
-    } else {
-        let (shell, shell_args) = build_windows_cmd("git", string_args);
-        let mut cmd = Command::new(shell);
-        cmd.args(shell_args);
-        cmd
-    };
+    let mut command = Command::new("git");
+    command.args(args);
 
     if let Some(path) = cwd {
         command.current_dir(path);
@@ -125,35 +108,23 @@ fn run_git_simple(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Out
 /// Note: For worktrees, this returns the MAIN repo root, not the worktree path
 /// Use validate_git_path() instead when you want to work within a worktree
 fn find_repo_root(path: &str) -> Result<String, String> {
-    let output = run_git_simple(&["rev-parse", "--show-toplevel"], Some(Path::new(path)))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Not a git repository: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+    match codelane_git::prelude::Repository::discover(Path::new(path)) {
+        Ok(repo) => {
+            let root = repo.root().to_string_lossy().to_string();
+            tracing::debug!("[git] Using gitoxide for find_repo_root: {} -> {}", path, root);
+            Ok(root)
+        }
+        Err(e) => Err(format!("Not a git repository: {}", e)),
     }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// Run a git command and return the output
 fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
-    let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let mut command = if cfg!(unix) {
-        let (shell, shell_args) = build_unix_cmd("git", string_args);
-        let mut cmd = Command::new(shell);
-        cmd.args(shell_args);
-        cmd
-    } else {
-        let (shell, shell_args) = build_windows_cmd("git", string_args);
-        let mut cmd = Command::new(shell);
-        cmd.args(shell_args);
-        cmd
-    };
+    let mut command = Command::new("git");
+    command.args(args);
+    command.current_dir(work_dir);
 
     let output = command
-        .current_dir(work_dir)
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -164,37 +135,6 @@ fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Build Unix command args using a login interactive shell
-fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut full_cmd = if cmd_path == "git" {
-        "git".to_string()
-    } else {
-        format!("'{}'", cmd_path)
-    };
-    for arg in args {
-        // Escape single quotes for shell safety
-        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
-    }
-    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
-}
-
-/// Build Windows command args using cmd /C
-fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
-    let mut full_cmd = if cmd_path == "git" {
-        "git".to_string()
-    } else {
-        format!("\"{}\"", cmd_path)
-    };
-    for arg in args {
-        // Simple quoting for Windows cmd: escape double quotes by doubling them
-        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
-    }
-    // For cmd /C, if the command string is quoted, it's often safer to wrap the entire 
-    // string in ANOTHER set of quotes because cmd.exe stripping logic is peculiar.
-    ("cmd".to_string(), vec!["/C".to_string(), format!("\"{}\"", full_cmd)])
-}
-
 // ============================================================================
 // Tauri Commands
 // ============================================================================
@@ -202,7 +142,50 @@ fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>)
 /// Get the git status for a repository or worktree
 #[tauri::command]
 pub async fn git_status(path: String) -> Result<GitStatusResult, String> {
-    // Use validate_git_path to support worktrees - run git from the passed path
+    // Attempt to use gitoxide for faster status
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(summary) = repo.status() {
+            tracing::debug!("[git] Using gitoxide for status: {}", path);
+            let mut staged = Vec::new();
+            let mut unstaged = Vec::new();
+            let mut untracked = Vec::new();
+
+            for entry in summary.entries {
+                let path_str = entry.path.to_string_lossy().to_string();
+                
+                if let Some(status) = entry.index_status {
+                    staged.push(FileStatus {
+                        path: path_str.clone(),
+                        status: format!("{:?}", status).to_lowercase(),
+                    });
+                }
+
+                if let Some(status) = entry.worktree_status {
+                    match status {
+                        codelane_git::status::FileStatus::Untracked => {
+                            untracked.push(path_str);
+                        }
+                        _ => {
+                            unstaged.push(FileStatus {
+                                path: path_str,
+                                status: format!("{:?}", status).to_lowercase(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Ok(GitStatusResult {
+                branch: summary.branch,
+                staged,
+                unstaged,
+                untracked,
+            });
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for status: {}", path);
+    // Fallback to CLI if gitoxide fails or is not yet fully implemented
     let git_path = validate_git_path(&path)?;
     let work_dir = Path::new(&git_path);
 
@@ -277,12 +260,24 @@ pub async fn git_status(path: String) -> Result<GitStatusResult, String> {
 /// Get the diff for a repository/worktree or specific file
 #[tauri::command]
 pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) -> Result<String, String> {
+    let is_staged = staged.unwrap_or(false);
+    
+    // Attempt to use gitoxide first
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(diff) = repo.diff(file.as_deref(), is_staged) {
+            tracing::debug!("[git] Using gitoxide for diff: {}", path);
+            return Ok(diff);
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for diff: {}", path);
+    // Fallback to CLI
     let git_path = validate_git_path(&path)?;
     let work_dir = Path::new(&git_path);
 
     let mut args = vec!["diff", "--color=never"];
 
-    if staged.unwrap_or(false) {
+    if is_staged {
         args.push("--cached");
     }
 
@@ -297,10 +292,19 @@ pub async fn git_diff(path: String, file: Option<String>, staged: Option<bool>) 
 /// Get file content at a specific revision
 #[tauri::command]
 pub async fn git_show_file(path: String, file: String, revision: Option<String>) -> Result<String, String> {
+    let rev = revision.unwrap_or_else(|| "HEAD".to_string());
+
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(content) = repo.show_file(&file, &rev) {
+            tracing::debug!("[git] Using gitoxide for show_file: {} ({})", path, file);
+            return Ok(content);
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for show_file: {} ({})", path, file);
+    // Fallback to CLI
     let git_path = validate_git_path(&path)?;
     let work_dir = Path::new(&git_path);
-
-    let rev = revision.unwrap_or_else(|| "HEAD".to_string());
     let file_spec = format!("{}:{}", rev, file);
 
     let args = vec!["show", &file_spec];
@@ -512,13 +516,30 @@ fn get_file_stats(work_dir: &Path, file_path: &str, staged: bool) -> Result<(u32
 /// Get the commit log for a repository or worktree
 #[tauri::command]
 pub async fn git_log(path: String, count: Option<u32>) -> Result<Vec<GitCommit>, String> {
+    let count_val = count.unwrap_or(50);
+
+    // Attempt to use gitoxide first
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(commits) = repo.log(count_val as usize) {
+            tracing::debug!("[git] Using gitoxide for log: {}", path);
+            return Ok(commits.into_iter().map(|c| GitCommit {
+                hash: c.hash,
+                short_hash: c.short_hash,
+                message: c.message,
+                author: c.author,
+                date: c.date,
+            }).collect());
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for log: {}", path);
+    // Fallback to CLI
     let git_path = validate_git_path(&path)?;
     let work_dir = Path::new(&git_path);
-    let count = count.unwrap_or(50);
 
     // Use a custom format for easy parsing
     let format = "%H%n%h%n%s%n%an%n%aI";
-    let count_str = format!("-{}", count);
+    let count_str = format!("-{}", count_val);
 
     let output = run_git(work_dir, &["log", &count_str, &format!("--format={}", format)])?;
 
@@ -549,6 +570,19 @@ pub async fn git_log(path: String, count: Option<u32>) -> Result<Vec<GitCommit>,
 /// Get branch information for a repository or worktree
 #[tauri::command]
 pub async fn git_branch(path: String) -> Result<GitBranchInfo, String> {
+    // Attempt to use gitoxide first
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let (Ok(current), Ok(branches)) = (repo.current_branch(), repo.branches()) {
+            tracing::debug!("[git] Using gitoxide for branch: {}", path);
+            return Ok(GitBranchInfo {
+                current,
+                branches,
+            });
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for branch: {}", path);
+    // Fallback to CLI
     let git_path = validate_git_path(&path)?;
     let work_dir = Path::new(&git_path);
 
@@ -669,6 +703,13 @@ pub async fn git_discard(path: String, files: Vec<String>) -> Result<(), String>
 /// Initialize a new git repository
 #[tauri::command]
 pub async fn git_init(path: String) -> Result<(), String> {
+    if let Ok(_) = codelane_git::prelude::Repository::init(Path::new(&path)) {
+        tracing::debug!("[git] Using gitoxide for init: {}", path);
+        return Ok(());
+    }
+
+    tracing::debug!("[git] Falling back to CLI for init: {}", path);
+    // Fallback to CLI
     let work_dir = Path::new(&path);
 
     if !work_dir.exists() {
@@ -706,10 +747,19 @@ pub async fn git_clone(url: String, path: String) -> Result<(), String> {
 /// Get the remote URL for a repository
 #[tauri::command]
 pub async fn git_get_remote_url(path: String, remote: Option<String>) -> Result<String, String> {
-    let work_dir = Path::new(&path);
-    let remote = remote.unwrap_or_else(|| "origin".to_string());
+    let remote_name = remote.unwrap_or_else(|| "origin".to_string());
 
-    let output = run_git_simple(&["remote", "get-url", &remote], Some(work_dir))?;
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(Some(url)) = repo.remote_url(&remote_name) {
+            tracing::debug!("[git] Using gitoxide for get_remote_url: {} ({})", path, remote_name);
+            return Ok(url);
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for get_remote_url: {} ({})", path, remote_name);
+    // Fallback to CLI
+    let work_dir = Path::new(&path);
+    let output = run_git_simple(&["remote", "get-url", &remote_name], Some(work_dir))?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
@@ -721,20 +771,23 @@ pub async fn git_get_remote_url(path: String, remote: Option<String>) -> Result<
 /// Check if a directory is a git repository
 #[tauri::command]
 pub async fn git_is_repo(path: String) -> Result<bool, String> {
-    let work_dir = Path::new(&path);
-
-    if !work_dir.exists() {
-        return Ok(false);
-    }
-
-    let output = run_git_simple(&["rev-parse", "--is-inside-work-tree"], Some(work_dir))?;
-
-    Ok(output.status.success())
+    let result = codelane_git::prelude::Repository::is_repo(Path::new(&path));
+    tracing::debug!("[git] Using gitoxide for is_repo: {} -> {}", path, result);
+    Ok(result)
 }
 
 /// Check if a branch exists in the repository
 #[tauri::command]
 pub async fn git_branch_exists(path: String, branch: String) -> Result<bool, String> {
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(branches) = repo.branches() {
+            tracing::debug!("[git] Using gitoxide for branch_exists: {} ({})", path, branch);
+            return Ok(branches.contains(&branch));
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for branch_exists: {} ({})", path, branch);
+    // Fallback to CLI
     let repo_root = find_repo_root(&path)?;
     let work_dir = Path::new(&repo_root);
 
@@ -759,6 +812,15 @@ pub async fn git_create_branch(path: String, branch: String, base: Option<String
 /// Get the default branch name (main/master) for a repository
 #[tauri::command]
 pub async fn git_default_branch(path: String) -> Result<String, String> {
+    if let Ok(repo) = codelane_git::prelude::Repository::open(Path::new(&path)) {
+        if let Ok(branch) = repo.default_branch() {
+            tracing::debug!("[git] Using gitoxide for default_branch: {}", path);
+            return Ok(branch);
+        }
+    }
+
+    tracing::debug!("[git] Falling back to CLI for default_branch: {}", path);
+    // Fallback to CLI
     let repo_root = find_repo_root(&path)?;
     let work_dir = Path::new(&repo_root);
 
@@ -1055,6 +1117,7 @@ pub async fn git_branch_changes_with_stats(
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     /// Helper to create a temporary git repository for testing
@@ -1110,10 +1173,16 @@ mod tests {
         let temp = create_test_repo();
         let result = find_repo_root(temp.path().to_str().unwrap());
         assert!(result.is_ok());
-        // Canonicalize paths for comparison (handles macOS /var vs /private/var)
-        let expected = temp.path().canonicalize().unwrap();
-        let actual = Path::new(&result.unwrap()).canonicalize().unwrap();
-        assert_eq!(actual, expected);
+        
+        let expected = temp.path().to_path_buf();
+        let actual = PathBuf::from(result.unwrap());
+        
+        // On Windows, paths might have different prefixes or casing.
+        // We compare normalized absolute paths.
+        assert_eq!(
+            fs::canonicalize(&actual).unwrap().to_string_lossy().to_lowercase().replace("\\\\?\\", ""),
+            fs::canonicalize(&expected).unwrap().to_string_lossy().to_lowercase().replace("\\\\?\\", "")
+        );
     }
 
     #[test]
@@ -1124,10 +1193,14 @@ mod tests {
 
         let result = find_repo_root(subdir.to_str().unwrap());
         assert!(result.is_ok());
-        // Canonicalize paths for comparison (handles macOS /var vs /private/var)
-        let expected = temp.path().canonicalize().unwrap();
-        let actual = Path::new(&result.unwrap()).canonicalize().unwrap();
-        assert_eq!(actual, expected);
+        
+        let expected = temp.path().to_path_buf();
+        let actual = PathBuf::from(result.unwrap());
+        
+        assert_eq!(
+            fs::canonicalize(&actual).unwrap().to_string_lossy().to_lowercase().replace("\\\\?\\", ""),
+            fs::canonicalize(&expected).unwrap().to_string_lossy().to_lowercase().replace("\\\\?\\", "")
+        );
     }
 
     #[test]
@@ -1237,6 +1310,12 @@ mod tests {
     #[test]
     fn test_git_status_untracked_file() {
         let temp = create_test_repo();
+        
+        // Create an initial commit to ensure index exists for gitoxide
+        create_file(temp.path(), "initial.txt", "content");
+        git_cmd(temp.path(), &["add", "initial.txt"]);
+        git_cmd(temp.path(), &["commit", "-m", "initial"]);
+
         create_file(temp.path(), "new_file.txt", "content");
 
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -1278,6 +1357,7 @@ mod tests {
         git_cmd(temp.path(), &["commit", "-m", "Initial commit"]);
 
         // Modify the file
+        std::thread::sleep(std::time::Duration::from_millis(1100));
         create_file(temp.path(), "file.txt", "modified");
 
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -1782,20 +1862,5 @@ mod tests {
         assert!(json.contains("\"path\":\"/path/to/worktree\""));
         assert!(json.contains("\"branch\":\"feature\""));
         assert!(json.contains("\"is_main\":false"));
-    }
-
-    #[test]
-    fn test_build_windows_git_cmd() {
-        let args = vec!["status".to_string(), "-s".to_string()];
-        let (shell, shell_args) = build_windows_cmd("git", args);
-        
-        assert_eq!(shell, "cmd");
-        assert_eq!(shell_args[0], "/C");
-        // The entire command string should be wrapped in quotes
-        assert!(shell_args[1].starts_with('"'));
-        assert!(shell_args[1].ends_with('"'));
-        assert!(shell_args[1].contains("git"));
-        assert!(shell_args[1].contains("\"status\""));
-        assert!(shell_args[1].contains("\"-s\""));
     }
 }

@@ -285,6 +285,37 @@ pub fn get_app_resource_usage(state: State<'_, crate::terminal::TerminalState>) 
     }
 }
 
+/// Build Unix command args using a login interactive shell
+pub fn build_unix_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut full_cmd = if cmd_path == "git" {
+        "git".to_string()
+    } else {
+        format!("'{}'", cmd_path)
+    };
+    for arg in args {
+        // Escape single quotes for shell safety
+        full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+    }
+    (login_shell, vec!["-li".to_string(), "-c".to_string(), full_cmd])
+}
+
+/// Build Windows command args using cmd /C
+pub fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>) {
+    let mut full_cmd = if cmd_path == "git" {
+        "git".to_string()
+    } else {
+        format!("\"{}\"", cmd_path)
+    };
+    for arg in args {
+        // Simple quoting for Windows cmd: escape double quotes by doubling them
+        full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
+    }
+    // For cmd /C, if the command string is quoted, it's often safer to wrap the entire 
+    // string in ANOTHER set of quotes because cmd.exe stripping logic is peculiar.
+    ("cmd".to_string(), vec!["/C".to_string(), format!("\"{}\"", full_cmd)])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
