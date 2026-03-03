@@ -97,34 +97,60 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
     Ok(None)
 }
 
-/// Get process statistics for a given PID
+/// Get process statistics for a given PID, including all child processes recursively
 #[tauri::command]
 pub fn get_process_stats(pid: u32) -> Result<ProcessStats, String> {
     let mut system_guard = get_system();
     let system = system_guard.as_mut().unwrap();
 
-    let sys_pid = Pid::from_u32(pid);
+    let root_pid = Pid::from_u32(pid);
 
-    // Only refresh the specific process, not all processes
+    // Refresh all processes to build an accurate tree
+    // ProcessRefreshKind::everything() ensures we have parent PIDs
     system.refresh_processes_specifics(
-        ProcessesToUpdate::Some(&[sys_pid]),
-        true, // remove dead processes
+        ProcessesToUpdate::All,
+        true,
         ProcessRefreshKind::everything(),
     );
 
-    if let Some(process) = system.process(sys_pid) {
-        let memory_bytes = process.memory();
-        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
-
-        Ok(ProcessStats {
-            pid,
-            cpu_usage: process.cpu_usage(),
-            memory_usage: memory_bytes,
-            memory_usage_mb: memory_mb,
-        })
-    } else {
-        Err(format!("Process {} not found", pid))
+    if system.process(root_pid).is_none() {
+        return Err(format!("Process {} not found", pid));
     }
+
+    let mut total_memory: u64 = 0;
+    let mut total_cpu: f32 = 0.0;
+
+    // Find all child processes recursively
+    let mut pids_to_check = vec![root_pid];
+    let mut checked_pids = std::collections::HashSet::new();
+
+    while let Some(current_pid) = pids_to_check.pop() {
+        if checked_pids.contains(&current_pid) {
+            continue;
+        }
+        checked_pids.insert(current_pid);
+
+        if let Some(process) = system.process(current_pid) {
+            total_memory += process.memory();
+            total_cpu += process.cpu_usage();
+
+            // Find immediate children of this process
+            for (child_pid, child_process) in system.processes() {
+                if child_process.parent() == Some(current_pid) && !checked_pids.contains(child_pid) {
+                    pids_to_check.push(*child_pid);
+                }
+            }
+        }
+    }
+
+    let memory_mb = total_memory as f64 / 1024.0 / 1024.0;
+
+    Ok(ProcessStats {
+        pid,
+        cpu_usage: total_cpu,
+        memory_usage: total_memory,
+        memory_usage_mb: memory_mb,
+    })
 }
 
 /// Get resource usage for the Codelane app (including all child processes like WebView)
