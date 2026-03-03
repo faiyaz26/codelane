@@ -11,6 +11,7 @@ use crate::paths;
 use super::manifest::{Extension, ExtensionManifest};
 use super::rpc::{JsonRpcRequest, JsonRpcResponse, handle_request};
 
+#[derive(Clone)]
 pub struct ExtensionState {
     pub extensions: Arc<Mutex<HashMap<String, Extension>>>,
     pub last_scanned: Arc<Mutex<Option<std::time::Instant>>>,

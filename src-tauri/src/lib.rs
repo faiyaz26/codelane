@@ -50,7 +50,7 @@ pub fn run() {
             // Expected format: extensions/{id}/{path}
             if let Some(rest) = path_part.strip_prefix("extensions/") {
                 let parts: Vec<&str> = rest.splitn(2, '/').collect();
-                if parts.length() == 2 {
+                if parts.len() == 2 {
                     let extension_id = parts[0];
                     let relative_path = parts[1];
                     
@@ -75,7 +75,7 @@ pub fn run() {
                                 .header("Content-Type", mime_type)
                                 .header("Access-Control-Allow-Origin", "*")
                                 .body(content)
-                                .map_err(|_| tauri::Error::FailedToSendMessage);
+                                .unwrap();
                         }
                     }
                 }
@@ -84,7 +84,7 @@ pub fn run() {
             tauri::http::Response::builder()
                 .status(404)
                 .body(Vec::new())
-                .map_err(|_| tauri::Error::FailedToSendMessage)
+                .unwrap()
         })
         // Manage extension state
         .manage(extension::ExtensionState::new())
