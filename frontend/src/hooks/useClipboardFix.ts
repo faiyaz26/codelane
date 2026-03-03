@@ -20,7 +20,9 @@ export function useClipboardFix() {
         target?.closest?.('.xterm') || 
         target?.classList?.contains('xterm') ||
         target?.classList?.contains('xterm-helper-textarea') ||
-        target?.closest?.('.xterm-helper-textarea')
+        target?.closest?.('.xterm-helper-textarea') ||
+        (target?.className && typeof target.className === 'string' && target.className.includes('xterm')) ||
+        (target?.closest && target.closest('[class*="xterm"]'))
       ) return;
 
       if (e.key === 'c' || e.key === 'x') {
@@ -112,7 +114,9 @@ export function useClipboardFix() {
         target?.closest?.('.xterm') || 
         target?.classList?.contains('xterm') ||
         target?.classList?.contains('xterm-helper-textarea') ||
-        target?.closest?.('.xterm-helper-textarea')
+        target?.closest?.('.xterm-helper-textarea') ||
+        (target?.className && typeof target.className === 'string' && target.className.includes('xterm')) ||
+        (target?.closest && target.closest('[class*="xterm"]'))
       ) return;
 
       // Prevent the native paste action
