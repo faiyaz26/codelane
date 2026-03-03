@@ -82,6 +82,24 @@ jobs:
             echo "value=v$VERSION" >> $GITHUB_OUTPUT
           fi
 
+      - name: Get Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.value }}"
+          FILE="changelogs/${TAG}.md"
+          if [ -f "$FILE" ]; then
+            echo "Using release notes from $FILE"
+            # Using a multi-line output for GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            cat "$FILE" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "No release notes found at $FILE, using default body"
+            echo "body=Release for Codelane $TAG" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and Release with Tauri Action
         uses: tauri-apps/tauri-action@v0
         env:
@@ -98,7 +116,7 @@ jobs:
         with:
           tagName: ${{ steps.tag.outputs.value }}
           releaseName: "Codelane ${{ steps.tag.outputs.value }}"
-          releaseBody: "Release for Codelane ${{ steps.tag.outputs.value }}"
+          releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
