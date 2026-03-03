@@ -1,15 +1,10 @@
 import { Show, createSignal, createEffect } from 'solid-js';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { invoke } from '@tauri-apps/api/core';
 import { isMacOS } from '../../lib/platform';
 import { initGitRepo } from '../../lib/git-api';
 import { useGitService } from '../../hooks/useGitService';
 import { CommitDialog } from '../git';
 import { ActivityView } from './ActivityBar';
-import { editorStateManager } from '../../services/EditorStateManager';
-import { aiReviewService } from '../../services/AIReviewService';
-import { getReviewTool } from '../../lib/settings-api';
-import { codeReviewSettingsManager } from '../../services/CodeReviewSettingsManager';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import GitPullRequestCreateArrowIcon from '../icons/GitPullRequestCreateArrowIcon';
 import type { Lane } from '../../types/lane';
@@ -29,7 +24,6 @@ interface TopBarProps {
 export function TopBar(props: TopBarProps) {
   const [isInitializing, setIsInitializing] = createSignal(false);
   const [commitDialogOpen, setCommitDialogOpen] = createSignal(false);
-  const [isGeneratingReview, setIsGeneratingReview] = createSignal(false);
   const [projectName, setProjectName] = createSignal<string | null>(null);
 
   // Use centralized git watcher service (shared with ChangesView)
@@ -73,75 +67,6 @@ export function TopBar(props: TopBarProps) {
     await gitWatcher.refresh();
     // Refresh code review if callback provided
     props.onRefreshCodeReview?.();
-  };
-
-  const handleGenerateAIReview = async () => {
-    if (!props.activeLaneId || !props.effectiveWorkingDir) return;
-
-    setIsGeneratingReview(true);
-
-    try {
-      // Use the same AI tool as the main coding agent
-      const tool = await getReviewTool();
-
-      // Get list of changed files
-      const status = gitWatcher.gitStatus();
-      if (!status) {
-        throw new Error('No git status available');
-      }
-
-      // Collect all changed files
-      const changedFiles = [
-        ...status.staged.map(f => f.path),
-        ...status.unstaged.map(f => f.path),
-      ];
-
-      let diffContent = '';
-
-      // Get diffs for all files
-      for (const filePath of changedFiles) {
-        try {
-          const diff = await invoke<string>('git_diff', {
-            path: props.effectiveWorkingDir,
-            file: filePath,
-            staged: false,
-          });
-          diffContent += `\n\n# File: ${filePath}\n${diff}`;
-        } catch (error) {
-          console.error(`Failed to get diff for ${filePath}:`, error);
-        }
-      }
-
-      // Generate review
-      const model = codeReviewSettingsManager.getReviewModel() || undefined;
-      const result = await aiReviewService.generateReview({
-        tool,
-        diffContent,
-        workingDir: props.effectiveWorkingDir,
-        model,
-      });
-
-      // Open result in temporary markdown file
-      const content = result.success
-        ? result.content
-        : `# Error\n\n${result.error || 'Failed to generate review'}`;
-
-      const timestamp = new Date().toLocaleString();
-      const title = `AI Summary - ${timestamp}.md`;
-
-      await editorStateManager.openTemporaryMarkdown(props.activeLaneId, title, content);
-    } catch (error) {
-      // Open error in temporary markdown file
-      if (props.activeLaneId) {
-        await editorStateManager.openTemporaryMarkdown(
-          props.activeLaneId,
-          'AI Summary - Error.md',
-          `# Error\n\n${error}`
-        );
-      }
-    } finally {
-      setIsGeneratingReview(false);
-    }
   };
 
   const handleTitleBarMouseDown = async (e: MouseEvent) => {
@@ -286,16 +211,8 @@ export function TopBar(props: TopBarProps) {
                 })()}
               </Show>
 
-              {/* Show "AI Summary" and "Commit" buttons when IN Git Manager tab */}
+              {/* Show only "Commit" button when IN Git Manager tab (AI summary is now part of Review tab) */}
               <Show when={props.activeView === ActivityView.GitManager}>
-                <button
-                  onClick={handleGenerateAIReview}
-                  disabled={isGeneratingReview()}
-                  class="px-4 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                  title="Generate AI summary"
-                >
-                  {isGeneratingReview() ? '🤖 Generating...' : '🤖 AI Summary'}
-                </button>
                 <button
                   class="px-4 py-1.5 text-xs bg-zed-accent-blue text-white rounded-md hover:opacity-90 transition-opacity"
                   onClick={() => setCommitDialogOpen(true)}
