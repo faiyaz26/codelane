@@ -229,8 +229,17 @@ pub fn get_app_resource_usage(state: State<'_, crate::terminal::TerminalState>) 
     if process_count > 0 {
         let memory_mb = total_memory as f64 / 1024.0 / 1024.0;
         
-        // Refresh total memory info once per call for accurate percentage
+        // Refresh total system info for normalization
+        system.refresh_cpu_usage();
         system.refresh_memory();
+        
+        let cpu_count = system.cpus().len() as f32;
+        let normalized_cpu = if cpu_count > 0.0 {
+            total_cpu / cpu_count
+        } else {
+            total_cpu
+        };
+
         let total_system_memory = system.total_memory();
         
         let memory_percent = if total_system_memory > 0 {
@@ -240,7 +249,7 @@ pub fn get_app_resource_usage(state: State<'_, crate::terminal::TerminalState>) 
         };
 
         Ok(AppResourceUsage {
-            cpu_percent: total_cpu,
+            cpu_percent: normalized_cpu,
             memory_mb,
             memory_percent,
         })
@@ -348,7 +357,7 @@ mod tests {
     #[test]
     fn test_get_app_resource_usage() {
         // Mock state
-        let terminal_state = crate::terminal::TerminalState::new();
+        let _terminal_state = crate::terminal::TerminalState::new();
         // Since we can't easily construct a tauri::State in a unit test without 
         // full app setup, we skip the actual call if it requires complex state injection.
         // But let's try a simple approach if possible.
