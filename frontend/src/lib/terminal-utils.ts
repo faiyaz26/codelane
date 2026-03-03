@@ -130,20 +130,6 @@ export function attachKeyHandlers(
       return false;
     }
 
-    // Cmd/Ctrl+V: paste from clipboard
-    if (isMod && event.key === 'v') {
-      readText().then((text) => {
-        if (text) {
-          // Use terminal.paste() instead of writeToPty() so xterm handles
-          // bracketed paste mode and newlines properly before emitting onData
-          terminal.paste(text);
-        }
-      }).catch((err) => {
-        console.error('[terminal] Failed to paste from clipboard:', err);
-      });
-      return false;
-    }
-
     // Shift+Enter: Claude Code compatibility
     if (event.key === 'Enter' && event.shiftKey) {
       sendShiftEnter();

@@ -455,7 +455,7 @@ pub async fn write_terminal(
         .flush()
         .map_err(|e| format!("Failed to flush PTY: {}", e))?;
 
-    tracing::trace!("Wrote {} bytes to terminal {}", data.len(), id);
+    tracing::info!("Wrote {} bytes to terminal {}", data.len(), id);
 
     Ok(())
 }
