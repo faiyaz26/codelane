@@ -68,8 +68,11 @@ export function MainLayout(props: MainLayoutProps) {
       const activeTabId = tabManager.getActiveTab(laneId)();
       const tabs = tabManager.getTabs(laneId)();
       const activeTab = tabs.find(t => t.id === activeTabId);
-      return activeTab?.type === 'extension';
+      const isExt = activeTab?.type === 'extension';
+      console.info(`[MainLayout] isExtensionTabActive for lane ${laneId}: ${isExt} (tab: ${activeTabId}, type: ${activeTab?.type})`);
+      return isExt;
     } catch (e) {
+      console.error('[MainLayout] Error checking extension tab state:', e);
       return false;
     }
   });
@@ -223,7 +226,7 @@ export function MainLayout(props: MainLayoutProps) {
                 {/* Main content row */}
                 <div class="flex-1 flex overflow-hidden">
                   {/* Agent Terminal - Always rendered, hidden in Git Manager, Code Review, extension tabs, and PR review lanes */}
-                  <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || isExtensionTabActive() || currentLane().laneType === 'pr_review' || !!currentLane().prMetadata) ? 'none' : 'contents' }}>
+                  <Show when={!(activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || isExtensionTabActive() || currentLane().laneType === 'pr_review' || !!currentLane().prMetadata)}>
                     <AgentTerminalPanel
                       lanes={props.lanes}
                       activeLaneId={props.activeLaneId}
@@ -237,7 +240,7 @@ export function MainLayout(props: MainLayoutProps) {
                       onAgentFailed={props.onAgentFailed}
                       onReloadAgentTerminal={props.onReloadAgentTerminal}
                     />
-                  </div>
+                  </Show>
 
                   {/* Code Review - takes over main content area */}
                   <Show when={activeView() === ActivityView.CodeReview}>
