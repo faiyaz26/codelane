@@ -621,7 +621,7 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
 name = "codelane-benchmarks"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "codelane-core",
  "codelane-git",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-core"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-git"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "codelane-core",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-lsp"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "codelane-core",
@@ -685,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-tauri"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-terminal"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "codelane-core",

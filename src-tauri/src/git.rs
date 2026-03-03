@@ -187,10 +187,12 @@ fn build_windows_cmd(cmd_path: &str, args: Vec<String>) -> (String, Vec<String>)
         format!("\"{}\"", cmd_path)
     };
     for arg in args {
-        // Simple quoting for Windows cmd
+        // Simple quoting for Windows cmd: escape double quotes by doubling them
         full_cmd.push_str(&format!(" \"{}\"", arg.replace('"', "\"\"")));
     }
-    ("cmd".to_string(), vec!["/C".to_string(), full_cmd])
+    // For cmd /C, if the command string is quoted, it's often safer to wrap the entire 
+    // string in ANOTHER set of quotes because cmd.exe stripping logic is peculiar.
+    ("cmd".to_string(), vec!["/C".to_string(), format!("\"{}\"", full_cmd)])
 }
 
 // ============================================================================
@@ -1789,6 +1791,9 @@ mod tests {
         
         assert_eq!(shell, "cmd");
         assert_eq!(shell_args[0], "/C");
+        // The entire command string should be wrapped in quotes
+        assert!(shell_args[1].starts_with('"'));
+        assert!(shell_args[1].ends_with('"'));
         assert!(shell_args[1].contains("git"));
         assert!(shell_args[1].contains("\"status\""));
         assert!(shell_args[1].contains("\"-s\""));

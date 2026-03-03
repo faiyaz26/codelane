@@ -97,6 +97,33 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        // Windows: Use PowerShell to find processes with the specific environment variable
+        // We look for the process whose command line contains the lane ID, as environment 
+        // variables are inherited by child processes (like the shell we spawn).
+        let output = Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(format!(
+                "Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*CODELANE_LANE_ID={0}*' }} | Select-Object -ExpandProperty ProcessId -First 1",
+                lane_id
+            ))
+            .output()
+            .map_err(|e| format!("Failed to execute powershell command: {}", e))?;
+
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !pid_str.is_empty() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    return Ok(Some(pid));
+                }
+            }
+        }
+    }
+
     Ok(None)
 }
 

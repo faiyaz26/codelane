@@ -175,13 +175,25 @@ pub async fn create_terminal(
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
     // Determine the user's login shell for wrapping commands
-    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let is_shell_command = shell_cmd.contains("zsh") || shell_cmd.contains("bash") || shell_cmd.contains("fish");
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            "powershell.exe".to_string()
+        } else {
+            "/bin/zsh".to_string()
+        }
+    });
+
+    let is_shell_command = shell_cmd.contains("zsh") 
+        || shell_cmd.contains("bash") 
+        || shell_cmd.contains("fish")
+        || shell_cmd.contains("powershell")
+        || shell_cmd.contains("pwsh")
+        || shell_cmd.contains("cmd.exe");
 
     // Build the command
-    // For non-shell commands, wrap in a login shell to ensure .zshrc/.bashrc is sourced
+    // For non-shell commands on Unix, wrap in a login shell to ensure .zshrc/.bashrc is sourced
     // This ensures PATH and other environment variables from shell init files are available
-    let mut cmd = if !is_shell_command {
+    let mut cmd = if !is_shell_command && cfg!(unix) {
         // Wrap the command in a login shell: zsh -l -c 'command args...'
         let mut full_command = shell_cmd.clone();
         if let Some(ref cmd_args) = args {
@@ -202,7 +214,7 @@ pub async fn create_terminal(
         wrapper.arg(&full_command);
         wrapper
     } else {
-        // For shell commands, run directly
+        // For shell commands, or on Windows, run directly
         let mut wrapper = CommandBuilder::new(&shell_cmd);
 
         // Add arguments if provided
@@ -210,8 +222,8 @@ pub async fn create_terminal(
             for arg in cmd_args {
                 wrapper.arg(arg);
             }
-        } else {
-            // For zsh/bash without explicit args, use login shell mode
+        } else if cfg!(unix) {
+            // For zsh/bash without explicit args on Unix, use login shell mode
             wrapper.arg("-l");  // Login shell
             wrapper.arg("-i");  // Interactive
         }
