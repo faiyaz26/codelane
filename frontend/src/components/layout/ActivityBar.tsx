@@ -2,6 +2,7 @@ import { For } from 'solid-js';
 import codelaneLogoWhite from '../../assets/codelane-logo-white.png';
 import codelaneLogoDark from '../../assets/codelane-logo-dark.png';
 import { themeManager } from '../../services/ThemeManager';
+import { isDev } from '../../lib/platform';
 
 export enum ActivityView {
   Explorer = 'explorer',
@@ -140,11 +141,18 @@ export function ActivityBar(props: ActivityBarProps) {
   const currentTheme = themeManager.getTheme();
   const logoSrc = () => currentTheme() === 'light' ? codelaneLogoDark : codelaneLogoWhite;
 
+  const filteredItems = () => ACTIVITY_ITEMS.filter(item => {
+    if (item.id === ActivityView.Extensions) {
+      return isDev();
+    }
+    return true;
+  });
+
   return (
     <div class="w-14 bg-zed-bg-panel border-l border-zed-border-subtle flex flex-col">
       {/* Top Activity Icons */}
       <div class="flex-1 flex flex-col items-center pt-2 gap-1">
-        <For each={ACTIVITY_ITEMS}>
+        <For each={filteredItems()}>
           {(item) => (
             <button
               class={`w-10 h-10 flex items-center justify-center rounded transition-colors relative ${

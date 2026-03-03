@@ -57,6 +57,13 @@ export function getPlatformSync(): Platform {
 }
 
 /**
+ * Check if running in development mode
+ */
+export function isDev(): boolean {
+  return import.meta.env.DEV;
+}
+
+/**
  * Check if running on macOS
  */
 export function isMacOS(): boolean {
