@@ -8,12 +8,17 @@ import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
  */
 export function useClipboardFix() {
   onMount(() => {
-    const handleClipboard = async (e: KeyboardEvent) => {
+    /**
+     * Intercept keyboard shortcuts for Copy/Cut/SelectAll.
+     * Paste (Cmd+V) is intentionally handled via the 'paste' event (handleNativePaste)
+     * to avoid double-pasting and ensure compatibility with Edit menu actions.
+     */
+    const handleKeyboardShortcuts = async (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
 
-      // Skip if target is inside a terminal (xterm handles its own clipboard)
       const target = e.target as HTMLElement;
-      if (target.closest('.xterm')) return;
+      // Skip if target is inside a terminal (xterm handles its own clipboard)
+      if (target?.closest?.('.xterm')) return;
 
       if (e.key === 'c' || e.key === 'x') {
         const selection = window.getSelection();
@@ -28,83 +33,70 @@ export function useClipboardFix() {
             }
           }
         }
-      } else if (e.key === 'v') {
-        // Always intercept paste to use Tauri clipboard API.
-        // This prevents WebKit's native NSPasteboard access which can crash
-        // due to a macOS bug with stale clipboard type cache pointers.
-        e.preventDefault();
-        const text = await readText();
-        if (text) {
-          if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-            const start = target.selectionStart ?? 0;
-            const end = target.selectionEnd ?? 0;
-            const currentValue = target.value;
-            // Use native input setter to trigger reactive frameworks
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-              target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-              'value'
-            )?.set;
-            nativeInputValueSetter?.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
-            target.dispatchEvent(new Event('input', { bubbles: true }));
-            // Restore cursor position after paste
-            const newPos = start + text.length;
-            target.setSelectionRange(newPos, newPos);
-          } else if (target.isContentEditable) {
-            // Handle contenteditable elements (e.g., code editors)
-            document.execCommand('insertText', false, text);
-          } else {
-            // For any other focusable element, dispatch a paste-like event
-            // so downstream handlers can pick it up if needed
-            target.dispatchEvent(new CustomEvent('tauri-paste', { detail: text, bubbles: true }));
-          }
-        }
       } else if (e.key === 'a') {
-        // Cmd+A: select all in input fields (ensure it works)
+        // Cmd+A: ensure it works in input fields
         if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
           // Let native behavior handle it
           return;
         }
       }
+      // Note: 'v' is NOT handled here to prevent double-pasting. 
+      // Most browsers trigger a 'paste' event even when Cmd+V is prevented on keydown,
+      // or they trigger 'paste' if we don't prevent it.
     };
 
-    // Intercept native paste events (from Edit menu, context menu, execCommand)
-    // to prevent WebKit's NSPasteboard access which can crash on macOS.
+    /**
+     * Intercept native paste events (from Cmd+V, Edit menu, context menu).
+     * We use the Tauri clipboard API to prevent WebKit's native NSPasteboard access 
+     * which can crash on macOS due to stale pointer bugs.
+     */
     const handleNativePaste = async (e: ClipboardEvent) => {
       const target = e.target as HTMLElement;
+      
       // Skip terminals (xterm handles its own clipboard)
-      if (target.closest('.xterm')) return;
+      if (target?.closest?.('.xterm')) return;
 
+      // Prevent the native paste action
       e.preventDefault();
       e.stopPropagation();
 
-      // Get text from the clipboard event data if available, otherwise use Tauri API
-      let text = e.clipboardData?.getData('text/plain');
-      if (!text) {
-        text = await readText();
-      }
+      // Read text from Tauri clipboard API (more reliable than event.clipboardData in this context)
+      const text = await readText();
       if (!text) return;
 
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
         const start = target.selectionStart ?? 0;
         const end = target.selectionEnd ?? 0;
         const currentValue = target.value;
+        
+        // Use native input setter to trigger reactive frameworks (Solid/React)
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
           target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
           'value'
         )?.set;
+        
         nativeInputValueSetter?.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
+        
+        // Trigger input event so the framework knows the value changed
         target.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // Restore/set cursor position after paste
         const newPos = start + text.length;
         target.setSelectionRange(newPos, newPos);
-      } else if (target.isContentEditable) {
+      } else if (target instanceof HTMLElement && target.isContentEditable) {
+        // Handle contenteditable elements
         document.execCommand('insertText', false, text);
+      } else if (target instanceof HTMLElement) {
+        // For any other focusable element, dispatch a custom event
+        target.dispatchEvent(new CustomEvent('tauri-paste', { detail: text, bubbles: true }));
       }
     };
 
-    document.addEventListener('keydown', handleClipboard);
+    document.addEventListener('keydown', handleKeyboardShortcuts);
     document.addEventListener('paste', handleNativePaste, true); // capture phase
+    
     onCleanup(() => {
-      document.removeEventListener('keydown', handleClipboard);
+      document.removeEventListener('keydown', handleKeyboardShortcuts);
       document.removeEventListener('paste', handleNativePaste, true);
     });
   });
