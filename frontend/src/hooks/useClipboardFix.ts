@@ -16,7 +16,7 @@ export function useClipboardFix() {
 
       const target = e.target as HTMLElement;
       // Skip if target is inside a terminal (xterm handles its own clipboard)
-      if (target?.closest?.('.xterm')) return;
+      if (target?.closest?.('.xterm') || target?.classList?.contains('xterm')) return;
 
       if (e.key === 'c' || e.key === 'x') {
         const selection = window.getSelection();
@@ -35,8 +35,8 @@ export function useClipboardFix() {
         // ALWAYS prevent default for Cmd+V.
         // If we don't, the browser will perform a native paste AND also 
         // trigger a 'paste' event which we also handle, leading to double-paste.
-        // By preventing it here, we handle the paste once.
         e.preventDefault();
+        e.stopPropagation();
         
         // Manual paste trigger
         handleManualPaste(target);
@@ -55,35 +55,42 @@ export function useClipboardFix() {
     const handleManualPaste = async (target: HTMLElement) => {
       if (!target) return;
       
-      // Read text from Tauri clipboard API
-      const text = await readText();
-      if (!text) return;
+      try {
+        // Read text from Tauri clipboard API
+        const text = await readText();
+        
+        if (!text) return;
 
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        const start = target.selectionStart ?? 0;
-        const end = target.selectionEnd ?? 0;
-        const currentValue = target.value;
-        
-        // Use native input setter to trigger reactive frameworks (Solid/React)
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-          'value'
-        )?.set;
-        
-        nativeInputValueSetter?.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
-        
-        // Trigger input event so the framework knows the value changed
-        target.dispatchEvent(new Event('input', { bubbles: true }));
-        
-        // Restore/set cursor position after paste
-        const newPos = start + text.length;
-        target.setSelectionRange(newPos, newPos);
-      } else if (target instanceof HTMLElement && target.isContentEditable) {
-        // Handle contenteditable elements
-        document.execCommand('insertText', false, text);
-      } else if (target instanceof HTMLElement) {
-        // For any other focusable element, dispatch a custom event
-        target.dispatchEvent(new CustomEvent('tauri-paste', { detail: text, bubbles: true }));
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+          const start = target.selectionStart ?? 0;
+          const end = target.selectionEnd ?? 0;
+          const currentValue = target.value;
+          
+          // Use native input setter to trigger reactive frameworks (Solid/React)
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+            'value'
+          )?.set;
+          
+          if (nativeInputValueSetter) {
+            nativeInputValueSetter.call(target, currentValue.slice(0, start) + text + currentValue.slice(end));
+          } else {
+            target.value = currentValue.slice(0, start) + text + currentValue.slice(end);
+          }
+          
+          // Trigger input event so the framework knows the value changed
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          // Restore/set cursor position after paste
+          const newPos = start + text.length;
+          target.setSelectionRange(newPos, newPos);
+        } else if (target instanceof HTMLElement && target.isContentEditable) {
+          document.execCommand('insertText', false, text);
+        } else if (target instanceof HTMLElement) {
+          target.dispatchEvent(new CustomEvent('tauri-paste', { detail: text, bubbles: true }));
+        }
+      } catch (error) {
+        console.error('[ClipboardFix] CRITICAL ERROR during paste operation:', error);
       }
     };
 
@@ -96,7 +103,7 @@ export function useClipboardFix() {
       const target = e.target as HTMLElement;
       
       // Skip terminals (xterm handles its own clipboard)
-      if (target?.closest?.('.xterm')) return;
+      if (target?.closest?.('.xterm') || target?.classList?.contains('xterm')) return;
 
       // Prevent the native paste action
       e.preventDefault();
