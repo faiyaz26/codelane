@@ -8,6 +8,13 @@ This document contains instructions for AI agents working on this project.
 - Write clear, concise commit messages following conventional commits format
 - Focus on the "why" not the "what" in commit messages
 
+## Release Notes Mandate
+
+Whenever you perform a **version bump** or complete a **major feature set**, you **MUST** create or update a markdown file in the `changelogs/` directory:
+- Path: `changelogs/v<VERSION>.md` (e.g., `changelogs/v0.2.3.md`)
+- Content: A summary of Features, Improvements, and Bug Fixes.
+- Purpose: These notes are automatically included in the GitHub Release via CI.
+
 ## Documentation Guidelines
 
 **DO NOT create these types of files:**
