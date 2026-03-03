@@ -12,7 +12,14 @@ export interface ExtensionContext {
 class ExtensionLoader {
   private registeredTabs = new Map<string, Component<any>>();
   private loadedExtensions = new Set<string>();
-  private [extensions, setExtensions] = createSignal<ExtensionManifest[]>([]);
+  private extensions: () => ExtensionManifest[];
+  private setExtensions: (exts: ExtensionManifest[]) => void;
+
+  constructor() {
+    const [extensions, setExtensions] = createSignal<ExtensionManifest[]>([]);
+    this.extensions = extensions;
+    this.setExtensions = setExtensions;
+  }
 
   /**
    * Initialize and load enabled extensions
@@ -20,7 +27,7 @@ class ExtensionLoader {
   async initialize(): Promise<void> {
     try {
       const allExtensions = await listExtensions();
-      setExtensions(allExtensions);
+      this.setExtensions(allExtensions);
       
       // For now, we "auto-load" all discovered extensions that have a frontend
       for (const ext of allExtensions) {
