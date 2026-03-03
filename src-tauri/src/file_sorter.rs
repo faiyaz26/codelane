@@ -56,8 +56,8 @@ fn patterns() -> &'static CategoryPatterns {
             // Build configs
             Regex::new(r"^(Makefile|CMakeLists\.txt|meson\.build|BUILD|WORKSPACE)$").unwrap(),
             // CI/CD
-            Regex::new(r"^\.github/workflows/").unwrap(),
-            Regex::new(r"^(\.gitlab-ci\.yml|\.circleci/|\.travis\.yml|azure-pipelines\.yml)").unwrap(),
+            Regex::new(r"^\.github[/\\]workflows[/\\]").unwrap(),
+            Regex::new(r"^(\.gitlab-ci\.yml|\.circleci[/\\]|\.travis\.yml|azure-pipelines\.yml)").unwrap(),
             // Build tool configs
             Regex::new(r"^(tsconfig|vite\.config|webpack\.config|rollup\.config|tailwind\.config|postcss\.config|jest\.config|vitest\.config)\.(json|ts|js|mjs)$").unwrap(),
             // Linter/formatter configs
@@ -69,9 +69,9 @@ fn patterns() -> &'static CategoryPatterns {
             // C/C++ headers
             Regex::new(r"\.(h|hpp|hxx|hh)$").unwrap(),
             // Type/interface/model directories
-            Regex::new(r"/(types|interfaces|models|schemas?|dtos?)/").unwrap(),
+            Regex::new(r"[/\\](types|interfaces|models|schemas?|dtos?)[/\\]").unwrap(),
             // Type files
-            Regex::new(r"/(types|interfaces)\.(ts|tsx|rs|py|go)$").unwrap(),
+            Regex::new(r"[/\\](types|interfaces)\.(ts|tsx|rs|py|go)$").unwrap(),
             // Protocol definitions
             Regex::new(r"\.(proto|graphql|thrift|avsc)$").unwrap(),
             // OpenAPI/Swagger
@@ -82,10 +82,10 @@ fn patterns() -> &'static CategoryPatterns {
             Regex::new(r"\.(test|spec)\.(ts|tsx|js|jsx|rs|py|go|rb|java|kt)$").unwrap(),
             Regex::new(r"_(test|spec)\.(ts|tsx|js|jsx|rs|py|go|rb)$").unwrap(),
             // Test directories
-            Regex::new(r"^__tests__/").unwrap(),
-            Regex::new(r"^(tests?|specs?)/").unwrap(),
-            Regex::new(r"/tests?/").unwrap(),
-            Regex::new(r"/specs?/").unwrap(),
+            Regex::new(r"^__tests__[/\\]").unwrap(),
+            Regex::new(r"^(tests?|specs?)[/\\]").unwrap(),
+            Regex::new(r"[/\\]tests?[/\\]").unwrap(),
+            Regex::new(r"[/\\]specs?[/\\]").unwrap(),
             // Specific test patterns
             Regex::new(r"Test\.(java|kt|swift)$").unwrap(),
             Regex::new(r"Tests\.(swift|cs)$").unwrap(),
@@ -96,11 +96,11 @@ fn patterns() -> &'static CategoryPatterns {
             // Lock files
             Regex::new(r"^(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|Gemfile\.lock|poetry\.lock|composer\.lock)$").unwrap(),
             // Vendored/dependencies
-            Regex::new(r"^(vendor|node_modules|dist|build|target|out)/").unwrap(),
+            Regex::new(r"^(vendor|node_modules|dist|build|target|out)[/\\]").unwrap(),
             // Protobuf generated
             Regex::new(r"\.pb\.(go|rs|py)$").unwrap(),
             // GraphQL generated
-            Regex::new(r"(generated|__generated__)/.*\.(ts|tsx)$").unwrap(),
+            Regex::new(r"(generated|__generated__)[/\\].*\.(ts|tsx)$").unwrap(),
         ],
         documentation: vec![
             // Markdown
@@ -108,7 +108,7 @@ fn patterns() -> &'static CategoryPatterns {
             // Common doc files
             Regex::new(r"^(README|CHANGELOG|LICENSE|CONTRIBUTING|CODE_OF_CONDUCT|AUTHORS)").unwrap(),
             // Doc directories
-            Regex::new(r"^(docs?|documentation)/").unwrap(),
+            Regex::new(r"^(docs?|documentation)[/\\]").unwrap(),
         ],
     })
 }
@@ -194,7 +194,9 @@ fn find_matching_test<'a>(impl_path: &str, test_files: &[&'a FileChangeStats]) -
             .trim_end_matches("Test.kt")
             .trim_end_matches("Tests.swift");
 
-        test_base == base_name || test_base.ends_with(&format!("/{}", base_name.split('/').last().unwrap_or("")))
+        test_base == base_name || 
+        test_base.ends_with(&format!("/{}", base_name.split('/').last().unwrap_or(""))) ||
+        test_base.ends_with(&format!("\\{}", base_name.split('\\').last().unwrap_or("")))
     }).copied()
 }
 

@@ -1266,7 +1266,7 @@ mod tests {
         assert!(result.is_ok());
 
         let path = result.unwrap();
-        let path_str = path.to_string_lossy();
+        let path_str = path.to_string_lossy().to_lowercase().replace("\\", "/");
 
         // Should contain .codelane/<env>/worktrees
         assert!(path_str.contains(".codelane/dev/worktrees"));

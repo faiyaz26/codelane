@@ -71,7 +71,8 @@ fn extract_file_dependencies(
 
 /// Normalize a file path for comparison
 fn normalize_path(path: &str) -> String {
-    path.trim_start_matches("./")
+    path.replace("\\", "/")
+        .trim_start_matches("./")
         .trim_start_matches("../")
         .to_string()
 }
@@ -228,6 +229,7 @@ mod tests {
         assert_eq!(normalize_path("./src/main.ts"), "src/main.ts");
         assert_eq!(normalize_path("../utils/helper.ts"), "utils/helper.ts");
         assert_eq!(normalize_path("src/app.ts"), "src/app.ts");
+        assert_eq!(normalize_path(".\\src\\main.ts"), "src/main.ts");
     }
 
     #[test]
