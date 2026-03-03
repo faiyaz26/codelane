@@ -175,7 +175,7 @@ pub async fn create_terminal(
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
     // Determine the user's login shell for wrapping commands
-    let login_shell = std::env::var("SHELL").unwrap_or_else(|| {
+    let login_shell = std::env::var("SHELL").unwrap_or_else(|_| {
         if cfg!(target_os = "windows") {
             "powershell.exe".to_string()
         } else {
