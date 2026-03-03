@@ -14,6 +14,7 @@ import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
 import { initPlatform } from './lib/platform';
 
 import { tabManager } from './services/TabManager';
+import { extensionLoader } from './services/ExtensionLoader';
 import { agentNotificationService } from './services/AgentNotificationService';
 import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
@@ -67,6 +68,9 @@ function App() {
   onMount(async () => {
     // Initialize platform detection (static, only done once)
     await initPlatform();
+
+    // Initialize extension system
+    await extensionLoader.initialize();
 
     // Load agent settings
     try {

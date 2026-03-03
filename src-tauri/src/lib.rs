@@ -42,6 +42,50 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
+        // Register custom URI scheme for extension assets
+        .register_uri_scheme_protocol("codelane-assets", |_app, request| {
+            let uri = request.uri().to_string();
+            let path_part = uri.strip_prefix("codelane-assets://").unwrap_or("");
+            
+            // Expected format: extensions/{id}/{path}
+            if let Some(rest) = path_part.strip_prefix("extensions/") {
+                let parts: Vec<&str> = rest.splitn(2, '/').collect();
+                if parts.length() == 2 {
+                    let extension_id = parts[0];
+                    let relative_path = parts[1];
+                    
+                    let extension_dir = paths::extensions_dir().join(extension_id);
+                    let file_path = extension_dir.join(relative_path);
+                    
+                    // Security: ensure the file is within the extensions directory
+                    if file_path.starts_with(&extension_dir) && file_path.exists() {
+                        if let Ok(content) = std::fs::read(file_path) {
+                            let mime_type = match rest.split('.').last() {
+                                Some("js") => "application/javascript",
+                                Some("css") => "text/css",
+                                Some("html") => "text/html",
+                                Some("png") => "image/png",
+                                Some("jpg") | Some("jpeg") => "image/jpeg",
+                                Some("svg") => "image/svg+xml",
+                                Some("json") => "application/json",
+                                _ => "application/octet-stream",
+                            };
+                            
+                            return tauri::http::Response::builder()
+                                .header("Content-Type", mime_type)
+                                .header("Access-Control-Allow-Origin", "*")
+                                .body(content)
+                                .map_err(|_| tauri::Error::FailedToSendMessage);
+                        }
+                    }
+                }
+            }
+            
+            tauri::http::Response::builder()
+                .status(404)
+                .body(Vec::new())
+                .map_err(|_| tauri::Error::FailedToSendMessage)
+        })
         // Manage extension state
         .manage(extension::ExtensionState::new())
         // Manage lane state

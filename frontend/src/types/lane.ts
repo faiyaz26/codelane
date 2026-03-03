@@ -14,6 +14,8 @@ export interface Tab {
   title: string;
   sortOrder: number;
   createdAt: number;
+  extensionId?: string;
+  metadata?: Record<string, any>;
 }
 
 /**
