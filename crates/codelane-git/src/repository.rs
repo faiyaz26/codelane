@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use gix::bstr::ByteSlice;
 
 use crate::{Error, Result};
+use crate::diff::compute_diff;
 
 /// Git repository wrapper
 pub struct Repository {
@@ -68,7 +69,7 @@ impl Repository {
 
     /// Get the diff for the repository
     pub fn diff(&self, file: Option<&str>, staged: bool) -> Result<String> {
-        crate::diff::compute_diff(&self.repo, file, staged)
+        compute_diff(&self.repo, file, staged)
     }
 
     /// Get the commit log
