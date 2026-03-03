@@ -1,24 +1,14 @@
 {
   "extensions": [
     {
-      "id": "test-extension",
-      "name": "Test Extension",
-      "version": "0.1.0",
-      "description": "A test extension for JSON-RPC verification",
-      "repository": "https://github.com/google/codelane",
-      "download_url": "https://github.com/google/codelane/releases/download/ext/test-extension@v0.1.0/test-extension.zip",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "permissions": ["terminal", "lanes"]
-    },
-    {
       "id": "remote-desktop",
       "name": "Remote Desktop",
       "version": "1.0.0",
-      "description": "Access CodeLane remotely via WebRTC",
-      "repository": "https://github.com/google/codelane",
-      "download_url": "https://github.com/google/codelane/releases/download/ext/remote-desktop@v1.0.0/remote-desktop-{{platform}}.zip",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "permissions": ["terminal", "lanes", "agent", "notification"]
+      "description": "Access CodeLane remotely via WebRTC with screen sharing and terminal control.",
+      "repository": "https://github.com/google/codelane-remote",
+      "download_url": "https://github.com/google/codelane-remote/releases/download/v1.0.0/remote-desktop.zip",
+      "sha256": "placeholder-sha256",
+      "permissions": ["terminal:read", "terminal:write"]
     }
   ]
 }
