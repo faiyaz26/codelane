@@ -14,6 +14,7 @@ import { TabContent } from './TabContent';
 interface TabPanelProps {
   laneId: string;
   workingDir: string;
+  isExtensionTabActive?: boolean;
 }
 
 export function TabPanel(props: TabPanelProps) {
@@ -33,7 +34,10 @@ export function TabPanel(props: TabPanelProps) {
 
   const minHeight = 40;
   const maxHeight = () => window.innerHeight * 0.5; // 50% of viewport height
-  const panelHeight = () => (collapsed() ? minHeight : Math.min(height(), maxHeight()));
+  const panelHeight = () => {
+    if (props.isExtensionTabActive) return '100%';
+    return (collapsed() ? minHeight : Math.min(height(), maxHeight()));
+  };
 
   // Get reactive tabs and activeTabId from TabManager
   const tabs = tabManager.getTabs(props.laneId);
@@ -147,12 +151,13 @@ export function TabPanel(props: TabPanelProps) {
     <div
       class="border-t border-zed-border-subtle bg-zed-bg-panel flex flex-col"
       style={{
-        height: `${panelHeight()}px`,
-        transition: isResizing() ? 'none' : 'height 0.2s',
+        height: typeof panelHeight() === 'number' ? `${panelHeight()}px` : panelHeight(),
+        transition: isResizing() || props.isExtensionTabActive ? 'none' : 'height 0.2s',
+        flex: props.isExtensionTabActive ? '1' : 'none',
       }}
     >
       {/* Resize Handle */}
-      <Show when={!collapsed()}>
+      <Show when={!collapsed() && !props.isExtensionTabActive}>
         <div
           onMouseDown={handleMouseDown}
           class="h-1 cursor-ns-resize hover:bg-zed-accent-blue/50 active:bg-zed-accent-blue transition-colors flex-shrink-0"
@@ -163,7 +168,7 @@ export function TabPanel(props: TabPanelProps) {
       <TabBar
         tabs={tabs()}
         activeTabId={activeTabId()}
-        collapsed={collapsed()}
+        collapsed={collapsed() && !props.isExtensionTabActive}
         onToggleCollapse={handleToggleCollapse}
         onTabCreate={handleTabCreate}
         onTabClose={handleTabClose}
@@ -177,7 +182,7 @@ export function TabPanel(props: TabPanelProps) {
         style={{
           // Use clip instead of h-0/visibility:hidden so xterm.js keeps valid dimensions
           // and doesn't corrupt its internal state when collapsed
-          ...(collapsed() ? {
+          ...(collapsed() && !props.isExtensionTabActive ? {
             'clip-path': 'inset(0 0 100% 0)',
             position: 'absolute' as const,
             width: '100%',
