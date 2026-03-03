@@ -51,8 +51,8 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
 
         // Use ps to find processes with CODELANE_LANE_ID env var
         // macOS-specific: use ps with -E flag to show environment
-        let output = Command::new("sh")
-            .arg("-c")
+        let output = Command::new("zsh")
+            .arg("-lic")
             .arg(format!(
                 "ps -eo pid,command | grep -v grep | grep 'CODELANE_LANE_ID={}' | awk '{{print $1}}' | head -1",
                 lane_id
@@ -75,8 +75,8 @@ pub fn find_process_by_lane(lane_id: String) -> Result<Option<u32>, String> {
         use std::process::Command;
 
         // Linux: use /proc filesystem
-        let output = Command::new("sh")
-            .arg("-c")
+        let output = Command::new("bash")
+            .arg("-lic")
             .arg(format!(
                 "grep -l 'CODELANE_LANE_ID={}' /proc/*/environ 2>/dev/null | head -1 | cut -d/ -f3",
                 lane_id

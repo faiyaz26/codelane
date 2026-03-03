@@ -95,8 +95,24 @@ fn run_gh(args: &[&str]) -> Result<String, String> {
         _ => "gh".to_string(), // Fallback to bare command
     };
 
-    let output = Command::new(gh_path)
-        .args(args)
+    let mut command = if cfg!(unix) {
+        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let mut full_cmd = format!("'{}'", gh_path);
+        for arg in args {
+            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+        }
+        let mut cmd = Command::new(login_shell);
+        cmd.arg("-li").arg("-c").arg(full_cmd);
+        cmd
+    } else {
+        let mut cmd = Command::new(gh_path);
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
+    };
+
+    let output = command
         .output()
         .map_err(|e| format!("Failed to run gh: {}", e))?;
 

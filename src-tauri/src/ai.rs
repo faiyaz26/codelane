@@ -89,7 +89,7 @@ fn run_command(
         }
 
         let mut cmd = Command::new(login_shell);
-        cmd.arg("-l").arg("-c").arg(full_cmd);
+        cmd.arg("-li").arg("-c").arg(full_cmd);
         cmd
     } else {
         let mut cmd = Command::new(cmd_path);

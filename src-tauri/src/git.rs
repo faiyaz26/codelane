@@ -85,11 +85,7 @@ fn validate_git_path(path: &str) -> Result<String, String> {
     }
 
     // Check if we're inside a git work tree (works for both repos and worktrees)
-    let output = Command::new("git")
-        .current_dir(path)
-        .args(["rev-parse", "--is-inside-work-tree"])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let output = run_git_simple(&["rev-parse", "--is-inside-work-tree"], Some(work_dir))?;
 
     if !output.status.success() {
         return Err(format!(
@@ -103,15 +99,37 @@ fn validate_git_path(path: &str) -> Result<String, String> {
     Ok(path.to_string())
 }
 
+/// Run a git command without a specific working directory, using the login shell on Unix
+fn run_git_simple(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Output, String> {
+    let mut command = if cfg!(unix) {
+        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let mut full_cmd = "git".to_string();
+        for arg in args {
+            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+        }
+        let mut cmd = Command::new(login_shell);
+        cmd.arg("-li").arg("-c").arg(full_cmd);
+        cmd
+    } else {
+        let mut cmd = Command::new("git");
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
+    };
+
+    if let Some(path) = cwd {
+        command.current_dir(path);
+    }
+
+    command.output().map_err(|e| format!("Failed to run git: {}", e))
+}
+
 /// Find the git repository root from the given path
 /// Note: For worktrees, this returns the MAIN repo root, not the worktree path
 /// Use validate_git_path() instead when you want to work within a worktree
 fn find_repo_root(path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(path)
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let output = run_git_simple(&["rev-parse", "--show-toplevel"], Some(Path::new(path)))?;
 
     if !output.status.success() {
         return Err(format!(
@@ -125,9 +143,25 @@ fn find_repo_root(path: &str) -> Result<String, String> {
 
 /// Run a git command and return the output
 fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    let mut command = if cfg!(unix) {
+        let login_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let mut full_cmd = "git".to_string();
+        for arg in args {
+            full_cmd.push_str(&format!(" '{}'", arg.replace('\'', "'\\''")));
+        }
+        let mut cmd = Command::new(login_shell);
+        cmd.arg("-li").arg("-c").arg(full_cmd);
+        cmd
+    } else {
+        let mut cmd = Command::new("git");
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
+    };
+
+    let output = command
         .current_dir(work_dir)
-        .args(args)
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -637,11 +671,7 @@ pub async fn git_clone(url: String, path: String) -> Result<(), String> {
 
     // Run clone from the parent directory
     // Note: git clone will fail if target directory exists and is not empty
-    let output = Command::new("git")
-        .current_dir(parent_dir)
-        .args(["clone", &url, &repo_name.to_string_lossy()])
-        .output()
-        .map_err(|e| format!("Failed to run git clone: {}", e))?;
+    let output = run_git_simple(&["clone", &url, &repo_name.to_string_lossy()], Some(parent_dir))?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
@@ -656,11 +686,7 @@ pub async fn git_get_remote_url(path: String, remote: Option<String>) -> Result<
     let work_dir = Path::new(&path);
     let remote = remote.unwrap_or_else(|| "origin".to_string());
 
-    let output = Command::new("git")
-        .current_dir(work_dir)
-        .args(["remote", "get-url", &remote])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let output = run_git_simple(&["remote", "get-url", &remote], Some(work_dir))?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
@@ -678,11 +704,7 @@ pub async fn git_is_repo(path: String) -> Result<bool, String> {
         return Ok(false);
     }
 
-    let output = Command::new("git")
-        .current_dir(work_dir)
-        .args(["rev-parse", "--is-inside-work-tree"])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let output = run_git_simple(&["rev-parse", "--is-inside-work-tree"], Some(work_dir))?;
 
     Ok(output.status.success())
 }
@@ -693,11 +715,7 @@ pub async fn git_branch_exists(path: String, branch: String) -> Result<bool, Str
     let repo_root = find_repo_root(&path)?;
     let work_dir = Path::new(&repo_root);
 
-    let output = Command::new("git")
-        .current_dir(work_dir)
-        .args(["rev-parse", "--verify", &format!("refs/heads/{}", branch)])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let output = run_git_simple(&["rev-parse", "--verify", &format!("refs/heads/{}", branch)], Some(work_dir))?;
 
     Ok(output.status.success())
 }
@@ -732,22 +750,14 @@ pub async fn git_default_branch(path: String) -> Result<String, String> {
     }
 
     // Fallback: check if "main" branch exists
-    let main_check = Command::new("git")
-        .current_dir(work_dir)
-        .args(["rev-parse", "--verify", "refs/heads/main"])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let main_check = run_git_simple(&["rev-parse", "--verify", "refs/heads/main"], Some(work_dir))?;
 
     if main_check.status.success() {
         return Ok("main".to_string());
     }
 
     // Fallback: check if "master" branch exists
-    let master_check = Command::new("git")
-        .current_dir(work_dir)
-        .args(["rev-parse", "--verify", "refs/heads/master"])
-        .output()
-        .map_err(|e| format!("Failed to run git: {}", e))?;
+    let master_check = run_git_simple(&["rev-parse", "--verify", "refs/heads/master"], Some(work_dir))?;
 
     if master_check.status.success() {
         return Ok("master".to_string());
