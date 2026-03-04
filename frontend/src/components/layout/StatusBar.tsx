@@ -1,7 +1,9 @@
-import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { Show, createMemo, createSignal, onMount, onCleanup, For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { invoke } from '@tauri-apps/api/core';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { ActivityView } from './ActivityBar';
+import { statusBarManager } from '../../services/StatusBarManager';
 
 interface AppResourceUsage {
   cpuPercent: number;
@@ -41,9 +43,12 @@ export function StatusBar(props: StatusBarProps) {
     return reviewState()?.status === 'ready';
   });
 
+  const leftItems = createMemo(() => statusBarManager.getItems()().filter(i => i.alignment === 'left'));
+  const rightItems = createMemo(() => statusBarManager.getItems()().filter(i => i.alignment === 'right'));
+
   return (
     <div class="h-6 bg-zed-bg-panel border-t border-zed-border-subtle flex items-center px-3 text-xs select-none">
-      {/* Left Section - Keyboard shortcuts for Code Review */}
+      {/* Left Section - Keyboard shortcuts for Code Review & Extensions */}
       <div class="flex items-center gap-3 flex-1">
         <Show when={showCodeReviewShortcuts()}>
           <div class="flex items-center gap-3 text-zed-text-tertiary">
@@ -63,10 +68,17 @@ export function StatusBar(props: StatusBarProps) {
             </span>
           </div>
         </Show>
+        <For each={leftItems()}>
+          {(item) => <Dynamic component={item.component} />}
+        </For>
       </div>
 
-      {/* Right Section - Resource Usage Only */}
+      {/* Right Section - Resource Usage & Extensions */}
       <div class="flex items-center gap-3 flex-1 justify-end">
+        <For each={rightItems()}>
+          {(item) => <Dynamic component={item.component} />}
+        </For>
+        
         {/* Resource Usage */}
         <Show when={resourceUsage()}>
           <div class="flex items-center gap-2 text-zed-text-tertiary">

@@ -1,12 +1,17 @@
 import { createSignal, type Component } from 'solid-js';
 import { listExtensions, type ExtensionManifest } from '../lib/extension-api';
 import { tabManager } from './TabManager';
+import { extensionSettingsManager, type ExtensionSettingSchema } from './ExtensionSettingsManager';
+import { statusBarManager, type StatusBarItem } from './StatusBarManager';
 
 export interface ExtensionContext {
   id: string;
   manifest: ExtensionManifest;
   registerTab: (type: string, component: Component<any>) => void;
   createTab: (laneId: string, title: string, metadata?: any) => Promise<void>;
+  registerSettings: (schemas: ExtensionSettingSchema[]) => void;
+  getSettings: () => Promise<Record<string, any>>;
+  registerStatusBarItem: (item: Omit<StatusBarItem, 'id'> & { id?: string }) => void;
 }
 
 class ExtensionLoader {
@@ -31,7 +36,7 @@ class ExtensionLoader {
       
       // For now, we "auto-load" all discovered extensions that have a frontend
       for (const ext of allExtensions) {
-        if (ext.main_frontend) {
+        if (ext.main_frontend && ext.running !== false) {
           await this.loadExtension(ext);
         }
       }
@@ -69,6 +74,24 @@ class ExtensionLoader {
               extensionType: metadata?.type || 'default'
             }
           });
+        },
+        registerSettings: (schemas: ExtensionSettingSchema[]) => {
+          extensionSettingsManager.registerSettings({
+            extensionId: manifest.id,
+            schemas
+          });
+          console.info(`[ExtensionLoader] Registered settings for: ${manifest.id}`);
+        },
+        getSettings: async () => {
+          return await extensionSettingsManager.loadSettings(manifest.id);
+        },
+        registerStatusBarItem: (item) => {
+          const itemId = item.id ? `${manifest.id}:${item.id}` : manifest.id;
+          statusBarManager.registerItem({
+            ...item,
+            id: itemId
+          });
+          console.info(`[ExtensionLoader] Registered status bar item for: ${manifest.id}`);
         }
       };
 
