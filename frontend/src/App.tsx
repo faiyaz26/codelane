@@ -281,6 +281,7 @@ function App() {
       >
         <MainLayout
           lanes={lanes()}
+          agentSettings={agentSettings()}
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
           agentReloadingLanes={agentReloadingLanes()}
