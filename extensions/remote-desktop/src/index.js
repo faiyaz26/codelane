@@ -237,11 +237,17 @@ function activate(context) {
       priority: 100,
       component: () => {
         const el = document.createElement('div');
-        el.className = 'flex items-center gap-1 cursor-pointer hover:text-zed-text-primary transition-colors text-zed-text-tertiary px-2 py-0.5 rounded bg-zed-bg-app border border-zed-border-subtle hover:border-zed-border-default text-xs';
+        el.className = 'flex items-center gap-1.5 cursor-pointer hover:text-zed-text-primary transition-colors px-2 py-0.5 rounded bg-zed-bg-app border border-zed-border-subtle hover:border-zed-border-default text-xs';
         const render = () => {
-          el.innerHTML = state.isConnected 
-            ? `<div class="w-2 h-2 rounded-full bg-green-500 mr-1"></div><span class="font-medium text-green-400">Connected to Client</span>`
-            : `<div class="w-2 h-2 rounded-full bg-zed-text-disabled mr-1"></div><span>Connect Remote</span>`;
+          const icon = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.828a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" /></svg>`;
+          
+          if (state.isConnected) {
+            el.innerHTML = `${icon}<span class="font-medium">Remote Desktop</span>`;
+            el.className = 'flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 text-xs';
+          } else {
+            el.innerHTML = `${icon}<span class="opacity-80">Remote Desktop</span>`;
+            el.className = 'flex items-center gap-1.5 cursor-pointer hover:text-zed-text-primary transition-colors text-zed-text-tertiary px-2 py-0.5 rounded bg-zed-bg-app border border-zed-border-subtle hover:border-zed-border-default text-xs';
+          }
         };
         render();
         state.listeners.push(render);
