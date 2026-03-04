@@ -106,8 +106,10 @@ pub fn run() {
             extension::extension_list,
             extension::extension_start,
             extension::extension_stop,
+            extension::extension_uninstall,
             extension::extension_install,
             extension::extension_get_registry,
+
             // Store commands
             store::get_store_path,
             // Lane commands
@@ -309,6 +311,23 @@ pub fn run() {
                     }
                 }
             });
+
+            // Auto-start enabled extensions
+            let extension_state = app.state::<extension::ExtensionState>();
+            let settings_state = app.state::<settings::SettingsState>();
+            let app_handle = app.handle().clone();
+            
+            if let Ok(settings) = settings_state.get_agent_settings() {
+                let enabled_ids = settings.enabled_extensions;
+                if !enabled_ids.is_empty() {
+                    let ext_state = extension_state.inner().clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = ext_state.auto_start_extensions(app_handle, enabled_ids).await {
+                            tracing::error!("Failed to auto-start extensions: {}", e);
+                        }
+                    });
+                }
+            }
 
             tracing::info!("Codelane window initialized with menu");
             Ok(())

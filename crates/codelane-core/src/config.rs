@@ -375,6 +375,9 @@ pub struct AgentSettings {
     /// Predefined agent configurations
     #[serde(default)]
     pub presets: HashMap<String, AgentConfig>,
+    /// List of extension IDs that should be automatically started
+    #[serde(default)]
+    pub enabled_extensions: Vec<String>,
 }
 
 impl Default for AgentSettings {
@@ -391,6 +394,7 @@ impl Default for AgentSettings {
         Self {
             default_agent: AgentConfig::shell_default(),
             presets,
+            enabled_extensions: Vec::new(),
         }
     }
 }

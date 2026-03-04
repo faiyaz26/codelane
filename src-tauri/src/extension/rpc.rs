@@ -26,22 +26,40 @@ pub async fn handle_request(
     request: JsonRpcRequest,
     permissions: &[String],
 ) -> Result<serde_json::Value, serde_json::Value> {
-    // Check permissions
-    let has_permission = if request.method.starts_with("codelane.terminal.") {
-        permissions.contains(&"terminal".to_string()) || permissions.contains(&"terminal:read".to_string()) || permissions.contains(&"terminal:write".to_string())
-    } else if request.method.starts_with("codelane.lane.") {
-        permissions.contains(&"lanes".to_string()) || permissions.contains(&"lanes:read".to_string())
-    } else if request.method.starts_with("codelane.agent.") {
-        permissions.contains(&"agent".to_string()) || permissions.contains(&"agent:read".to_string())
-    } else if request.method.starts_with("codelane.notification.") {
-        permissions.contains(&"notification".to_string())
-    } else if request.method == "codelane.ping" {
-        true
-    } else {
-        false
+    // Check permissions strictly
+    let has_permission = match request.method.as_str() {
+        "codelane.ping" => true,
+        
+        "codelane.terminal.subscribe" | "codelane.terminal.list" => {
+            permissions.contains(&"terminal".to_string()) || 
+            permissions.contains(&"terminal:read".to_string())
+        }
+        
+        "codelane.terminal.write" => {
+            permissions.contains(&"terminal".to_string()) || 
+            permissions.contains(&"terminal:write".to_string())
+        }
+        
+        "codelane.terminal.create" => {
+            permissions.contains(&"terminal".to_string()) || 
+            permissions.contains(&"terminal:control".to_string())
+        }
+        
+        "codelane.lane.list" | "codelane.agent.getStatus" | "codelane.agent.getTerminal" => {
+            permissions.contains(&"lanes".to_string()) || 
+            permissions.contains(&"lanes:read".to_string()) ||
+            permissions.contains(&"agent:read".to_string())
+        }
+        
+        "codelane.notification.show" => {
+            permissions.contains(&"notification".to_string())
+        }
+        
+        _ => false,
     };
 
     if !has_permission {
+        tracing::warn!("[Extension {}] Permission denied for method {}", extension_id, request.method);
         return Err(serde_json::json!(format!("Permission denied for method {}", request.method)));
     }
 

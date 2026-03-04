@@ -15,6 +15,13 @@ pub struct ExtensionManifest {
     pub permissions: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtensionInfo {
+    #[serde(flatten)]
+    pub manifest: ExtensionManifest,
+    pub running: bool,
+}
+
 pub struct Extension {
     pub manifest: ExtensionManifest,
     pub path: PathBuf,

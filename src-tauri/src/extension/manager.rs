@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
@@ -107,11 +107,46 @@ impl ExtensionState {
         extension.stdin = Some(stdin_arc.clone());
         extension.child_process = Some(Arc::new(Mutex::new(child)));
 
-        let extension_id_clone = extension_id.to_string();
-        let app_handle = app.clone();
         let permissions = extension.manifest.permissions.clone();
         
+        // Monitor process for unexpected exit
+        let ext_id_for_monitor = extension_id.to_string();
+        let app_for_monitor = app.clone();
+        let ext_state_for_monitor = self.clone();
+        let child_arc_for_monitor = extension.child_process.as_ref().unwrap().clone();
+        
+        tokio::spawn(async move {
+            let mut child = child_arc_for_monitor.lock().await;
+            match child.wait().await {
+                Ok(status) => {
+                    if !status.success() {
+                        tracing::error!("[Extension {}] Process exited with error: {}", ext_id_for_monitor, status);
+                        // Notify frontend
+                        let _ = app_for_monitor.emit("extension:crashed", serde_json::json!({
+                            "id": ext_id_for_monitor,
+                            "code": status.code()
+                        }));
+                    } else {
+                        tracing::info!("[Extension {}] Process exited cleanly", ext_id_for_monitor);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("[Extension {}] Failed to wait for process: {}", ext_id_for_monitor, e);
+                }
+            }
+            
+            // Cleanup state
+            let mut extensions = ext_state_for_monitor.extensions.lock().await;
+            if let Some(ext) = extensions.get_mut(&ext_id_for_monitor) {
+                ext.child_process = None;
+                ext.stdin = None;
+            }
+        });
+
         // Handle stdout for JSON-RPC
+        let extension_id_rpc = extension_id.to_string();
+        let app_rpc = app.clone();
+        let stdin_rpc = stdin_arc.clone();
         tokio::spawn(async move {
             use tokio::io::AsyncWriteExt;
             let mut reader = BufReader::new(stdout).lines();
@@ -119,7 +154,7 @@ impl ExtensionState {
                 if let Ok(request) = serde_json::from_str::<JsonRpcRequest>(&line) {
                     let id = request.id.clone();
                     
-                    let result = handle_request(&app_handle, &extension_id_clone, request, &permissions).await;
+                    let result = handle_request(&app_rpc, &extension_id_rpc, request, &permissions).await;
 
                     if let Some(rpc_id) = id {
                         let response = match result {
@@ -138,13 +173,13 @@ impl ExtensionState {
                         };
 
                         if let Ok(resp_line) = serde_json::to_string(&response) {
-                            let mut stdin_lock = stdin_arc.lock().await;
+                            let mut stdin_lock = stdin_rpc.lock().await;
                             let _ = stdin_lock.write_all(format!("{}\n", resp_line).as_bytes()).await;
                             let _ = stdin_lock.flush().await;
                         }
                     }
                 } else {
-                    tracing::info!("[Extension {}] stdout: {}", extension_id_clone, line);
+                    tracing::info!("[Extension {}] stdout: {}", extension_id_rpc, line);
                 }
             }
         });
@@ -180,6 +215,36 @@ impl ExtensionState {
             subs.retain(|id| id != extension_id);
         }
 
+        Ok(())
+    }
+
+    /// Uninstall an extension
+    pub async fn uninstall_extension(&self, extension_id: &str) -> Result<()> {
+        // First stop it
+        let _ = self.stop_extension(extension_id).await;
+
+        let mut extensions = self.extensions.lock().await;
+        if let Some(extension) = extensions.remove(extension_id) {
+            if extension.path.exists() {
+                std::fs::remove_dir_all(&extension.path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Automatically start extensions based on persistent settings
+    pub async fn auto_start_extensions(&self, app: AppHandle, enabled_ids: Vec<String>) -> Result<()> {
+        // Ensure discovery is done first
+        self.discover_extensions().await?;
+        
+        for id in enabled_ids {
+            tracing::info!("Auto-starting extension: {}", id);
+            if let Err(e) = self.start_extension(app.clone(), &id).await {
+                tracing::error!("Failed to auto-start extension {}: {}", id, e);
+            }
+        }
+        
         Ok(())
     }
 
