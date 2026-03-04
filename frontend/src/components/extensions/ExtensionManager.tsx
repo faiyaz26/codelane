@@ -3,6 +3,7 @@ import {
   listExtensions, 
   startExtension, 
   stopExtension, 
+  uninstallExtension,
   getExtensionRegistry,
   installExtension,
   type ExtensionManifest,
@@ -55,21 +56,28 @@ export function ExtensionManager() {
     setLoading(false);
   });
 
-  const handleStart = async (id: string) => {
+  const handleToggle = async (ext: ExtensionManifest) => {
     try {
-      await startExtension(id);
-      console.info(`Started extension ${id}`);
+      if (ext.running) {
+        await stopExtension(ext.id);
+      } else {
+        await startExtension(ext.id);
+      }
+      await fetchInstalled(true);
     } catch (e) {
-      console.error(`Failed to start extension ${id}:`, e);
+      console.error(`Failed to toggle extension ${ext.id}:`, e);
     }
   };
 
-  const handleStop = async (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this extension? This will remove all its files from your local machine.')) {
+      return;
+    }
     try {
-      await stopExtension(id);
-      console.info(`Stopped extension ${id}`);
+      await uninstallExtension(id);
+      await fetchInstalled(true);
     } catch (e) {
-      console.error(`Failed to stop extension ${id}:`, e);
+      alert(`Delete failed: ${e}`);
     }
   };
 
@@ -182,16 +190,20 @@ export function ExtensionManager() {
                     </p>
                     <div class="flex gap-2">
                       <button
-                        onClick={() => handleStart(ext.id)}
-                        class="px-3 py-1 bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white text-[11px] rounded transition-colors font-medium"
+                        onClick={() => handleToggle(ext)}
+                        class={`px-3 py-1 text-[11px] rounded transition-colors font-medium border ${
+                          ext.running
+                            ? 'bg-zed-bg-panel hover:bg-zed-bg-hover text-zed-text-primary border-zed-border-default'
+                            : 'bg-zed-accent-blue hover:bg-zed-accent-blue-hover text-white border-transparent'
+                        }`}
                       >
-                        Enable
+                        {ext.running ? 'Disable' : 'Enable'}
                       </button>
                       <button
-                        onClick={() => handleStop(ext.id)}
+                        onClick={() => handleDelete(ext.id)}
                         class="px-3 py-1 bg-zed-bg-panel hover:bg-red-900/40 text-zed-text-tertiary hover:text-red-400 border border-zed-border-subtle hover:border-red-500/50 text-[11px] rounded transition-all font-medium"
                       >
-                        Disable
+                        Delete
                       </button>
                     </div>
                   </div>

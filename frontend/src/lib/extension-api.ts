@@ -12,6 +12,7 @@ export interface ExtensionManifest {
   main_backend: string | null;
   main_frontend: string | null;
   permissions: string[];
+  running: boolean;
 }
 
 export interface RegistryExtension {
@@ -48,6 +49,13 @@ export async function startExtension(id: string): Promise<void> {
  */
 export async function stopExtension(id: string): Promise<void> {
   await invoke('extension_stop', { id });
+}
+
+/**
+ * Uninstalls an extension by ID
+ */
+export async function uninstallExtension(id: string): Promise<void> {
+  await invoke('extension_uninstall', { id });
 }
 
 /**
