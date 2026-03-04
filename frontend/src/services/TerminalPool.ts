@@ -11,6 +11,8 @@
 import { spawn, type PtyHandle } from './PortablePty';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
 import { createTerminal, createFitAddon, attachKeyHandlers } from '../lib/terminal-utils';
+import { agentStatusManager } from './AgentStatusManager';
+import type { DetectableAgentType } from '../types/agentStatus';
 import type {
   TerminalConfig,
   TerminalHandle,
@@ -206,6 +208,20 @@ class TerminalPool {
     // Attach custom key handlers (Shift+Enter, etc.)
     attachKeyHandlers(terminal, (data) => pty!.write(data));
 
+    // Register with agent status manager if it's an agent lane
+    if (useAgent) {
+      const resolvedAgentType: DetectableAgentType = spawnSuccess 
+        ? ((await getLaneAgentConfig(laneId)).agentType as DetectableAgentType)
+        : 'shell';
+      
+      await agentStatusManager.registerLane(laneId, resolvedAgentType);
+
+      // Link PTY title to status manager
+      terminal.onTitleChange((title) => {
+        agentStatusManager.feedWindowTitle(laneId, title);
+      });
+    }
+
     // Set up event-based data flow (low latency!) with sticky scroll
     // PTY output → terminal
     await pty.onData((data) => {
@@ -215,6 +231,10 @@ class TerminalPool {
       const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
 
       terminal.write(data);
+
+      if (useAgent) {
+        agentStatusManager.feedOutput(laneId, data);
+      }
 
       // Only force scroll to bottom if we were already at the bottom and autoScroll is enabled.
       // This ensures we don't "jump" to bottom while the user is scrolling up to read history.
@@ -226,12 +246,18 @@ class TerminalPool {
     // Terminal input → PTY
     terminal.onData((data) => {
       pty!.write(data);
+      if (useAgent) {
+        agentStatusManager.feedUserInput(laneId, data);
+      }
     });
 
     // Handle PTY exit
     await pty.onExit(() => {
       terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
       handle.status = 'exited';
+      if (useAgent) {
+        agentStatusManager.markExited(laneId);
+      }
     });
 
     return handle;

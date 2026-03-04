@@ -9,6 +9,7 @@ import { createSignal, type Accessor } from 'solid-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Tab } from '../types/lane';
 import { atomicUpdate, loadTabPanelState } from './TabStorage';
+import { terminalPool } from './TerminalPool';
 
 /**
  * Tab manager instance - manages tabs for all lanes
@@ -41,6 +42,16 @@ class TabManager {
    * Dispose lane (cleanup)
    */
   disposeLane(laneId: string): void {
+    // Cleanup all terminals associated with this lane
+    const signal = this.tabs.get(laneId);
+    if (signal) {
+      const tabs = signal[0]();
+      tabs.forEach(tab => {
+        const terminalId = `${laneId}-tab-${tab.id}`;
+        void terminalPool.release(terminalId);
+      });
+    }
+
     this.tabs.delete(laneId);
     this.activeTabs.delete(laneId);
   }
@@ -153,6 +164,10 @@ class TabManager {
     // Update local state (optimistic)
     setTabs(updatedTabs);
     setActiveTab(newActiveTab);
+
+    // Cleanup terminal process explicitly
+    const terminalId = `${laneId}-tab-${tabId}`;
+    void terminalPool.release(terminalId);
 
     // Persist to storage
     try {

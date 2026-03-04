@@ -14,6 +14,7 @@ import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
 import { initPlatform } from './lib/platform';
 
 import { tabManager } from './services/TabManager';
+import { terminalPool } from './services/TerminalPool';
 import { extensionLoader } from './services/ExtensionLoader';
 import { agentNotificationService } from './services/AgentNotificationService';
 import { agentStatusManager } from './services/AgentStatusManager';
@@ -162,8 +163,11 @@ function App() {
       setLanes((prev) => prev.filter((l) => l.id !== laneId));
     });
 
-    // Dispose TabManager for this lane
+    // Dispose TabManager for this lane (handles tab terminals)
     tabManager.disposeLane(laneId);
+
+    // Dispose agent terminal
+    void terminalPool.release(`${laneId}-agent`);
 
     // Persist the active lane change
     if (wasActive) {

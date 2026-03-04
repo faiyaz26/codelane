@@ -1,15 +1,11 @@
 import { onCleanup, onMount, createEffect, createSignal, Show, untrack } from 'solid-js';
-import type { Terminal } from '@xterm/xterm';
-import type { FitAddon } from '@xterm/addon-fit';
-import { spawn, type PtyHandle } from '../services/PortablePty';
-import { getTerminalTheme } from '../theme';
-import { themeManager } from '../services/ThemeManager';
-import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
-import { createTerminal, createFitAddon, loadAddons, attachKeyHandlers, updateTerminalTheme } from '../lib/terminal-utils';
+import { useTerminalPool } from '../hooks/useTerminalPool';
+import { TerminalInstance } from './terminal/TerminalInstance';
+import type { TerminalHandle } from '../types/terminal';
 import { agentStatusManager } from '../services/AgentStatusManager';
-import type { DetectableAgentType } from '../types/agentStatus';
 import { HookOnboardingModal, shouldShowHookPrompt } from './hooks/HookOnboardingModal';
 import type { AgentType } from '../types/agent';
+import { getLaneAgentConfig } from '../lib/settings-api';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalViewProps {
@@ -22,307 +18,87 @@ interface TerminalViewProps {
 }
 
 export function TerminalView(props: TerminalViewProps) {
-  let containerRef: HTMLDivElement | undefined;
-  let terminal: Terminal | undefined;
-  let fitAddon: FitAddon | undefined;
-  let pty: PtyHandle | undefined;
+  const terminalPool = useTerminalPool();
+  const [handle, setHandle] = createSignal<TerminalHandle | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
+  const [isLoading, setIsLoading] = createSignal(false);
 
   const [showNotificationPrompt, setShowNotificationPrompt] = createSignal(false);
   const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
   const [onboardingAgentType, setOnboardingAgentType] = createSignal<AgentType>('claude');
-  const [userHasScrolledUp, setUserHasScrolledUp] = createSignal(false);
-  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = createSignal(true);
-  let isAgentLane = false;
+  
+  const terminalId = () => `${props.laneId}-agent`;
 
-  // Watch for theme changes and update terminal
-  createEffect(() => {
-    const currentTheme = themeManager.getTheme()(); // Subscribe to theme changes
-    if (terminal) {
-      updateTerminalTheme(terminal);
-    }
-  });
-
+  // Acquire terminal on mount
   onMount(async () => {
-    if (!containerRef) return;
-
-    // Use untrack to pin this terminal instance to the specific lane/cwd it was created for.
-    // This prevents switching lanes from re-running this initialization logic.
-    const laneId = untrack(() => props.laneId);
-    const cwd = untrack(() => props.cwd);
-
-    // Create xterm.js instance with shared configuration
-    terminal = createTerminal();
-    fitAddon = createFitAddon(terminal);
-
-    // Open terminal in the container
-    terminal.open(containerRef);
-
-    // Load rendering + utility addons (must be after open() for WebGL)
-    loadAddons(terminal);
-
-    // Fit terminal to container
-    fitAddon.fit();
-
-    // Focus the terminal
-    terminal.focus();
+    setIsLoading(true);
+    setError(null);
 
     try {
-      let spawnSuccess = false;
-      const useAgent = props.useAgent !== false; // Default to true
-      let agentConfig: Awaited<ReturnType<typeof getLaneAgentConfig>> | null = null;
-
-      // Base environment
-      const baseEnv: Record<string, string> = {
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        CODELANE_LANE_ID: laneId,
-        CODELANE_SESSION_ID: `${laneId}-${Date.now()}`,
-      };
-
-      // Load agent config only if useAgent is true
-      if (useAgent) {
-        agentConfig = await getLaneAgentConfig(laneId);
-
-        // Merge agent env with terminal env
-        const env = {
-          ...baseEnv,
-          ...agentConfig.env,
-        };
-
-        // Try to spawn the configured agent
-        if (agentConfig.agentType !== 'shell') {
-          // Check if command exists before trying to spawn
-          const commandPath = await checkCommandExists(agentConfig.command);
-
-          if (commandPath) {
-            try {
-              pty = await spawn(commandPath, agentConfig.args, {
-                cols: terminal.cols,
-                rows: terminal.rows,
-                cwd: agentConfig.useLaneCwd ? cwd : undefined,
-                env,
-              });
-
-              spawnSuccess = true;
-            } catch (spawnError) {
-              console.error('[TerminalView] Failed to spawn agent:', spawnError);
-              spawnSuccess = false;
-              // Notify parent that agent failed
-              props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
-            }
-          } else {
-            spawnSuccess = false;
-            // Notify parent that agent is not installed
-            props.onAgentFailed?.(agentConfig.agentType, agentConfig.command);
-          }
-        }
-      }
-
-      // Fallback to shell if agent failed, agent type is shell, or useAgent is false
-      if (!spawnSuccess) {
-        // Use zsh as default shell (will use user's default shell via -l flag)
-        const fallbackShell = 'zsh';
-
-        pty = await spawn(fallbackShell, undefined, {
-          cols: terminal.cols,
-          rows: terminal.rows,
-          cwd: cwd,
-          env: baseEnv,
-        });
-      }
-
-      // Track resolved agent type for status detection
-      const resolvedAgentType: DetectableAgentType = (spawnSuccess && useAgent)
-        ? (agentConfig?.agentType || 'shell') as DetectableAgentType
-        : 'shell';
-      await agentStatusManager.registerLane(laneId, resolvedAgentType);
-      isAgentLane = resolvedAgentType !== 'shell';
-
-      // Show notification prompt when agent first starts working
-      if (isAgentLane) {
-        const unsub = agentStatusManager.onStatusChange((change) => {
-          if (
-            change.laneId === laneId &&
-            change.newStatus === 'working' &&
-            agentStatusManager.shouldShowNotificationPrompt()
-          ) {
-            setShowNotificationPrompt(true);
-            unsub();
-          }
-        });
-        onCleanup(unsub);
-      }
-
-      // Show hook onboarding modal for hook-supported agents on first run
-      const hookSupportedAgents: AgentType[] = ['claude', 'codex', 'gemini'];
-      if (
-        isAgentLane &&
-        hookSupportedAgents.includes(resolvedAgentType as AgentType) &&
-        shouldShowHookPrompt(resolvedAgentType as AgentType)
-      ) {
-        setTimeout(() => {
-          setOnboardingAgentType(resolvedAgentType as AgentType);
-          setShowHookOnboarding(true);
-        }, 2000); // Delay to avoid startup disruption
-      }
-
-      // Attach custom key handlers (Shift+Enter, etc.)
-      attachKeyHandlers(terminal, (data) => pty!.write(data));
-
-      // Sticky scroll detection
-      const updateScrollState = () => {
-        if (!terminal) return;
-        const buffer = terminal.buffer.active;
-        // viewportY is current scroll position, baseY is the maximum possible scroll position (the bottom)
-        const atBottom = buffer.viewportY >= buffer.baseY;
-        
-        setIsAutoScrollEnabled(atBottom);
-        setUserHasScrolledUp(!atBottom);
-      };
-
-      // Listen for scroll events
-      terminal.onScroll(() => {
-        updateScrollState();
+      const h = await terminalPool.acquire({
+        id: terminalId(),
+        cwd: props.cwd,
+        useAgent: props.useAgent !== false,
       });
+      setHandle(h);
+      
+      // Notify parent
+      props.onTerminalReady?.(h.id);
 
-      // Also listen for wheel events to catch manual scroll-up faster
-      const handleWheel = () => {
-        // Use requestAnimationFrame to allow xterm to update its internal scroll position
-        // before we check the state.
-        requestAnimationFrame(updateScrollState);
-      };
-      containerRef.addEventListener('wheel', handleWheel, { passive: true });
-
-      // Listen for window title changes from the PTY (useful for Gemini CLI)
-      terminal.onTitleChange((title) => {
-        agentStatusManager.feedWindowTitle(laneId, title);
-      });
-
-      // Set up event-based data flow (low latency!)
-      // PTY output → terminal (with sticky scroll)
-      await pty!.onData((data) => {
-        if (terminal) {
-          terminal.write(data);
-          if (isAutoScrollEnabled()) {
-            terminal.scrollToBottom();
-          }
-        }
-        // Feed output to agent status detector
-        agentStatusManager.feedOutput(laneId, data);
-      });
-
-      // Terminal input → PTY
-      terminal.onData((data) => {
-        if (pty) {
-          pty.write(data);
-        }
-        // Signal user input to agent status detector (transitions out of waiting_for_input)
-        agentStatusManager.feedUserInput(laneId, data);
-      });
-
-      // Handle PTY exit
-      await pty!.onExit(() => {
-        if (terminal) {
-          terminal.write('\r\n\x1b[1;33m[Process exited]\x1b[0m\r\n');
-        }
+      // Handle exit callback
+      // Note: TerminalPool already handles agentStatusManager.markExited
+      const pty = h.pty;
+      const unExit = await pty.onExit(() => {
         props.onTerminalExit?.();
-        agentStatusManager.markExited(laneId);
       });
+      onCleanup(() => unExit());
 
-      // Call ready callback with terminal ID
-      props.onTerminalReady?.(pty!.id);
+      // Show onboarding/prompts if needed
+      const laneId = props.laneId;
+      const useAgent = props.useAgent !== false;
+      if (useAgent) {
+        const agentConfig = await getLaneAgentConfig(laneId);
+        const resolvedAgentType = agentConfig.agentType;
 
-      // Safe fit that guards against zero dimensions and preserves scroll position
-      const safeFitAndResize = () => {
-        if (!fitAddon || !terminal || !pty || !containerRef) return;
-        // Skip if container has no visible dimensions (collapsed/hidden)
-        const rect = containerRef.getBoundingClientRect();
-        if (rect.width < 1 || rect.height < 1) return;
+        // Show notification prompt when agent first starts working
+        if (resolvedAgentType !== 'shell') {
+          const unsub = agentStatusManager.onStatusChange((change) => {
+            if (
+              change.laneId === laneId &&
+              change.newStatus === 'working' &&
+              agentStatusManager.shouldShowNotificationPrompt()
+            ) {
+              setShowNotificationPrompt(true);
+              unsub();
+            }
+          });
+          onCleanup(unsub);
 
-        // Check if scrolled to bottom before fit
-        const buffer = terminal.buffer.active;
-        const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
-
-        fitAddon.fit();
-        pty.resize(terminal.cols, terminal.rows);
-
-        // Force full re-render to clear any stale WebGL texture artifacts
-        terminal.refresh(0, terminal.rows - 1);
-
-        // Restore scroll position: stay at bottom if we were at bottom
-        if (isAtBottom) {
-          terminal.scrollToBottom();
+          // Show hook onboarding
+          const hookSupportedAgents: AgentType[] = ['claude', 'codex', 'gemini'];
+          if (
+            hookSupportedAgents.includes(resolvedAgentType as AgentType) &&
+            shouldShowHookPrompt(resolvedAgentType as AgentType)
+          ) {
+            setTimeout(() => {
+              setOnboardingAgentType(resolvedAgentType as AgentType);
+              setShowHookOnboarding(true);
+            }, 2000);
+          }
         }
-      };
-
-      // Handle resize events with debouncing
-      let resizeTimeout: number | undefined;
-      const resizeObserver = new ResizeObserver(() => {
-        if (resizeTimeout) {
-          clearTimeout(resizeTimeout);
-        }
-        resizeTimeout = setTimeout(safeFitAndResize, 100) as unknown as number;
-      });
-
-      if (containerRef) {
-        resizeObserver.observe(containerRef);
       }
-
-      // Initial resize
-      setTimeout(() => {
-        safeFitAndResize();
-        // Scroll to bottom after initial layout
-        if (terminal) terminal.scrollToBottom();
-      }, 100);
-
-      // Listen for custom terminal resize events
-      const handleTerminalResize = () => safeFitAndResize();
-      window.addEventListener('terminal-resize', handleTerminalResize);
-
-      // Focus terminal and refresh rendering when its lane becomes active
-      const handleTerminalFocus = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (detail?.laneId === laneId && terminal) {
-          terminal.focus();
-          // Force full re-render to fix stale WebGL texture after being hidden
-          terminal.refresh(0, terminal.rows - 1);
-        }
-      };
-      window.addEventListener('terminal-focus', handleTerminalFocus);
-
-      // Cleanup
-      onCleanup(() => {
-        if (resizeObserver) resizeObserver.disconnect();
-        window.removeEventListener('terminal-resize', handleTerminalResize);
-        window.removeEventListener('terminal-focus', handleTerminalFocus);
-        if (containerRef) {
-          containerRef.removeEventListener('wheel', handleWheel);
-        }
-      });
-    } catch (error) {
-      console.error('Failed to create PTY:', error);
-      if (terminal) {
-        terminal.write('\r\n\x1b[1;31mFailed to create terminal:\x1b[0m ' + error + '\r\n');
-      }
+    } catch (err) {
+      console.error('[TerminalView] Failed to acquire terminal:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
     }
   });
 
-  // Cleanup on unmount
-  onCleanup(async () => {
-    // Note: laneId is captured via untrack in onMount scope, 
-    // but here we can just use props.laneId as we are unmounting anyway
-    agentStatusManager.unregisterLane(props.laneId);
-    if (pty) {
-      try {
-        await pty.kill();
-      } catch (error) {
-        console.error('Failed to kill PTY:', error);
-      }
-    }
-
-    if (terminal) {
-      terminal.dispose();
-    }
+  // No longer kill PTY on unmount!
+  // Cleanup only for component-local resources
+  onCleanup(() => {
+    // agentStatusManager.unregisterLane is NOT called here because we want to keep status across unmounts
   });
 
   const handleEnableNotification = (type: 'done' | 'input' | 'both') => {
@@ -341,21 +117,40 @@ export function TerminalView(props: TerminalViewProps) {
   };
 
   const scrollToBottom = () => {
-    if (terminal) {
-      terminal.scrollToBottom();
-      setIsAutoScrollEnabled(true);
-      setUserHasScrolledUp(false);
+    const h = handle();
+    if (h) {
+      h.terminal.scrollToBottom();
+      h.autoScroll = true;
     }
   };
 
   return (
     <div class="relative w-full h-full group">
-      <div
-        ref={containerRef}
-        class="w-full h-full bg-zed-bg-panel"
-      />
+      <Show
+        when={!isLoading() && !error() && handle()}
+        fallback={
+          <div class="w-full h-full flex items-center justify-center bg-zed-bg-panel">
+            <div class="text-zed-text-secondary">
+              <Show when={isLoading()}>
+                <div class="flex items-center gap-2">
+                  <div class="animate-spin rounded-full h-4 w-4 border-2 border-zed-accent-blue border-t-transparent"></div>
+                  <span>Starting agent...</span>
+                </div>
+              </Show>
+              <Show when={error()}>
+                <div class="text-zed-accent-red">
+                  <div class="font-semibold">Failed to start agent</div>
+                  <div class="text-sm mt-1">{error()}</div>
+                </div>
+              </Show>
+            </div>
+          </div>
+        }
+      >
+        {(h) => <TerminalInstance handle={h()} />}
+      </Show>
 
-      <Show when={userHasScrolledUp()}>
+      <Show when={handle() && !handle()!.autoScroll}>
         <button
           onClick={scrollToBottom}
           class="absolute bottom-10 right-10 px-4 py-2 bg-zed-accent-blue text-white rounded-full shadow-xl flex items-center gap-2 text-sm font-semibold hover:bg-zed-accent-blue-hover transition-all animate-bounce-in z-20 cursor-pointer"

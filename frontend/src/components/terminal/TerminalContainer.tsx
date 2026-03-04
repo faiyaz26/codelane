@@ -47,14 +47,10 @@ export function TerminalContainer(props: TerminalContainerProps) {
     }
   });
 
-  // Release terminal on unmount
-  onCleanup(async () => {
-    const h = handle();
-    if (h) {
-      await terminalPool.release(h.id);
-    }
-  });
-
+  // No longer release terminal on unmount to prevent process termination
+  // during layout changes or lane list refreshes.
+  // Explicit cleanup is handled by TabManager when a tab is closed.
+  
   return (
     <Show
       when={!isLoading() && !error() && handle()}
