@@ -120,17 +120,40 @@ function activate(context) {
     qrImage.alt = 'Connecting QR Code';
     qrContainer.appendChild(qrImage);
     
-    // PIN Display
+    // ID and PIN Container
+    const infoGrid = document.createElement('div');
+    infoGrid.className = 'grid grid-cols-2 gap-4 w-full mb-8';
+
+    // Connection ID
+    const idWrapper = document.createElement('div');
+    idWrapper.className = 'flex flex-col items-center';
+    const idLabel = document.createElement('span');
+    idLabel.className = 'text-[10px] font-bold text-zed-text-disabled uppercase tracking-widest mb-2';
+    idLabel.innerText = 'Connection ID';
+    const idContainer = document.createElement('div');
+    idContainer.className = 'bg-zed-bg-surface border border-zed-border-default rounded-lg px-3 py-2 flex items-center justify-center w-full';
+    const idText = document.createElement('span');
+    idText.className = 'text-xl font-mono font-bold text-zed-text-primary';
+    idContainer.appendChild(idText);
+    idWrapper.appendChild(idLabel);
+    idWrapper.appendChild(idContainer);
+
+    // PIN
+    const pinWrapper = document.createElement('div');
+    pinWrapper.className = 'flex flex-col items-center';
     const pinLabel = document.createElement('span');
     pinLabel.className = 'text-[10px] font-bold text-zed-text-disabled uppercase tracking-widest mb-2';
     pinLabel.innerText = 'Handshake PIN';
-
     const pinContainer = document.createElement('div');
-    pinContainer.className = 'bg-zed-bg-surface border border-zed-border-default rounded-lg px-6 py-3 flex items-center justify-center gap-2 w-full mb-8';
-    
+    pinContainer.className = 'bg-zed-bg-surface border border-zed-border-default rounded-lg px-3 py-2 flex items-center justify-center w-full';
     const pinText = document.createElement('span');
-    pinText.className = 'text-3xl font-mono tracking-[0.3em] font-bold text-zed-accent-blue';
+    pinText.className = 'text-xl font-mono font-bold text-zed-accent-blue';
     pinContainer.appendChild(pinText);
+    pinWrapper.appendChild(pinLabel);
+    pinWrapper.appendChild(pinContainer);
+
+    infoGrid.appendChild(idWrapper);
+    infoGrid.appendChild(pinWrapper);
     
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'w-full h-10 inline-flex items-center justify-center rounded-md font-medium transition-colors bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-default text-zed-text-primary text-sm';
@@ -141,27 +164,30 @@ function activate(context) {
     };
     
     content.appendChild(qrContainer);
-    content.appendChild(pinLabel);
-    content.appendChild(pinContainer);
+    content.appendChild(infoGrid);
     content.appendChild(cancelBtn);
     
-    return { content, qrImage, pinText };
+    return { content, qrImage, idText, pinText };
   };
 
   let peer = null;
 
   const startHosting = async () => {
     const settings = await context.getSettings();
-    const { content, qrImage, pinText } = createModalContent();
+    const { content, qrImage, idText, pinText } = createModalContent();
     
     context.openDialog({
       title: 'Connect Remote Client',
-      description: 'Scan this QR code with your mobile device, or enter the PIN manually on the remote app.',
+      description: 'Scan the QR code or manually enter the Connection ID and PIN on the remote app.',
       size: 'sm',
       component: content
     });
     
+    const connectionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const hostPeerId = `codelane-host-${connectionId}`;
     state.pin = generatePin();
+    
+    idText.innerText = connectionId;
     pinText.innerText = state.pin;
     
     const peerOptions = { debug: 2 };
@@ -169,7 +195,7 @@ function activate(context) {
       peerOptions.key = settings.peerJsKey;
     }
     
-    peer = new window.Peer(generatePeerId(), peerOptions);
+    peer = new window.Peer(hostPeerId, peerOptions);
     
     peer.on('open', (id) => {
       const url = `https://remote.codelane.app/?host=${id}&pin=${state.pin}`;
