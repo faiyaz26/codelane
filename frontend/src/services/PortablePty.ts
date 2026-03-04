@@ -221,6 +221,7 @@ export async function spawn(
       reader.addCallback(callback);
 
       // Lazily initialize backend listener if it's the first subscriber
+      // Use a lock-like check to prevent multiple concurrent listen calls
       if (!dataUnlistenPromise) {
         dataUnlistenPromise = listen<TerminalOutputPayload>(
           'terminal-output',
@@ -231,6 +232,8 @@ export async function spawn(
           }
         );
       }
+
+      await dataUnlistenPromise;
 
       // Return a function that removes this specific callback
       return () => {
@@ -258,6 +261,8 @@ export async function spawn(
           }
         );
       }
+
+      await exitUnlistenPromise;
 
       // Return a function that removes this specific callback
       return () => {

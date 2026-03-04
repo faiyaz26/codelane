@@ -15,6 +15,7 @@ interface RemoteTerminalProps {
 
 export function RemoteTerminal(props: RemoteTerminalProps) {
   let terminalContainer: HTMLDivElement | undefined;
+  let webglAddon: WebglAddon | undefined;
   
   const terminal = new Terminal({
     cursorBlink: true,
@@ -50,7 +51,8 @@ export function RemoteTerminal(props: RemoteTerminalProps) {
     
     // Try to load WebGL for performance
     try {
-      terminal.loadAddon(new WebglAddon());
+      webglAddon = new WebglAddon();
+      terminal.loadAddon(webglAddon);
     } catch (e) {
       console.warn('WebGL addon could not be loaded, falling back to canvas', e);
     }
@@ -67,13 +69,27 @@ export function RemoteTerminal(props: RemoteTerminalProps) {
     }
 
     const handleResize = () => {
-      fitAddon.fit();
+      try {
+        fitAddon.fit();
+      } catch (e) {
+        // Ignore resize errors during teardown
+      }
     };
     window.addEventListener('resize', handleResize);
 
     onCleanup(() => {
       window.removeEventListener('resize', handleResize);
-      terminal.dispose();
+      
+      // Explicitly dispose addons before terminal to avoid WebGL race conditions
+      try {
+        if (webglAddon) {
+          webglAddon.dispose();
+        }
+        fitAddon.dispose();
+        terminal.dispose();
+      } catch (e) {
+        console.warn('[RemoteTerminal] Error during disposal:', e);
+      }
     });
   });
 

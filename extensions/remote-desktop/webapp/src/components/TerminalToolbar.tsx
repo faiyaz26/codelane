@@ -17,6 +17,7 @@ export function TerminalToolbar(props: TerminalToolbarProps) {
     { label: 'CTRL+C', value: '\x03' },
     { label: 'CTRL+D', value: '\x04' },
     { label: 'CTRL+Z', value: '\x1a' },
+    { label: 'ENTER', value: '\r' },
   ];
 
   return (

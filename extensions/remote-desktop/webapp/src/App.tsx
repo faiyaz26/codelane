@@ -194,9 +194,17 @@ function RemoteDashboard(props: { conn: any }) {
     }
   };
 
+  const handleSendWithoutEnter = () => {
+    const cmd = commandInput();
+    if (cmd) {
+      sendToTerminal(cmd);
+      setCommandInput('');
+    }
+  };
+
   const handleCommandSubmit = (e: Event) => {
     e.preventDefault();
-    const cmd = commandInput().trim();
+    const cmd = commandInput();
     if (cmd) {
       sendToTerminal(cmd + '\n');
       setCommandInput('');
@@ -235,30 +243,47 @@ function RemoteDashboard(props: { conn: any }) {
 
       {/* Command Input Box */}
       <Show when={remoteStore.activeLaneId()}>
-        <form 
-          onSubmit={handleCommandSubmit}
-          class="px-2 py-2 bg-zed-bg-panel border-t border-zed-border-subtle flex gap-2 items-center shrink-0"
-        >
-          <input
-            type="text"
-            value={commandInput()}
-            onInput={(e) => setCommandInput(e.currentTarget.value)}
-            placeholder="Type command..."
-            class="flex-1 bg-zed-bg-surface border border-zed-border-default rounded-md px-3 py-1.5 text-sm text-zed-text-primary focus:outline-none focus:border-zed-accent-blue transition-colors"
-            autocapitalize="none"
-            autocomplete="off"
-            autocorrect="off"
-            spellcheck={false}
-          />
-          <button 
-            type="submit"
-            class="p-2 text-zed-accent-blue hover:bg-zed-bg-hover rounded-md transition-colors"
+        <div class="px-2 py-2 bg-zed-bg-panel border-t border-zed-border-subtle flex flex-col gap-2 shrink-0">
+          <form 
+            onSubmit={handleCommandSubmit}
+            class="flex gap-2 items-center"
           >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
-        </form>
+            <input
+              type="text"
+              value={commandInput()}
+              onInput={(e) => setCommandInput(e.currentTarget.value)}
+              placeholder="Type command..."
+              class="flex-1 bg-zed-bg-surface border border-zed-border-default rounded-md px-3 py-1.5 text-sm text-zed-text-primary focus:outline-none focus:border-zed-accent-blue transition-colors"
+              autocapitalize="none"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck={false}
+            />
+            
+            <div class="flex gap-1">
+              <button 
+                type="button"
+                onClick={handleSendWithoutEnter}
+                class="p-2 text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded-md transition-colors"
+                title="Add Input (No Enter)"
+              >
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+              
+              <button 
+                type="submit"
+                class="p-2 text-zed-accent-blue hover:bg-zed-bg-hover rounded-md transition-colors"
+                title="Execute (With Enter)"
+              >
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
       </Show>
 
       {/* Mobile Developer Toolbar */}
