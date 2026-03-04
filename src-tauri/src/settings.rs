@@ -83,7 +83,12 @@ pub fn lane_get_agent_config(
 
     // Fall back to global default
     let agent_settings = settings_state.get_agent_settings()?;
-    Ok(agent_settings.default_agent)
+    let default_agent = agent_settings.installed_agents.iter()
+        .find(|a| a.name.as_deref() == Some(&agent_settings.default_agent_name))
+        .cloned()
+        .unwrap_or_else(|| agent_settings.installed_agents.first().cloned().unwrap_or_default());
+    
+    Ok(default_agent)
 }
 
 /// Update agent configuration for a specific lane

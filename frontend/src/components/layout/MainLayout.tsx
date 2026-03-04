@@ -14,9 +14,11 @@ import { editorStateManager } from '../../services/EditorStateManager';
 import type { Lane } from '../../types/lane';
 import { fetchBranch } from '../../lib/git-api';
 import { codeReviewStore } from '../../services/CodeReviewStore';
+import type { AgentSettings } from '../../types/agent';
 
 interface MainLayoutProps {
   lanes: Lane[];
+  agentSettings: AgentSettings;
   activeLaneId: string | null;
   initializedLanes: Set<string>;
   agentReloadingLanes: Set<string>;
@@ -209,6 +211,7 @@ export function MainLayout(props: MainLayoutProps) {
                   <div style={{ display: (activeView() === ActivityView.GitManager || activeView() === ActivityView.CodeReview || currentLane().laneType === 'pr_review' || !!currentLane().prMetadata) ? 'none' : 'contents' }}>
                     <AgentTerminalPanel
                       lanes={props.lanes}
+                      agentSettings={props.agentSettings}
                       activeLaneId={props.activeLaneId}
                       initializedLanes={props.initializedLanes}
                       agentReloadingLanes={props.agentReloadingLanes}

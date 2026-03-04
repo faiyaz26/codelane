@@ -12,21 +12,57 @@ import type { AITool } from '../services/AIReviewService';
 const AGENT_SETTINGS_KEY = 'agent_settings';
 
 /**
- * Get current agent settings from store
+ * Get current agent settings from the unified backend store
  */
 export async function getAgentSettings(): Promise<AgentSettings> {
-  const store = await getStore();
-  const settings = await store.get<any>(AGENT_SETTINGS_KEY);
+  try {
+    const settings = await invoke<AgentSettings>('settings_get_agents');
+    
+    // Fallback/Migration: If backend returned default but we have data in the old store
+    if (settings.installedAgents.length <= 1) {
+      const store = await getStore();
+      const oldSettings = await store.get<any>(AGENT_SETTINGS_KEY);
+      
+      if (oldSettings && oldSettings.installedAgents && oldSettings.installedAgents.length > 1) {
+        console.info('[Settings] Migrating settings from legacy store to backend...');
+        const migrated = migrateLegacySettings(oldSettings);
+        await updateAgentSettings(migrated);
+        return migrated;
+      }
+    }
 
-  if (!settings) {
+    return settings;
+  } catch (error) {
+    console.error('Failed to get agent settings from backend:', error);
     return getDefaultAgentSettings();
   }
+}
 
+/**
+ * Update agent settings in the unified backend store
+ */
+export async function updateAgentSettings(settings: AgentSettings): Promise<void> {
+  try {
+    await invoke('settings_update_agents', { settings });
+    
+    // Also update the legacy store for backward compatibility/safety for now
+    const store = await getStore();
+    await store.set(AGENT_SETTINGS_KEY, settings);
+    await store.save();
+  } catch (error) {
+    console.error('Failed to update agent settings in backend:', error);
+    throw error;
+  }
+}
+
+/**
+ * Internal helper to migrate old settings structures
+ */
+function migrateLegacySettings(settings: any): AgentSettings {
   const defaultSettings = getDefaultAgentSettings();
 
   // Migration: ensure installedAgents exists
   if (!settings.installedAgents) {
-    // If we have the old defaultAgent, use it as the first installed agent
     if (settings.defaultAgent) {
       settings.installedAgents = [settings.defaultAgent];
     } else {
@@ -34,7 +70,7 @@ export async function getAgentSettings(): Promise<AgentSettings> {
     }
   }
 
-  // Ensure all installed agents have a name (crucial for name-based lookup)
+  // Ensure all installed agents have a name
   settings.installedAgents = settings.installedAgents.map((agent: AgentConfig) => {
     if (!agent.name) {
       const metadata = AGENT_METADATA[agent.agentType];
@@ -49,29 +85,13 @@ export async function getAgentSettings(): Promise<AgentSettings> {
     delete settings.defaultAgent;
   }
 
-  // Ensure defaultAgentName is not empty and matches one of the installed agents
+  // Ensure defaultAgentName is valid
   const hasValidDefault = settings.defaultAgentName && settings.installedAgents.some((a: AgentConfig) => a.name === settings.defaultAgentName);
   if (!hasValidDefault) {
     settings.defaultAgentName = settings.installedAgents[0]?.name || defaultSettings.defaultAgentName;
   }
 
-  // Remove presets if they exist in the saved settings (no longer needed in store)
-  if (settings.presets) {
-    delete settings.presets;
-  }
-
   return settings as AgentSettings;
-}
-
-/**
- * Update agent settings in store
- */
-export async function updateAgentSettings(settings: AgentSettings): Promise<void> {
-  const store = await getStore();
-  // Ensure we don't save presets to store
-  const { presets, ...toSave } = settings as any;
-  await store.set(AGENT_SETTINGS_KEY, toSave);
-  await store.save();
 }
 
 /**

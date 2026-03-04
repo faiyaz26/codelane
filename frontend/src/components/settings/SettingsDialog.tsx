@@ -29,6 +29,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const [settings, setSettings] = createSignal<AgentSettings | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
+  const [isSuccess, setIsSuccess] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal(false);
   const [isAgentValid, setIsAgentValid] = createSignal(true);
 
@@ -70,7 +71,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
     try {
       await updateAgentSettings(currentSettings);
       props.onSettingsSaved(currentSettings);
-      props.onOpenChange(false);
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        props.onOpenChange(false);
+      }, 800);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
@@ -240,9 +245,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <Button
                   variant="primary"
                   onClick={handleSave}
-                  disabled={isSaving() || !isAgentValid()}
+                  disabled={isSaving() || !isAgentValid() || isSuccess()}
                 >
-                  {isSaving() ? 'Saving...' : 'Save Changes'}
+                  <Show when={isSuccess()} fallback={isSaving() ? 'Saving...' : 'Save Changes'}>
+                    Changes Saved!
+                  </Show>
                 </Button>
               </div>
             </div>

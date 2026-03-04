@@ -255,6 +255,9 @@ pub enum AITool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentConfig {
+    /// Optional display name
+    #[serde(default)]
+    pub name: Option<String>,
     /// Type of agent
     pub agent_type: AgentType,
     /// Command to execute
@@ -283,6 +286,7 @@ impl AgentConfig {
     /// Default shell configuration
     pub fn shell_default() -> Self {
         Self {
+            name: Some("Shell".to_string()),
             agent_type: AgentType::Shell,
             command: if cfg!(windows) {
                 "powershell.exe".to_string()
@@ -302,6 +306,7 @@ impl AgentConfig {
     /// Claude Code preset
     pub fn claude_preset() -> Self {
         Self {
+            name: Some("Claude Code".to_string()),
             agent_type: AgentType::Claude,
             command: "claude".to_string(),
             args: vec![],
@@ -313,6 +318,7 @@ impl AgentConfig {
     /// Cursor preset
     pub fn cursor_preset() -> Self {
         Self {
+            name: Some("Cursor".to_string()),
             agent_type: AgentType::Cursor,
             command: "cursor".to_string(),
             args: vec![],
@@ -324,6 +330,7 @@ impl AgentConfig {
     /// Aider preset
     pub fn aider_preset() -> Self {
         Self {
+            name: Some("Aider".to_string()),
             agent_type: AgentType::Aider,
             command: "aider".to_string(),
             args: vec![],
@@ -335,6 +342,7 @@ impl AgentConfig {
     /// OpenCode preset
     pub fn opencode_preset() -> Self {
         Self {
+            name: Some("OpenCode".to_string()),
             agent_type: AgentType::OpenCode,
             command: "opencode".to_string(),
             args: vec![],
@@ -346,6 +354,7 @@ impl AgentConfig {
     /// Codex preset
     pub fn codex_preset() -> Self {
         Self {
+            name: Some("Codex".to_string()),
             agent_type: AgentType::Codex,
             command: "codex".to_string(),
             args: vec![],
@@ -357,6 +366,7 @@ impl AgentConfig {
     /// Gemini preset
     pub fn gemini_preset() -> Self {
         Self {
+            name: Some("Gemini".to_string()),
             agent_type: AgentType::Gemini,
             command: "gemini".to_string(),
             args: vec![],
@@ -370,11 +380,11 @@ impl AgentConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSettings {
-    /// Default agent to use
-    pub default_agent: AgentConfig,
-    /// Predefined agent configurations
+    /// Name of the default agent to use
+    pub default_agent_name: String,
+    /// List of installed agent configurations
     #[serde(default)]
-    pub presets: HashMap<String, AgentConfig>,
+    pub installed_agents: Vec<AgentConfig>,
     /// List of extension IDs that should be automatically started
     #[serde(default)]
     pub enabled_extensions: Vec<String>,
@@ -382,18 +392,9 @@ pub struct AgentSettings {
 
 impl Default for AgentSettings {
     fn default() -> Self {
-        let mut presets = HashMap::new();
-        presets.insert("shell".to_string(), AgentConfig::shell_default());
-        presets.insert("claude".to_string(), AgentConfig::claude_preset());
-        presets.insert("cursor".to_string(), AgentConfig::cursor_preset());
-        presets.insert("aider".to_string(), AgentConfig::aider_preset());
-        presets.insert("opencode".to_string(), AgentConfig::opencode_preset());
-        presets.insert("codex".to_string(), AgentConfig::codex_preset());
-        presets.insert("gemini".to_string(), AgentConfig::gemini_preset());
-
         Self {
-            default_agent: AgentConfig::shell_default(),
-            presets,
+            default_agent_name: "Shell".to_string(),
+            installed_agents: vec![AgentConfig::shell_default()],
             enabled_extensions: Vec::new(),
         }
     }

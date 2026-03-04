@@ -8,6 +8,7 @@ import type { AgentConfig, AgentSettings } from '../../types/agent';
 
 interface AgentTerminalPanelProps {
   lanes: Lane[];
+  agentSettings: AgentSettings;
   activeLaneId: string | null;
   initializedLanes: Set<string>;
   agentReloadingLanes: Set<string>;
@@ -60,19 +61,13 @@ function TerminalItem(props: {
 export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [showReloadConfirm, setShowReloadConfirm] = createSignal(false);
   const [showSwitchConfirm, setShowSwitchConfirm] = createSignal(false);
-  const [agentSettings, setAgentSettings] = createSignal<AgentSettings | null>(null);
   const [pendingAgent, setPendingAgent] = createSignal<AgentConfig | null>(null);
-
-  onMount(async () => {
-    const settings = await getAgentSettings();
-    setAgentSettings(settings);
-  });
 
   const activeLane = createMemo(() => props.lanes.find(l => l.id === props.activeLaneId));
 
   const currentAgent = createMemo(() => {
     const lane = activeLane();
-    const settings = agentSettings();
+    const settings = props.agentSettings;
     if (!lane || !settings) return null;
     
     // If lane has override, use it
@@ -86,20 +81,18 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
   const currentAgentName = createMemo(() => {
     const agent = currentAgent();
-    if (!agent) return '';
+    const settings = props.agentSettings;
+    if (!agent || !settings) return '';
     
     if (agent.name) return agent.name;
     
     // Try to find name in installed agents if missing in config
-    const settings = agentSettings();
-    if (settings) {
-      const found = settings.installedAgents.find(a => 
-        a.command === agent.command && 
-        a.agentType === agent.agentType &&
-        JSON.stringify(a.args) === JSON.stringify(agent.args)
-      );
-      if (found) return found.name || found.agentType;
-    }
+    const found = settings.installedAgents.find(a => 
+      a.command === agent.command && 
+      a.agentType === agent.agentType &&
+      JSON.stringify(a.args) === JSON.stringify(agent.args)
+    );
+    if (found) return found.name || found.agentType;
     
     return agent.agentType;
   });
@@ -198,11 +191,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
           <h3 class="panel-header-title">Agent Terminal</h3>
           
           {/* Agent Switcher */}
-          <Show when={agentSettings() && agentSettings()!.installedAgents.length > 1 && props.activeLaneId}>
+          <Show when={props.agentSettings.installedAgents.length > 1 && props.activeLaneId}>
             <div class="flex items-center">
               <div class="h-4 w-[1px] bg-zed-border-subtle mx-2" />
               <Select
-                options={agentSettings()!.installedAgents}
+                options={props.agentSettings.installedAgents}
                 optionValue="name"
                 optionLabel="name"
                 value={currentAgent()}
