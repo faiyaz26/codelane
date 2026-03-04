@@ -105,6 +105,13 @@ class TerminalPool {
   }
 
   /**
+   * Get all active terminal handles
+   */
+  getAllHandles(): TerminalHandle[] {
+    return Array.from(this.handles.values());
+  }
+
+  /**
    * Cleanup all terminals
    */
   async cleanup(): Promise<void> {

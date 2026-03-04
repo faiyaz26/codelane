@@ -1,8 +1,12 @@
 import { createSignal, type Component } from 'solid-js';
 import { listExtensions, type ExtensionManifest } from '../lib/extension-api';
+import { listLanes } from '../lib/lane-api';
 import { tabManager } from './TabManager';
 import { extensionSettingsManager, type ExtensionSettingSchema } from './ExtensionSettingsManager';
 import { statusBarManager, type StatusBarItem } from './StatusBarManager';
+import { terminalPool } from './TerminalPool';
+import { codeReviewStore } from './CodeReviewStore';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 export interface ExtensionContext {
   id: string;
@@ -12,6 +16,19 @@ export interface ExtensionContext {
   registerSettings: (schemas: ExtensionSettingSchema[]) => void;
   getSettings: () => Promise<Record<string, any>>;
   registerStatusBarItem: (item: Omit<StatusBarItem, 'id'> & { id?: string }) => void;
+  
+  // Data Hooks API
+  terminal: {
+    write: (terminalId: string, data: string) => Promise<void>;
+    onData: (terminalId: string, callback: (data: Uint8Array) => void) => Promise<UnlistenFn | undefined>;
+    getActiveIds: () => string[];
+  };
+  lanes: {
+    list: () => Promise<any[]>;
+  };
+  review: {
+    getState: (laneId: string) => any;
+  };
 }
 
 class ExtensionLoader {
@@ -92,6 +109,43 @@ class ExtensionLoader {
             id: itemId
           });
           console.info(`[ExtensionLoader] Registered status bar item for: ${manifest.id}`);
+        },
+        terminal: {
+          write: async (terminalId: string, data: string) => {
+            if (!manifest.permissions.includes('terminal:write')) {
+              throw new Error(`Extension ${manifest.id} lacks 'terminal:write' permission`);
+            }
+            const handle = terminalPool.getHandle(terminalId);
+            if (handle) {
+              await handle.pty.write(data);
+            }
+          },
+          onData: async (terminalId: string, callback: (data: Uint8Array) => void) => {
+            if (!manifest.permissions.includes('terminal:read')) {
+              throw new Error(`Extension ${manifest.id} lacks 'terminal:read' permission`);
+            }
+            const handle = terminalPool.getHandle(terminalId);
+            if (handle) {
+              // We want to tap into the output without stealing it from the terminal view
+              return await handle.pty.onData(callback);
+            }
+            return undefined;
+          },
+          getActiveIds: () => {
+             if (!manifest.permissions.includes('terminal:read')) return [];
+             return terminalPool.getAllHandles().map(h => h.id);
+          }
+        },
+        lanes: {
+          list: async () => {
+             return await listLanes();
+          }
+        },
+        review: {
+          getState: (laneId: string) => {
+            // Need a snapshot to send over wire
+            return codeReviewStore.getState(laneId)(); 
+          }
         }
       };
 
