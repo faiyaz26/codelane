@@ -1,6 +1,6 @@
 // Settings module types and constants
 
-export type SettingsTab = 'general' | 'agents' | 'code-review' | 'notifications' | 'appearance' | 'extensions';
+export type SettingsTab = 'general' | 'agents' | 'code-review' | 'notifications' | 'appearance' | 'extensions' | string;
 
 export interface NavItem {
   id: SettingsTab;

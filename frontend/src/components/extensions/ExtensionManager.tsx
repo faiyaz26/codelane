@@ -20,7 +20,6 @@ export function ExtensionManager() {
   const [loading, setLoading] = createSignal(true);
   const [installingIds, setInstallingIds] = createSignal<Set<string>>(new Set());
   const [error, setError] = createSignal<string | null>(null);
-  const [expandedSettings, setExpandedSettings] = createSignal<Set<string>>(new Set());
 
   const fetchInstalled = async (force = false) => {
     try {
@@ -104,22 +103,13 @@ export function ExtensionManager() {
     }
   };
 
-  const toggleSettings = (id: string) => {
-    setExpandedSettings(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const isInstalled = (id: string) => installedExtensions().some(e => e.id === id);
 
   return (
     <div class="flex flex-col h-full bg-zed-bg-panel text-sm">
       {/* Header & Tabs */}
       <div class="bg-zed-bg-header border-b border-zed-border-subtle">
-        <div class="p-4 flex justify-between items-center pb-2">
+        <div class="p-4 flex items-center gap-2 pb-2">
           <h2 class="text-zed-text-primary font-medium text-base">Extensions</h2>
           <button 
             onClick={refresh}
@@ -216,21 +206,7 @@ export function ExtensionManager() {
                       >
                         Delete
                       </button>
-                      
-                      <button
-                        onClick={() => toggleSettings(ext.id)}
-                        class="px-3 py-1 bg-zed-bg-panel hover:bg-zed-bg-hover text-zed-text-secondary border border-zed-border-subtle text-[11px] rounded transition-all font-medium ml-auto flex items-center gap-1"
-                      >
-                        <svg class={`w-3 h-3 transition-transform ${expandedSettings().has(ext.id) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                        Settings
-                      </button>
                     </div>
-
-                    <Show when={expandedSettings().has(ext.id)}>
-                      <ExtensionSettingsForm extensionId={ext.id} />
-                    </Show>
                   </div>
                 )}
               </For>

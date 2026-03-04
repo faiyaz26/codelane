@@ -13,8 +13,10 @@ import { NotificationSettings } from './NotificationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { CodeReviewSettings } from './CodeReviewSettings';
 import { ExtensionManager } from '../extensions/ExtensionManager';
+import { ExtensionSettingsForm } from '../extensions/ExtensionSettingsForm';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
+import { extensionSettingsManager } from '../../services/ExtensionSettingsManager';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -100,7 +102,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               </div>
 
               {/* Navigation */}
-              <nav class="flex-1 px-2 py-2">
+              <nav class="flex-1 px-2 py-2 overflow-y-auto">
                 <For each={NAV_ITEMS}>
                   {(item) => (
                     <button
@@ -116,6 +118,29 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     </button>
                   )}
                 </For>
+
+                {/* Extensions with settings */}
+                <Show when={extensionSettingsManager.getDefinitions()().length > 0}>
+                  <div class="my-2 border-t border-zed-border-subtle mx-2" />
+                  <div class="px-3 py-1 text-[10px] font-semibold text-zed-text-disabled uppercase tracking-wider">
+                    Extension Settings
+                  </div>
+                  <For each={extensionSettingsManager.getDefinitions()()}>
+                    {(def) => (
+                      <button
+                        class={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab() === `ext:${def.extensionId}`
+                            ? 'bg-zed-accent-blue/20 text-zed-accent-blue border-l-2 border-zed-accent-blue -ml-0.5 pl-[14px]'
+                            : 'text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover'
+                        }`}
+                        onClick={() => setActiveTab(`ext:${def.extensionId}`)}
+                      >
+                        <SettingsNavIcon icon="extensions" class="w-5 h-5 opacity-60" />
+                        <span class="truncate">{def.extensionId.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')}</span>
+                      </button>
+                    )}
+                  </For>
+                </Show>
               </nav>
 
               {/* Version */}
@@ -183,6 +208,27 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       <ExtensionManager />
                     </div>
                   </Show>
+
+                  {/* Dynamic Extension Settings Tabs */}
+                  <For each={extensionSettingsManager.getDefinitions()()}>
+                    {(def) => (
+                      <Show when={activeTab() === `ext:${def.extensionId}`}>
+                        <div class="flex flex-col gap-4">
+                          <header>
+                            <h2 class="text-xl font-semibold text-zed-text-primary mb-1">
+                              {def.extensionId.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')} Settings
+                            </h2>
+                            <p class="text-sm text-zed-text-secondary">
+                              Configure settings for the {def.extensionId} extension.
+                            </p>
+                          </header>
+                          <div class="-mt-4">
+                            <ExtensionSettingsForm extensionId={def.extensionId} />
+                          </div>
+                        </div>
+                      </Show>
+                    )}
+                  </For>
                 </Show>
               </div>
 

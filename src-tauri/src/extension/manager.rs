@@ -29,35 +29,43 @@ impl ExtensionState {
 
     /// Discover extensions in the extensions directory
     pub async fn discover_extensions(&self) -> Result<()> {
-        let extensions_dir = paths::extensions_dir();
+        let mut extensions_dirs = vec![paths::extensions_dir()];
         
-        if !extensions_dir.exists() {
-            tracing::debug!("Extensions directory does not exist at {:?}", extensions_dir);
-            let mut last_scanned = self.last_scanned.lock().await;
-            *last_scanned = Some(std::time::Instant::now());
-            return Ok(());
+        // In development, also look in the local extensions directory
+        if cfg!(debug_assertions) {
+            if let Ok(cwd) = std::env::current_dir() {
+                let local_exts = cwd.join("extensions");
+                if local_exts.exists() && local_exts.is_dir() {
+                    extensions_dirs.push(local_exts);
+                }
+            }
         }
 
         let mut extensions = self.extensions.lock().await;
 
-        for entry in std::fs::read_dir(extensions_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                let manifest_path = path.join("manifest.json");
-                if manifest_path.exists() {
-                    let manifest_content = std::fs::read_to_string(&manifest_path)?;
-                    let manifest: ExtensionManifest = serde_json::from_str(&manifest_content)?;
-                    
-                    extensions.entry(manifest.id.clone()).or_insert_with(|| Extension {
-                        manifest,
-                        path: path.to_path_buf(),
-                        child_process: None,
-                        stdin: None,
-                    });
-                }
+        for dir in extensions_dirs {
+            if !dir.exists() {
+                continue;
             }
-        }
+
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    let manifest_path = path.join("manifest.json");
+                    if manifest_path.exists() {
+                        let manifest_content = std::fs::read_to_string(&manifest_path)?;
+                        let manifest: ExtensionManifest = serde_json::from_str(&manifest_content)?;
+
+                        extensions.insert(manifest.id.clone(), Extension {
+                            manifest,
+                            path: path.to_path_buf(),
+                            child_process: None,
+                            stdin: None,
+                        });
+                        }
+                        }
+                        }        }
 
         let mut last_scanned = self.last_scanned.lock().await;
         *last_scanned = Some(std::time::Instant::now());
@@ -74,8 +82,14 @@ impl ExtensionState {
             return Ok(()); // Already running
         }
 
-        let main_backend = extension.manifest.main_backend.as_ref()
-            .context(format!("Extension {} has no backend entry point", extension_id))?;
+        let main_backend = match &extension.manifest.main_backend {
+            Some(backend) => backend,
+            None => {
+                // If there's no backend, we just consider it "started" so the frontend can load
+                tracing::info!("[Extension {}] Starting frontend-only extension", extension_id);
+                return Ok(());
+            }
+        };
 
         let backend_path = extension.path.join(main_backend);
         if !backend_path.exists() {
