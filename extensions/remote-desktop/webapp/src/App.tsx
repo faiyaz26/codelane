@@ -140,7 +140,8 @@ function App() {
 }
 
 function RemoteDashboard(props: { conn: any }) {
-  let terminalRef: { write: (data: string) => void } | undefined;
+  let terminalRef: { write: (data: string | Uint8Array) => void } | undefined;
+  const [commandInput, setCommandInput] = createSignal('');
 
   onMount(() => {
     // Request lanes list
@@ -168,7 +169,7 @@ function RemoteDashboard(props: { conn: any }) {
     props.conn.send({ type: 'terminal:subscribe', terminalId: `${laneId}-agent` });
   };
 
-  const handleTerminalInput = (data: string) => {
+  const sendToTerminal = (data: string) => {
     const laneId = remoteStore.activeLaneId();
     if (laneId) {
       props.conn.send({ 
@@ -176,6 +177,15 @@ function RemoteDashboard(props: { conn: any }) {
         terminalId: `${laneId}-agent`, 
         data 
       });
+    }
+  };
+
+  const handleCommandSubmit = (e: Event) => {
+    e.preventDefault();
+    const cmd = commandInput().trim();
+    if (cmd) {
+      sendToTerminal(cmd + '\n');
+      setCommandInput('');
     }
   };
 
@@ -203,15 +213,43 @@ function RemoteDashboard(props: { conn: any }) {
         }>
           <RemoteTerminal 
             terminalId={remoteStore.activeLaneId()!} 
-            onData={handleTerminalInput}
+            onData={sendToTerminal}
             ref={(r) => terminalRef = r}
           />
         </Show>
       </main>
 
+      {/* Command Input Box */}
+      <Show when={remoteStore.activeLaneId()}>
+        <form 
+          onSubmit={handleCommandSubmit}
+          class="px-2 py-2 bg-zed-bg-panel border-t border-zed-border-subtle flex gap-2 items-center shrink-0"
+        >
+          <input
+            type="text"
+            value={commandInput()}
+            onInput={(e) => setCommandInput(e.currentTarget.value)}
+            placeholder="Type command..."
+            class="flex-1 bg-zed-bg-surface border border-zed-border-default rounded-md px-3 py-1.5 text-sm text-zed-text-primary focus:outline-none focus:border-zed-accent-blue transition-colors"
+            autocapitalize="none"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck={false}
+          />
+          <button 
+            type="submit"
+            class="p-2 text-zed-accent-blue hover:bg-zed-bg-hover rounded-md transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </form>
+      </Show>
+
       {/* Mobile Developer Toolbar */}
       <Show when={remoteStore.activeLaneId()}>
-        <TerminalToolbar onKeyPress={handleTerminalInput} />
+        <TerminalToolbar onKeyPress={sendToTerminal} />
       </Show>
 
       {/* Mobile Bottom Navigation / Lane Switcher */}

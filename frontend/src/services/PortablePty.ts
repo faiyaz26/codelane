@@ -62,16 +62,21 @@ class DirectWriter {
  * build output). Data is collected and flushed at most ~60 times per second.
  *
  * Uses Uint8Array chunks to avoid spread operator stack overflow on large outputs.
+ * Now supports multiple concurrent subscribers.
  */
 class BatchedReader {
   private chunks: Uint8Array[] = [];
   private totalBytes = 0;
-  private callback: ((data: Uint8Array) => void) | null = null;
+  private callbacks = new Set<(data: Uint8Array) => void>();
   private frameScheduled = false;
   private disposed = false;
 
-  setCallback(callback: (data: Uint8Array) => void) {
-    this.callback = callback;
+  addCallback(callback: (data: Uint8Array) => void) {
+    this.callbacks.add(callback);
+  }
+
+  removeCallback(callback: (data: Uint8Array) => void) {
+    this.callbacks.delete(callback);
   }
 
   push(data: number[]) {
@@ -92,7 +97,9 @@ class BatchedReader {
   private flush() {
     this.frameScheduled = false;
 
-    if (this.disposed || this.totalBytes === 0 || !this.callback) {
+    if (this.disposed || this.totalBytes === 0 || this.callbacks.size === 0) {
+      this.chunks = [];
+      this.totalBytes = 0;
       return;
     }
 
@@ -113,20 +120,22 @@ class BatchedReader {
     this.chunks = [];
     this.totalBytes = 0;
 
-    try {
-      this.callback(data);
-    } catch (err) {
-      console.error('[PortablePty] Callback error:', err);
+    for (const callback of this.callbacks) {
+      try {
+        callback(data);
+      } catch (err) {
+        console.error('[PortablePty] Callback error:', err);
+      }
     }
   }
 
   dispose() {
     this.disposed = true;
     // Flush any remaining data
-    if (this.totalBytes > 0 && this.callback) {
+    if (this.totalBytes > 0 && this.callbacks.size > 0) {
       this.flush();
     }
-    this.callback = null;
+    this.callbacks.clear();
   }
 }
 
@@ -167,8 +176,9 @@ export async function spawn(
   const reader = new BatchedReader();
 
   // Track event listeners for cleanup
-  let dataUnlisten: UnlistenFn | null = null;
-  let exitUnlisten: UnlistenFn | null = null;
+  let dataUnlistenPromise: Promise<UnlistenFn> | null = null;
+  let exitUnlistenPromise: Promise<UnlistenFn> | null = null;
+  const exitCallbacks = new Set<(code: number | null) => void>();
 
   return {
     id: terminalId,
@@ -189,14 +199,14 @@ export async function spawn(
       writer.dispose();
       reader.dispose();
 
-      // Clean up listeners
-      if (dataUnlisten) {
-        dataUnlisten();
-        dataUnlisten = null;
+      // Clean up backend listeners
+      if (dataUnlistenPromise) {
+        const unlisten = await dataUnlistenPromise;
+        unlisten();
       }
-      if (exitUnlisten) {
-        exitUnlisten();
-        exitUnlisten = null;
+      if (exitUnlistenPromise) {
+        const unlisten = await exitUnlistenPromise;
+        unlisten();
       }
 
       try {
@@ -207,37 +217,52 @@ export async function spawn(
     },
 
     async onData(callback: (data: Uint8Array) => void): Promise<UnlistenFn> {
-      // Set callback on the batched reader
-      reader.setCallback(callback);
+      // Add callback to the batched reader
+      reader.addCallback(callback);
 
-      // Listen for terminal output events - data goes through batched reader
-      const unlisten = await listen<TerminalOutputPayload>(
-        'terminal-output',
-        (event) => {
-          if (event.payload.id === terminalId) {
-            // Push to batched reader - will be flushed on next animation frame
-            reader.push(event.payload.data);
+      // Lazily initialize backend listener if it's the first subscriber
+      if (!dataUnlistenPromise) {
+        dataUnlistenPromise = listen<TerminalOutputPayload>(
+          'terminal-output',
+          (event) => {
+            if (event.payload.id === terminalId) {
+              reader.push(event.payload.data);
+            }
           }
-        }
-      );
+        );
+      }
 
-      dataUnlisten = unlisten;
-      return unlisten;
+      // Return a function that removes this specific callback
+      return () => {
+        reader.removeCallback(callback);
+      };
     },
 
     async onExit(callback: (code: number | null) => void): Promise<UnlistenFn> {
-      // Listen for terminal exit events
-      const unlisten = await listen<TerminalExitPayload>(
-        'terminal-exit',
-        (event) => {
-          if (event.payload.id === terminalId) {
-            callback(event.payload.code);
-          }
-        }
-      );
+      exitCallbacks.add(callback);
 
-      exitUnlisten = unlisten;
-      return unlisten;
+      // Lazily initialize backend listener if it's the first subscriber
+      if (!exitUnlistenPromise) {
+        exitUnlistenPromise = listen<TerminalExitPayload>(
+          'terminal-exit',
+          (event) => {
+            if (event.payload.id === terminalId) {
+              for (const cb of exitCallbacks) {
+                try {
+                  cb(event.payload.code);
+                } catch (err) {
+                  console.error('[PortablePty] Exit callback error:', err);
+                }
+              }
+            }
+          }
+        );
+      }
+
+      // Return a function that removes this specific callback
+      return () => {
+        exitCallbacks.delete(callback);
+      };
     },
   };
 }

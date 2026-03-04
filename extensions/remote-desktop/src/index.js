@@ -101,6 +101,7 @@ function activate(context) {
     activeTerminalListeners: {},
     listeners: [],
     onAuthenticated: null, 
+    isShowingError: false, // Prevent multiple alerts
     setConnected: (val) => {
       state.isConnected = val;
       state.listeners.forEach(l => l());
@@ -304,8 +305,21 @@ function activate(context) {
     
     peer.on('error', (err) => {
       console.error('PeerJS error:', err);
-      alert(`Connection error: ${err.message}`);
-      context.closeDialog();
+      
+      if (!state.isShowingError) {
+        state.isShowingError = true;
+        alert(`Remote Desktop: ${err.message || 'Connection lost to signaling server'}`);
+        
+        // Reset state after alert is dismissed
+        state.isShowingError = false;
+        state.setConnected(false);
+        state.activeConnection = null;
+        if (peer) {
+          peer.destroy();
+          peer = null;
+        }
+        context.closeDialog();
+      }
     });
   };
 
