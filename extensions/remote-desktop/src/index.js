@@ -133,6 +133,11 @@ function activate(context) {
     statusToast.className = 'hidden flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full mb-6 animate-pulse';
     statusToast.innerHTML = '<div class="w-2 h-2 rounded-full bg-green-500"></div><span class="text-xs font-bold text-green-400">Client Connected</span>';
     
+    // Signaling Status
+    const signalStatus = document.createElement('div');
+    signalStatus.className = 'flex items-center gap-1.5 mb-4 text-[10px] font-medium uppercase tracking-wider text-zed-text-tertiary';
+    signalStatus.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-yellow"></div><span>Signaling: Connecting...</span>';
+
     if (state.isConnected) {
       statusToast.classList.remove('hidden');
       qrContainer.classList.add('opacity-20');
@@ -192,8 +197,9 @@ function activate(context) {
       if (confirm(msg)) {
         if (state.activeConnection) state.activeConnection.close();
         
-        // If they want to stop hosting entirely, kill the peer
+        // If they want to stop hosting entirely, kill the peer and heartbeat
         if (!state.isConnected) {
+          if (heartbeatTimer) clearInterval(heartbeatTimer);
           if (peer) peer.destroy();
           peer = null;
           state.lastConnectionId = '';
@@ -210,18 +216,32 @@ function activate(context) {
     
     content.appendChild(qrContainer);
     content.appendChild(statusToast);
+    content.appendChild(signalStatus);
     content.appendChild(infoGrid);
     content.appendChild(actionArea);
     
-    return { content, qrImage, idText, pinText, statusToast, qrContainer };
+    return { content, qrImage, idText, pinText, statusToast, qrContainer, signalStatus };
   };
 
   let peer = null;
+  let heartbeatTimer = null;
+
+  const startHeartbeat = (p) => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(() => {
+      if (p.open && !p.disconnected) {
+        // Explicit heartbeat for some webview environments
+        if (p.socket && p.socket._open) {
+          p.socket.send({ type: 'HEARTBEAT' });
+        }
+      }
+    }, 15000);
+  };
 
   const startHosting = async () => {
     // If peer exists and not destroyed, just show the dialog with current info
     if (peer && !peer.destroyed) {
-      const { content, qrImage, idText, pinText, statusToast, qrContainer } = createModalContent();
+      const { content, qrImage, idText, pinText, statusToast, qrContainer, signalStatus } = createModalContent();
       
       context.openDialog({
         title: 'Remote Desktop Info',
@@ -236,6 +256,14 @@ function activate(context) {
       const url = `https://remote.codelane.app/?host=codelane-host-${state.lastConnectionId}&pin=${state.pin}`;
       qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
 
+      if (peer.disconnected) {
+        console.info('[RemoteDesktop] Peer is disconnected, reconnecting...');
+        signalStatus.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-red"></div><span class="text-zed-accent-red">Signaling: Reconnecting...</span>';
+        peer.reconnect();
+      } else if (peer.open) {
+        signalStatus.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-green"></div><span class="text-zed-accent-green">Signaling: Online</span>';
+      }
+
       state.onAuthenticated = () => {
         statusToast.classList.remove('hidden');
         qrContainer.classList.add('opacity-20');
@@ -244,7 +272,7 @@ function activate(context) {
     }
 
     const settings = await context.getSettings();
-    const { content, qrImage, idText, pinText, statusToast, qrContainer } = createModalContent();
+    const { content, qrImage, idText, pinText, statusToast, qrContainer, signalStatus } = createModalContent();
     
     context.openDialog({
       title: 'Connect Remote Desktop',
@@ -258,9 +286,9 @@ function activate(context) {
       qrContainer.classList.add('opacity-20');
     };
     
-    // Reuse existing ID/PIN if available, otherwise generate new
+    // Ensure exactly 8 characters for Connection ID
     if (!state.lastConnectionId) {
-      state.lastConnectionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+      state.lastConnectionId = Math.random().toString(36).substring(2, 10).padEnd(8, '0').toUpperCase();
       state.pin = generatePin();
     }
 
@@ -269,7 +297,12 @@ function activate(context) {
     idText.innerText = state.lastConnectionId;
     pinText.innerText = state.pin;
     
-    const peerOptions = { debug: 2 };
+    // EXPLICIT: Always use 'peerjs' key for default cloud to match client
+    const peerOptions = { 
+      debug: 2,
+      key: 'peerjs'
+    };
+    
     if (settings.signalingServer === 'custom' && settings.peerJsKey) {
       peerOptions.key = settings.peerJsKey;
     }
@@ -277,9 +310,19 @@ function activate(context) {
     peer = new window.Peer(hostPeerId, peerOptions);
     
     peer.on('open', (id) => {
+      console.info('[RemoteDesktop] Host registered with signaling server:', id);
+      signalStatus.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-green"></div><span class="text-zed-accent-green">Signaling: Online</span>';
+      
       const url = `https://remote.codelane.app/?host=${id}&pin=${state.pin}`;
-      // Use free QR Server API
       qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+      
+      startHeartbeat(peer);
+    });
+    
+    peer.on('disconnected', () => {
+      console.warn('[RemoteDesktop] Signaling server disconnected. Attempting reconnect...');
+      signalStatus.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-red"></div><span class="text-zed-accent-red">Signaling: Reconnecting...</span>';
+      peer.reconnect();
     });
     
     peer.on('connection', (conn) => {
@@ -304,21 +347,27 @@ function activate(context) {
     });
     
     peer.on('error', (err) => {
-      console.error('PeerJS error:', err);
+      console.error('PeerJS error:', err.type, err.message);
       
-      if (!state.isShowingError) {
+      // Handle fatal errors
+      const isFatal = ['unavailable-id', 'invalid-key', 'invalid-id', 'browser-incompatible'].includes(err.type);
+
+      if (!state.isShowingError && isFatal) {
         state.isShowingError = true;
-        alert(`Remote Desktop: ${err.message || 'Connection lost to signaling server'}`);
+        alert(`Remote Desktop Fatal Error: ${err.message}`);
         
-        // Reset state after alert is dismissed
         state.isShowingError = false;
         state.setConnected(false);
         state.activeConnection = null;
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (peer) {
           peer.destroy();
           peer = null;
         }
         context.closeDialog();
+      } else {
+        console.warn('[RemoteDesktop] Non-fatal connection error:', err.type);
+        signalStatus.innerHTML = `<div class="w-1.5 h-1.5 rounded-full bg-zed-accent-red"></div><span class="text-zed-accent-red">Error: ${err.type}</span>`;
       }
     });
   };

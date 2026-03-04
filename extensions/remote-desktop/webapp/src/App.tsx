@@ -31,26 +31,35 @@ function App() {
   });
 
   const handleConnect = async () => {
-    if (!connectionId() || !pin()) return;
+    const rawId = connectionId().trim().toUpperCase();
+    const rawPin = pin().trim();
+    
+    if (!rawId || !rawPin) return;
     
     setIsLoading(true);
     setError(null);
 
-    const fullHostId = `codelane-host-${connectionId().toUpperCase()}`;
+    const fullHostId = `codelane-host-${rawId}`;
+    console.info(`[Remote] Attempting to connect to host: ${fullHostId}`);
     
     try {
       const newPeer = new Peer();
 
-      newPeer.on('open', () => {
-        const connection = newPeer.connect(fullHostId);
+      newPeer.on('open', (id) => {
+        console.info(`[Remote] Signaling server connected. My Client ID: ${id}`);
+        const connection = newPeer.connect(fullHostId, {
+          reliable: true
+        });
         setConn(connection);
 
         connection.on('open', () => {
-          connection.send({ type: 'auth', pin: pin() });
+          console.info('[Remote] P2P Channel open. Sending auth...');
+          connection.send({ type: 'auth', pin: rawPin });
         });
 
         connection.on('data', (data: any) => {
           if (data.type === 'auth_success') {
+            console.info('[Remote] Authentication successful!');
             setIsConnected(true);
             setIsLoading(false);
           } else if (data.type === 'error') {
@@ -61,22 +70,27 @@ function App() {
         });
 
         connection.on('close', () => {
+          console.warn('[Remote] Connection closed');
           setIsConnected(false);
           setConn(null);
-        });
-
-        connection.on('error', (err) => {
-          setError(err.message);
-          setIsLoading(false);
         });
       });
 
       newPeer.on('error', (err) => {
-        setError(`PeerJS error: ${err.type}`);
+        console.error('[Remote] PeerJS Error:', err.type, err.message);
+        if (err.type === 'peer-unavailable') {
+          setError(`Host "${rawId}" not found. Ensure the Desktop app is hosting.`);
+        } else if (err.type === 'network') {
+          setError('Network error. Check your internet connection.');
+        } else {
+          setError(`Connection error: ${err.type}`);
+        }
         setIsLoading(false);
+        newPeer.destroy();
       });
 
     } catch (err: any) {
+      console.error('[Remote] Catch block error:', err);
       setError(err.message);
       setIsLoading(false);
     }
