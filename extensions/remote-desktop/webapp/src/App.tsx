@@ -1,6 +1,9 @@
-import { createSignal, Show, onMount } from 'solid-js';
+import { createSignal, Show, onMount, For } from 'solid-js';
 import { Button, TextField } from '@codelane/shared';
 import { Peer } from 'peerjs';
+import { RemoteTerminal } from './components/RemoteTerminal';
+import { TerminalToolbar } from './components/TerminalToolbar';
+import { remoteStore } from './services/RemoteStore';
 
 function App() {
   const [connectionId, setConnectionId] = createSignal('');
@@ -17,7 +20,6 @@ function App() {
     const pinParam = params.get('pin');
     
     if (host) {
-      // Host ID in URL is often codelane-host-ABCDEF, but user sees ABCDEF
       const displayId = host.startsWith('codelane-host-') ? host.replace('codelane-host-', '') : host;
       setConnectionId(displayId);
     }
@@ -44,7 +46,6 @@ function App() {
         setConn(connection);
 
         connection.on('open', () => {
-          // Send auth packet
           connection.send({ type: 'auth', pin: pin() });
         });
 
@@ -82,7 +83,7 @@ function App() {
   };
 
   return (
-    <div class="h-screen w-screen bg-zed-bg-app flex flex-col items-center justify-center p-6">
+    <div class="h-screen w-screen bg-zed-bg-app flex flex-col items-center justify-center p-6 overflow-hidden">
       <Show when={!isConnected()} fallback={<RemoteDashboard conn={conn()} />}>
         <div class="w-full max-w-md bg-zed-bg-overlay border border-zed-border-default rounded-xl shadow-2xl p-8 flex flex-col animate-slide-down">
           <div class="flex items-center gap-3 mb-8">
@@ -138,14 +139,98 @@ function App() {
   );
 }
 
-function RemoteDashboard(_props: { conn: any }) {
+function RemoteDashboard(props: { conn: any }) {
+  let terminalRef: { write: (data: string) => void } | undefined;
+
+  onMount(() => {
+    // Request lanes list
+    props.conn.send({ type: 'lanes:list' });
+
+    // Handle data from desktop
+    props.conn.on('data', (data: any) => {
+      if (data.type === 'lanes:list_result') {
+        remoteStore.setLanes(data.lanes);
+        if (data.lanes.length > 0 && !remoteStore.activeLaneId()) {
+          handleSelectLane(data.lanes[0].id);
+        }
+      } else if (data.type === 'terminal:data') {
+        // PERF: Handle raw ArrayBuffer directly from PeerJS
+        const bytes = new Uint8Array(data.data);
+        terminalRef?.write(bytes);
+      }
+    });
+  });
+
+  const handleSelectLane = (laneId: string) => {
+    remoteStore.setActiveLaneId(laneId);
+    // \x1b[2J = clear screen, \x1b[H = move cursor to top-left
+    terminalRef?.write('\x1b[2J\x1b[H');
+    props.conn.send({ type: 'terminal:subscribe', terminalId: `${laneId}-agent` });
+  };
+
+  const handleTerminalInput = (data: string) => {
+    const laneId = remoteStore.activeLaneId();
+    if (laneId) {
+      props.conn.send({ 
+        type: 'terminal:write', 
+        terminalId: `${laneId}-agent`, 
+        data 
+      });
+    }
+  };
+
   return (
-    <div class="flex flex-col items-center justify-center text-zed-text-primary">
-      <h2 class="text-2xl font-bold mb-4">Dashboard (Phase 2)</h2>
-      <p class="text-zed-text-secondary italic">Establishing data stream from Codelane Desktop...</p>
-      <Button variant="secondary" onClick={() => window.location.reload()} class="mt-8">
-        Disconnect
-      </Button>
+    <div class="h-full w-full flex flex-col overflow-hidden">
+      {/* Mobile Top Bar */}
+      <header class="h-14 border-b border-zed-border-subtle flex items-center justify-between px-4 bg-zed-bg-panel shrink-0">
+        <div class="flex items-center gap-2 overflow-hidden">
+          <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <h1 class="text-sm font-bold truncate">
+            {remoteStore.lanes().find(l => l.id === remoteStore.activeLaneId())?.name || 'CodeLane Remote'}
+          </h1>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+          Disconnect
+        </Button>
+      </header>
+
+      {/* Content Area */}
+      <main class="flex-1 overflow-hidden relative bg-black text-white font-mono">
+        <Show when={remoteStore.activeLaneId()} fallback={
+          <div class="h-full flex items-center justify-center text-zed-text-tertiary">
+            Select a lane to start
+          </div>
+        }>
+          <RemoteTerminal 
+            terminalId={remoteStore.activeLaneId()!} 
+            onData={handleTerminalInput}
+            ref={(r) => terminalRef = r}
+          />
+        </Show>
+      </main>
+
+      {/* Mobile Developer Toolbar */}
+      <Show when={remoteStore.activeLaneId()}>
+        <TerminalToolbar onKeyPress={handleTerminalInput} />
+      </Show>
+
+      {/* Mobile Bottom Navigation / Lane Switcher */}
+      <nav class="h-16 border-t border-zed-border-subtle bg-zed-bg-panel flex items-center px-4 gap-3 overflow-x-auto no-scrollbar shrink-0">
+        <For each={remoteStore.lanes()}>
+          {(lane) => (
+            <button
+              onClick={() => handleSelectLane(lane.id)}
+              class={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                remoteStore.activeLaneId() === lane.id
+                  ? 'bg-zed-accent-blue text-white shadow-lg'
+                  : 'bg-zed-bg-surface text-zed-text-secondary hover:text-zed-text-primary border border-zed-border-default'
+              }`}
+            >
+              {lane.name}
+            </button>
+          )}
+        </For>
+      </nav>
     </div>
   );
 }

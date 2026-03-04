@@ -8,6 +8,10 @@ async function handleRemoteData(data, context, state, conn) {
       state.authenticated = true;
       state.activeConnection = conn;
       state.setConnected(true);
+      
+      // Notify the hosting UI
+      if (state.onAuthenticated) state.onAuthenticated();
+      
       conn.send({ type: 'auth_success' });
       return true;
     } else {
@@ -27,10 +31,11 @@ async function handleRemoteData(data, context, state, conn) {
       if (state.activeTerminalListeners[data.terminalId]) return;
       
       const unlisten = await context.terminal.onData(data.terminalId, (chunk) => {
+        // PERF: Send raw ArrayBuffer to avoid freezing the main thread with Array.from()
         conn.send({ 
           type: 'terminal:data', 
           terminalId: data.terminalId, 
-          data: Array.from(chunk) 
+          data: chunk.buffer 
         });
       });
       
@@ -91,9 +96,11 @@ function activate(context) {
     isConnected: false,
     authenticated: false,
     pin: '',
+    lastConnectionId: '', // Persist ID for reuse
     activeConnection: null,
     activeTerminalListeners: {},
     listeners: [],
+    onAuthenticated: null, 
     setConnected: (val) => {
       state.isConnected = val;
       state.listeners.forEach(l => l());
@@ -113,13 +120,23 @@ function activate(context) {
     
     // QR Code Container
     const qrContainer = document.createElement('div');
-    qrContainer.className = 'bg-white p-3 rounded-xl shadow-inner mb-6 flex items-center justify-center';
+    qrContainer.className = 'bg-white p-3 rounded-xl shadow-inner mb-6 flex items-center justify-center transition-opacity duration-500';
     
     const qrImage = document.createElement('img');
     qrImage.className = 'w-[180px] h-[180px]';
     qrImage.alt = 'Connecting QR Code';
     qrContainer.appendChild(qrImage);
+
+    // Connected Notification
+    const statusToast = document.createElement('div');
+    statusToast.className = 'hidden flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full mb-6 animate-pulse';
+    statusToast.innerHTML = '<div class="w-2 h-2 rounded-full bg-green-500"></div><span class="text-xs font-bold text-green-400">Client Connected</span>';
     
+    if (state.isConnected) {
+      statusToast.classList.remove('hidden');
+      qrContainer.classList.add('opacity-20');
+    }
+
     // ID and PIN Container
     const infoGrid = document.createElement('div');
     infoGrid.className = 'grid grid-cols-2 gap-4 w-full mb-8';
@@ -155,39 +172,100 @@ function activate(context) {
     infoGrid.appendChild(idWrapper);
     infoGrid.appendChild(pinWrapper);
     
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'w-full h-10 inline-flex items-center justify-center rounded-md font-medium transition-colors bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-default text-zed-text-primary text-sm';
-    cancelBtn.innerText = 'Cancel';
-    cancelBtn.onclick = () => {
-      context.closeDialog();
-      if (peer) { peer.destroy(); peer = null; }
+    const actionArea = document.createElement('div');
+    actionArea.className = 'flex gap-3 w-full';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'flex-1 h-10 inline-flex items-center justify-center rounded-md font-medium transition-colors bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-default text-zed-text-primary text-sm';
+    closeBtn.innerText = 'Close';
+    closeBtn.onclick = () => context.closeDialog();
+
+    const disconnectBtn = document.createElement('button');
+    disconnectBtn.className = 'flex-1 h-10 inline-flex items-center justify-center rounded-md font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-sm';
+    disconnectBtn.innerText = state.isConnected ? 'Disconnect' : 'Stop Hosting';
+    disconnectBtn.onclick = () => {
+      const msg = state.isConnected 
+        ? 'Disconnect remote client? You can reuse the same ID to reconnect later.' 
+        : 'Stop hosting? This will clear the Connection ID and PIN.';
+        
+      if (confirm(msg)) {
+        if (state.activeConnection) state.activeConnection.close();
+        
+        // If they want to stop hosting entirely, kill the peer
+        if (!state.isConnected) {
+          if (peer) peer.destroy();
+          peer = null;
+          state.lastConnectionId = '';
+          state.pin = '';
+        }
+        
+        state.setConnected(false);
+        context.closeDialog();
+      }
     };
+
+    actionArea.appendChild(closeBtn);
+    actionArea.appendChild(disconnectBtn);
     
     content.appendChild(qrContainer);
+    content.appendChild(statusToast);
     content.appendChild(infoGrid);
-    content.appendChild(cancelBtn);
+    content.appendChild(actionArea);
     
-    return { content, qrImage, idText, pinText };
+    return { content, qrImage, idText, pinText, statusToast, qrContainer };
   };
 
   let peer = null;
 
   const startHosting = async () => {
+    // If peer exists and not destroyed, just show the dialog with current info
+    if (peer && !peer.destroyed) {
+      const { content, qrImage, idText, pinText, statusToast, qrContainer } = createModalContent();
+      
+      context.openDialog({
+        title: 'Remote Desktop Info',
+        description: 'Hosting is active. Use these details to connect or reconnect a client.',
+        size: 'sm',
+        component: content
+      });
+
+      idText.innerText = state.lastConnectionId;
+      pinText.innerText = state.pin;
+      
+      const url = `https://remote.codelane.app/?host=codelane-host-${state.lastConnectionId}&pin=${state.pin}`;
+      qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+
+      state.onAuthenticated = () => {
+        statusToast.classList.remove('hidden');
+        qrContainer.classList.add('opacity-20');
+      };
+      return;
+    }
+
     const settings = await context.getSettings();
-    const { content, qrImage, idText, pinText } = createModalContent();
+    const { content, qrImage, idText, pinText, statusToast, qrContainer } = createModalContent();
     
     context.openDialog({
-      title: 'Connect Remote Client',
+      title: 'Connect Remote Desktop',
       description: 'Scan the QR code or manually enter the Connection ID and PIN on the remote app.',
       size: 'sm',
       component: content
     });
+
+    state.onAuthenticated = () => {
+      statusToast.classList.remove('hidden');
+      qrContainer.classList.add('opacity-20');
+    };
     
-    const connectionId = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const hostPeerId = `codelane-host-${connectionId}`;
-    state.pin = generatePin();
+    // Reuse existing ID/PIN if available, otherwise generate new
+    if (!state.lastConnectionId) {
+      state.lastConnectionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+      state.pin = generatePin();
+    }
+
+    const hostPeerId = `codelane-host-${state.lastConnectionId}`;
     
-    idText.innerText = connectionId;
+    idText.innerText = state.lastConnectionId;
     pinText.innerText = state.pin;
     
     const peerOptions = { debug: 2 };
@@ -215,6 +293,12 @@ function activate(context) {
         cleanupListeners();
         state.setConnected(false);
         state.activeConnection = null;
+        if (statusToast && !statusToast.classList.contains('hidden')) {
+          statusToast.classList.add('hidden');
+        }
+        if (qrContainer) {
+          qrContainer.classList.remove('opacity-20');
+        }
       });
     });
     
@@ -252,11 +336,7 @@ function activate(context) {
         render();
         state.listeners.push(render);
         el.onclick = () => {
-          if (!state.isConnected) startHosting();
-          else if (confirm('Disconnect remote client?')) {
-            if (state.activeConnection) state.activeConnection.close();
-            state.setConnected(false);
-          }
+          startHosting();
         };
         return el;
       }
