@@ -8,6 +8,7 @@ help:
 	@echo "Development:"
 	@echo "  make dev          - Start development server (Tauri + SolidJS)"
 	@echo "  make frontend     - Run frontend only (Vite)"
+	@echo "  make remote-app   - Run remote desktop webapp (Vite)"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build        - Build release binary"
@@ -37,6 +38,9 @@ dev:
 
 frontend:
 	cd frontend && pnpm dev
+
+remote-app:
+	cd extensions/remote-desktop/webapp && pnpm dev
 
 # Building
 build:
