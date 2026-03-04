@@ -34,6 +34,7 @@ export function TerminalContainer(props: TerminalContainerProps) {
       try {
         const h = await terminalPool.acquire({
           id: terminalId(),
+          laneId: props.laneId,
           cwd: props.workingDir,
           useAgent: false, // Plain terminals for tabs
         });

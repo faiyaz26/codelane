@@ -128,9 +128,7 @@ class TerminalPool {
     // Spawn PTY
     let spawnSuccess = false;
     const useAgent = config.useAgent !== false; // Default to true
-
-    // Extract laneId from terminal ID (format: "laneId-tab-tabId")
-    const laneId = config.id.split('-tab-')[0];
+    const laneId = config.laneId;
 
     // Merge environment
     const baseEnv: Record<string, string> = {

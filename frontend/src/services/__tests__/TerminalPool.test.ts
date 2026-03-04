@@ -116,13 +116,13 @@ beforeEach(async () => {
 describe('TerminalPool', () => {
   describe('sticky scroll', () => {
     it('creates handle with autoScroll defaulting to true', async () => {
-      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
 
       expect(handle.autoScroll).toBe(true);
     });
 
     it('calls scrollToBottom after PTY write when autoScroll is true', async () => {
-      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
       const { scrollToBottom, write } = mockTerminals[0];
 
       expect(handle.autoScroll).toBe(true);
@@ -136,7 +136,7 @@ describe('TerminalPool', () => {
     });
 
     it('does NOT call scrollToBottom when autoScroll is false', async () => {
-      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
       const { scrollToBottom, write } = mockTerminals[0];
 
       // Simulate user scrolling up
@@ -151,7 +151,7 @@ describe('TerminalPool', () => {
     });
 
     it('resumes scrollToBottom when autoScroll is re-enabled', async () => {
-      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
       const { scrollToBottom, write } = mockTerminals[0];
 
       // User scrolls up
@@ -166,7 +166,7 @@ describe('TerminalPool', () => {
     });
 
     it('does NOT call scrollToBottom if user is scrolled up even if autoScroll is true', async () => {
-      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
       const { terminal, scrollToBottom } = mockTerminals[0];
 
       expect(handle.autoScroll).toBe(true);
@@ -206,15 +206,15 @@ describe('TerminalPool', () => {
 
   describe('acquire and release', () => {
     it('returns existing handle on re-acquire', async () => {
-      const handle1 = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
-      const handle2 = await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      const handle1 = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
+      const handle2 = await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
 
       expect(handle1).toBe(handle2);
       expect(mockSpawn).toHaveBeenCalledTimes(1);
     });
 
     it('releases and cleans up terminal', async () => {
-      await terminalPool.acquire({ id: 'lane-1-tab-t1', cwd: '/tmp' });
+      await terminalPool.acquire({ id: 'lane-1-tab-t1', laneId: 'lane-1', cwd: '/tmp' });
       const { terminal } = mockTerminals[0];
 
       await terminalPool.release('lane-1-tab-t1');

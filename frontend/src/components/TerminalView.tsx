@@ -37,6 +37,7 @@ export function TerminalView(props: TerminalViewProps) {
     try {
       const h = await terminalPool.acquire({
         id: terminalId(),
+        laneId: props.laneId,
         cwd: props.cwd,
         useAgent: props.useAgent !== false,
       });

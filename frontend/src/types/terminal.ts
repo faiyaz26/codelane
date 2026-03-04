@@ -16,6 +16,7 @@ export type TerminalStatus = 'initializing' | 'ready' | 'error' | 'exited';
  */
 export interface TerminalConfig {
   id: string;
+  laneId: string;
   cwd?: string;
   useAgent?: boolean;
   env?: Record<string, string>;
