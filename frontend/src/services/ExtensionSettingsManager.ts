@@ -36,6 +36,10 @@ class ExtensionSettingsManager {
     });
   }
 
+  unregisterSettings(extensionId: string) {
+    this.setDefinitions(prev => prev.filter(d => d.extensionId !== extensionId));
+  }
+
   getDefinitions() {
     return this.definitions;
   }

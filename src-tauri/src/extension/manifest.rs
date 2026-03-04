@@ -27,4 +27,5 @@ pub struct Extension {
     pub path: PathBuf,
     pub child_process: Option<Arc<Mutex<Child>>>,
     pub stdin: Option<Arc<Mutex<ChildStdin>>>,
+    pub is_running: bool,
 }

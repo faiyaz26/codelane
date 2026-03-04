@@ -1,11 +1,8 @@
-import { Peer } from 'peerjs';
-import QRCode from 'qrcode';
+// Logic for testability
+const generatePin = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generatePeerId = () => `codelane-host-${Math.random().toString(36).substring(2, 10)}`;
 
-// Extract logic for testability
-export const generatePin = () => Math.floor(100000 + Math.random() * 900000).toString();
-export const generatePeerId = () => `codelane-host-${Math.random().toString(36).substring(2, 10)}`;
-
-export async function handleRemoteData(data, context, state, conn) {
+async function handleRemoteData(data, context, state, conn) {
   if (!state.authenticated) {
     if (data.type === 'auth' && data.pin === state.pin) {
       state.authenticated = true;
@@ -66,11 +63,29 @@ export async function handleRemoteData(data, context, state, conn) {
   }
 }
 
-export function activate(context) {
-  context.registerSettings([
-    { id: 'signalingServer', type: 'select', title: 'Signaling Server', options: [{label: 'Default Free Tier', value: 'default'}, {label: 'Bring Your Own', value: 'custom'}], defaultValue: 'default' },
-    { id: 'peerJsKey', type: 'string', title: 'PeerJS Key', description: 'Used only if "Bring Your Own" is selected' },
-  ]);
+function activate(context) {
+  // Lazy load PeerJS from CDN
+  const loadDependency = (url) => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  const initializeExtension = async () => {
+    try {
+      if (!window.Peer) {
+        console.info("[RemoteDesktop] Loading PeerJS...");
+        await loadDependency('https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js');
+      }
+      
+      console.info("[RemoteDesktop] PeerJS loaded successfully");
+      startExtensionLogic();
+    } catch (err) {
+      console.error("[RemoteDesktop] Failed to load PeerJS:", err);
+    }
+  };
 
   const state = {
     isConnected: false,
@@ -92,51 +107,59 @@ export function activate(context) {
     state.activeTerminalListeners = {};
   };
 
-  const createModal = () => {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm';
+  const createModalContent = () => {
     const content = document.createElement('div');
-    content.className = 'bg-zed-bg-overlay border border-zed-border-default rounded-lg shadow-2xl p-6 max-w-sm w-full flex flex-col items-center';
-    const title = document.createElement('h2');
-    title.className = 'text-lg font-semibold text-zed-text-primary mb-2';
-    title.innerText = 'Connect Remote Client';
-    const desc = document.createElement('p');
-    desc.className = 'text-sm text-zed-text-secondary text-center mb-6';
-    desc.innerText = 'Scan this QR code with your mobile device, or enter the PIN manually on the remote app.';
+    content.className = 'flex flex-col items-center w-full';
+    
+    // QR Code Container
     const qrContainer = document.createElement('div');
-    qrContainer.className = 'bg-white p-2 rounded-lg mb-4';
-    const canvas = document.createElement('canvas');
-    qrContainer.appendChild(canvas);
+    qrContainer.className = 'bg-white p-3 rounded-xl shadow-inner mb-6 flex items-center justify-center';
+    
+    const qrImage = document.createElement('img');
+    qrImage.className = 'w-[180px] h-[180px]';
+    qrImage.alt = 'Connecting QR Code';
+    qrContainer.appendChild(qrImage);
+    
+    // PIN Display
+    const pinLabel = document.createElement('span');
+    pinLabel.className = 'text-[10px] font-bold text-zed-text-disabled uppercase tracking-widest mb-2';
+    pinLabel.innerText = 'Handshake PIN';
+
     const pinContainer = document.createElement('div');
-    pinContainer.className = 'bg-zed-bg-panel border border-zed-border-subtle rounded-md px-4 py-2 flex items-center justify-center gap-2 w-full mb-6';
+    pinContainer.className = 'bg-zed-bg-surface border border-zed-border-default rounded-lg px-6 py-3 flex items-center justify-center gap-2 w-full mb-8';
+    
     const pinText = document.createElement('span');
-    pinText.className = 'text-2xl font-mono tracking-[0.2em] font-bold text-zed-accent-blue';
+    pinText.className = 'text-3xl font-mono tracking-[0.3em] font-bold text-zed-accent-blue';
     pinContainer.appendChild(pinText);
+    
     const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'px-4 py-2 bg-zed-bg-panel border border-zed-border-default rounded-md text-zed-text-primary hover:bg-zed-bg-hover transition-colors w-full';
+    cancelBtn.className = 'w-full h-10 inline-flex items-center justify-center rounded-md font-medium transition-colors bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-default text-zed-text-primary text-sm';
     cancelBtn.innerText = 'Cancel';
     cancelBtn.onclick = () => {
-      document.body.removeChild(modal);
-      if (peer) {
-        peer.destroy();
-        peer = null;
-      }
+      context.closeDialog();
+      if (peer) { peer.destroy(); peer = null; }
     };
-    content.appendChild(title);
-    content.appendChild(desc);
+    
     content.appendChild(qrContainer);
+    content.appendChild(pinLabel);
     content.appendChild(pinContainer);
     content.appendChild(cancelBtn);
-    modal.appendChild(content);
-    return { modal, canvas, pinText, cancelBtn };
+    
+    return { content, qrImage, pinText };
   };
 
   let peer = null;
 
   const startHosting = async () => {
     const settings = await context.getSettings();
-    const { modal, canvas, pinText } = createModal();
-    document.body.appendChild(modal);
+    const { content, qrImage, pinText } = createModalContent();
+    
+    context.openDialog({
+      title: 'Connect Remote Client',
+      description: 'Scan this QR code with your mobile device, or enter the PIN manually on the remote app.',
+      size: 'sm',
+      component: content
+    });
     
     state.pin = generatePin();
     pinText.innerText = state.pin;
@@ -146,11 +169,12 @@ export function activate(context) {
       peerOptions.key = settings.peerJsKey;
     }
     
-    peer = new Peer(generatePeerId(), peerOptions);
+    peer = new window.Peer(generatePeerId(), peerOptions);
     
     peer.on('open', (id) => {
       const url = `https://remote.codelane.app/?host=${id}&pin=${state.pin}`;
-      QRCode.toCanvas(canvas, url, { width: 200, margin: 1 });
+      // Use free QR Server API
+      qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
     });
     
     peer.on('connection', (conn) => {
@@ -171,32 +195,50 @@ export function activate(context) {
     peer.on('error', (err) => {
       console.error('PeerJS error:', err);
       alert(`Connection error: ${err.message}`);
-      document.body.removeChild(modal);
+      context.closeDialog();
     });
   };
 
-  context.registerStatusBarItem({
-    id: 'connection-status',
-    alignment: 'right',
-    priority: 100,
-    component: () => {
-      const el = document.createElement('div');
-      el.className = 'flex items-center gap-1 cursor-pointer hover:text-zed-text-primary transition-colors text-zed-text-tertiary px-2 py-0.5 rounded bg-zed-bg-app border border-zed-border-subtle hover:border-zed-border-default text-xs';
-      const render = () => {
-        el.innerHTML = state.isConnected 
-          ? `<div class="w-2 h-2 rounded-full bg-green-500 mr-1"></div><span class="font-medium text-green-400">Connected to Client</span>`
-          : `<div class="w-2 h-2 rounded-full bg-zed-text-disabled mr-1"></div><span>Connect Remote</span>`;
-      };
-      render();
-      state.listeners.push(render);
-      el.onclick = () => {
-        if (!state.isConnected) startHosting();
-        else if (confirm('Disconnect remote client?')) {
-          if (state.activeConnection) state.activeConnection.close();
-          state.setConnected(false);
-        }
-      };
-      return el;
-    }
-  });
+  const startExtensionLogic = () => {
+    context.registerSettings([
+      { id: 'signalingServer', type: 'select', title: 'Signaling Server', options: [{label: 'Default Free Tier', value: 'default'}, {label: 'Bring Your Own', value: 'custom'}], defaultValue: 'default' },
+      { id: 'peerJsKey', type: 'string', title: 'PeerJS Key', description: 'Used only if "Bring Your Own" is selected' },
+    ]);
+
+    context.registerStatusBarItem({
+      id: 'connection-status',
+      alignment: 'right',
+      priority: 100,
+      component: () => {
+        const el = document.createElement('div');
+        el.className = 'flex items-center gap-1 cursor-pointer hover:text-zed-text-primary transition-colors text-zed-text-tertiary px-2 py-0.5 rounded bg-zed-bg-app border border-zed-border-subtle hover:border-zed-border-default text-xs';
+        const render = () => {
+          el.innerHTML = state.isConnected 
+            ? `<div class="w-2 h-2 rounded-full bg-green-500 mr-1"></div><span class="font-medium text-green-400">Connected to Client</span>`
+            : `<div class="w-2 h-2 rounded-full bg-zed-text-disabled mr-1"></div><span>Connect Remote</span>`;
+        };
+        render();
+        state.listeners.push(render);
+        el.onclick = () => {
+          if (!state.isConnected) startHosting();
+          else if (confirm('Disconnect remote client?')) {
+            if (state.activeConnection) state.activeConnection.close();
+            state.setConnected(false);
+          }
+        };
+        return el;
+      }
+    });
+  };
+
+  // Start the loading process
+  initializeExtension();
+}
+
+// Global registry for extension activation
+if (typeof window !== 'undefined') {
+  window.CodeLaneExtensions = window.CodeLaneExtensions || {};
+  window.CodeLaneExtensions['remote-desktop'] = {
+    activate
+  };
 }

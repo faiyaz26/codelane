@@ -4,14 +4,19 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/index.js',
-      name: 'RemoteDesktopExtension',
+      name: 'CodeLaneRemoteDesktop',
       fileName: () => 'bundle.js',
-      formats: ['es']
+      formats: ['iife']
     },
+    minify: true,
     outDir: 'dist',
     emptyOutDir: false,
     rollupOptions: {
-      external: [], // bundle everything into the file so Codelane doesn't need to resolve node_modules
+      external: [],
+      output: {
+        exports: 'none', // We attach to window manually in index.js
+        extend: true,
+      }
     }
   }
 });

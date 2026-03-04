@@ -16,7 +16,7 @@ pub async fn extension_list(state: tauri::State<'_, ExtensionState>, force: Opti
     let extensions = state.extensions.lock().await;
     Ok(extensions.values().map(|e| ExtensionInfo {
         manifest: e.manifest.clone(),
-        running: e.child_process.is_some(),
+        running: e.is_running,
     }).collect())
 }
 
@@ -87,7 +87,20 @@ pub async fn extension_install(
 #[tauri::command]
 pub async fn extension_get_registry() -> Result<serde_json::Value, String> {
     let registry_url = "https://raw.githubusercontent.com/google/codelane/main/extensions/registry.json";
-    let response = reqwest::get(registry_url).await.map_err(|e| e.to_string())?;
-    let json = response.json::<serde_json::Value>().await.map_err(|e| e.to_string())?;
+    
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client.get(registry_url).send().await.map_err(|e| format!("Failed to fetch registry: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Registry fetch failed with status: {}", response.status()));
+    }
+
+    let text = response.text().await.map_err(|e| format!("Failed to read registry response: {}", e))?;
+    let json = serde_json::from_str(&text).map_err(|e| format!("Failed to parse registry JSON: {}. Response: {}", e, text))?;
+    
     Ok(json)
 }

@@ -56,14 +56,22 @@ impl ExtensionState {
                     if manifest_path.exists() {
                         let manifest_content = std::fs::read_to_string(&manifest_path)?;
                         let manifest: ExtensionManifest = serde_json::from_str(&manifest_content)?;
-
-                        extensions.insert(manifest.id.clone(), Extension {
-                            manifest,
-                            path: path.to_path_buf(),
-                            child_process: None,
-                            stdin: None,
-                        });
+                        
+                        let id = manifest.id.clone();
+                        if let Some(existing) = extensions.get_mut(&id) {
+                            // Preserve running state but update manifest/path
+                            existing.manifest = manifest;
+                            existing.path = path.to_path_buf();
+                        } else {
+                            extensions.insert(id, Extension {
+                                manifest,
+                                path: path.to_path_buf(),
+                                child_process: None,
+                                stdin: None,
+                                is_running: false,
+                            });
                         }
+                    }
                         }
                         }        }
 
@@ -78,15 +86,16 @@ impl ExtensionState {
         let extension = extensions.get_mut(extension_id)
             .context(format!("Extension {} not found", extension_id))?;
 
-        if extension.child_process.is_some() {
+        if extension.is_running {
             return Ok(()); // Already running
         }
 
         let main_backend = match &extension.manifest.main_backend {
-            Some(backend) => backend,
+            Some(backend) => backend.clone(),
             None => {
                 // If there's no backend, we just consider it "started" so the frontend can load
                 tracing::info!("[Extension {}] Starting frontend-only extension", extension_id);
+                extension.is_running = true;
                 return Ok(());
             }
         };
@@ -120,6 +129,7 @@ impl ExtensionState {
         let stdin_arc = Arc::new(Mutex::new(stdin));
         extension.stdin = Some(stdin_arc.clone());
         extension.child_process = Some(Arc::new(Mutex::new(child)));
+        extension.is_running = true;
 
         let permissions = extension.manifest.permissions.clone();
         
@@ -154,6 +164,7 @@ impl ExtensionState {
             if let Some(ext) = extensions.get_mut(&ext_id_for_monitor) {
                 ext.child_process = None;
                 ext.stdin = None;
+                ext.is_running = false;
             }
         });
 
@@ -222,6 +233,7 @@ impl ExtensionState {
         }
         
         extension.stdin = None;
+        extension.is_running = false;
 
         // Cleanup subscriptions
         let mut subscriptions = self.subscriptions.lock().await;
@@ -373,6 +385,7 @@ impl ExtensionState {
             path: target_dir,
             child_process: None,
             stdin: None,
+            is_running: false,
         });
 
         Ok(())

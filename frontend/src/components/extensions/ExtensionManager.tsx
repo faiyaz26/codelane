@@ -10,6 +10,7 @@ import {
   type RegistryExtension
 } from '../../lib/extension-api';
 import { ExtensionSettingsForm } from './ExtensionSettingsForm';
+import { extensionLoader } from '../../services/ExtensionLoader';
 
 type Tab = 'installed' | 'marketplace';
 
@@ -61,8 +62,10 @@ export function ExtensionManager() {
     try {
       if (ext.running) {
         await stopExtension(ext.id);
+        await extensionLoader.unloadExtension(ext.id);
       } else {
         await startExtension(ext.id);
+        await extensionLoader.loadExtensionById(ext.id);
       }
       await fetchInstalled(true);
     } catch (e) {

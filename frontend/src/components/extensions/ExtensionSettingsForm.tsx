@@ -65,22 +65,29 @@ export function ExtensionSettingsForm(props: Props) {
                     type={schema.type === 'number' ? 'number' : 'text'}
                     value={settings()?.[schema.id] ?? ''}
                     onInput={(e) => handleChange(schema.id, schema.type === 'number' ? Number(e.currentTarget.value) : e.currentTarget.value)}
-                    class="w-full bg-zed-bg-app border border-zed-border-default rounded px-3 py-1.5 text-sm text-zed-text-primary focus:border-zed-accent-blue focus:ring-1 focus:ring-zed-accent-blue focus:outline-none transition-all"
+                    class="w-full bg-zed-bg-surface border border-zed-border-default rounded px-3 py-1.5 text-sm text-zed-text-primary focus:border-zed-accent-blue focus:ring-1 focus:ring-zed-accent-blue focus:outline-none transition-all"
                   />
                 )}
 
                 {schema.type === 'select' && schema.options && (
-                  <select
-                    value={settings()?.[schema.id] ?? ''}
-                    onChange={(e) => handleChange(schema.id, e.currentTarget.value)}
-                    class="w-full bg-zed-bg-app border border-zed-border-default rounded px-3 py-1.5 text-sm text-zed-text-primary focus:border-zed-accent-blue focus:ring-1 focus:ring-zed-accent-blue focus:outline-none transition-all cursor-pointer"
-                  >
-                    <For each={schema.options}>
-                      {(opt) => (
-                        <option value={opt.value}>{opt.label}</option>
-                      )}
-                    </For>
-                  </select>
+                  <div class="relative">
+                    <select
+                      value={settings()?.[schema.id] ?? ''}
+                      onChange={(e) => handleChange(schema.id, e.currentTarget.value)}
+                      class="w-full bg-zed-bg-surface border border-zed-border-default rounded px-3 py-1.5 text-sm text-zed-text-primary focus:border-zed-accent-blue focus:ring-1 focus:ring-zed-accent-blue focus:outline-none transition-all cursor-pointer appearance-none"
+                    >
+                      <For each={schema.options}>
+                        {(opt) => (
+                          <option value={opt.value}>{opt.label}</option>
+                        )}
+                      </For>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-zed-text-tertiary">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

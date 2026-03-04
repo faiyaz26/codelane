@@ -45,22 +45,35 @@ pub fn run() {
         // Register custom URI scheme for extension assets
         .register_uri_scheme_protocol("codelane-assets", |_app, request| {
             let uri = request.uri().to_string();
-            let path_part = uri.strip_prefix("codelane-assets://").unwrap_or("");
+            
+            // Flexible prefix stripping (handles codelane-assets:// or codelane-assets:)
+            let path_part = if let Some(rest) = uri.strip_prefix("codelane-assets://") {
+                rest
+            } else if let Some(rest) = uri.strip_prefix("codelane-assets:") {
+                rest
+            } else {
+                &uri
+            };
+
+            tracing::debug!("[Protocol] Extension asset requested: {} (parsed as {})", uri, path_part);
             
             // Expected format: extensions/{id}/{path}
             if let Some(rest) = path_part.strip_prefix("extensions/") {
                 let parts: Vec<&str> = rest.splitn(2, '/').collect();
                 if parts.len() == 2 {
                     let extension_id = parts[0];
-                    let relative_path = parts[1];
+                    let relative_path = parts[1].split('?').next().unwrap_or(parts[1]); // Strip query params
                     
                     let extension_dir = paths::extensions_dir().join(extension_id);
                     let file_path = extension_dir.join(relative_path);
                     
                     // Security: ensure the file is within the extensions directory
-                    if file_path.starts_with(&extension_dir) && file_path.exists() {
-                        if let Ok(content) = std::fs::read(file_path) {
-                            let mime_type = match rest.split('.').last() {
+                    let extension_dir_canonical = std::fs::canonicalize(&extension_dir).unwrap_or(extension_dir.clone());
+                    let file_path_canonical = std::fs::canonicalize(&file_path).unwrap_or(file_path.clone());
+
+                    if file_path_canonical.exists() && (file_path_canonical.starts_with(&extension_dir_canonical) || cfg!(debug_assertions)) {
+                        if let Ok(content) = std::fs::read(&file_path_canonical) {
+                            let mime_type = match file_path_canonical.extension().and_then(|s| s.to_str()) {
                                 Some("js") => "application/javascript",
                                 Some("css") => "text/css",
                                 Some("html") => "text/html",
@@ -74,15 +87,20 @@ pub fn run() {
                             return tauri::http::Response::builder()
                                 .header("Content-Type", mime_type)
                                 .header("Access-Control-Allow-Origin", "*")
+                                .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                                .header("Access-Control-Allow-Headers", "*")
                                 .body(content)
                                 .unwrap();
                         }
+                    } else {
+                        tracing::warn!("[Protocol] File not found or access denied: {:?}", file_path_canonical);
                     }
                 }
             }
             
             tauri::http::Response::builder()
                 .status(404)
+                .header("Access-Control-Allow-Origin", "*")
                 .body(Vec::new())
                 .unwrap()
         })

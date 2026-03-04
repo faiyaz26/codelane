@@ -7,6 +7,7 @@ import { AboutDialog } from './components/AboutDialog';
 import { OnboardingWizard, type WizardData } from './components/onboarding';
 import { UpdateToast } from './components/UpdateToast';
 import { GlobalNotifications } from './components/GlobalNotifications';
+import { DynamicExtensionDialog } from './components/DynamicExtensionDialog';
 
 import { listLanes } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
@@ -305,6 +306,7 @@ function App() {
       <SettingsDialog open={settingsOpen()} onOpenChange={setSettingsOpen} onSettingsSaved={handleSettingsSaved} />
       <AboutDialog open={aboutOpen()} onOpenChange={setAboutOpen} />
       <OnboardingWizard open={onboardingOpen()} onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />
+      <DynamicExtensionDialog />
 
       {/* Toasts */}
       <UpdateToast />
