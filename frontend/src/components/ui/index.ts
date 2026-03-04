@@ -1,4 +1,1 @@
-export { Button } from './Button';
-export { Dialog } from './Dialog';
-export { TextField } from './TextField';
-export { Select } from './Select';
+export { Button, Dialog, TextField, Select } from '@codelane/shared';

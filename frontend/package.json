@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@codelane/shared": "workspace:*",
     "@git-diff-view/core": "^0.0.39",
     "@git-diff-view/shiki": "^0.0.39",
     "@git-diff-view/solid": "^0.0.12",
