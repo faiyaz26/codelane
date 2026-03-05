@@ -1,4 +1,4 @@
-import { createSignal, Show, onMount, For } from 'solid-js';
+import { createSignal, Show, onMount, For, onCleanup } from 'solid-js';
 import { Button, TextField } from '@codelane/shared';
 import { Peer } from 'peerjs';
 import { RemoteTerminal } from './components/RemoteTerminal';
@@ -179,7 +179,9 @@ function App() {
 
 function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
   let terminalRef: { 
-    write: (data: string | Uint8Array) => void 
+    write: (data: string | Uint8Array) => void;
+    resize: (cols: number, rows: number) => void;
+    getBuffer: () => string;
   } | undefined;
   
   const [commandInput, setCommandInput] = createSignal('');
@@ -189,6 +191,16 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
   onMount(() => {
     // Request lanes list
     props.conn.send({ type: 'lanes:list' });
+
+    // Polling mechanism to scrape the hidden terminal buffer for clean chat parsing
+    const parseInterval = setInterval(() => {
+      if (remoteStore.viewMode() === 'chat' && terminalRef && remoteStore.activeLaneId()) {
+        const bufferText = terminalRef.getBuffer();
+        if (bufferText) {
+          agentChatParser.parseBuffer(bufferText);
+        }
+      }
+    }, 500);
 
     // Handle data from desktop
     props.conn.on('data', (data: any) => {
@@ -205,13 +217,13 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
       } else if (data.type === 'terminal:data') {
         if (data.terminalId === `${remoteStore.activeLaneId()}-agent`) {
           const bytes = new Uint8Array(data.data);
-          // Pass to background terminal for TUI parity
+          // Always write to background terminal, it's the source of truth for the parser
           terminalRef?.write(bytes);
-          // Pass to Chat Parser for mobile view
-          agentChatParser.processData(bytes);
         }
       }
     });
+
+    onCleanup(() => clearInterval(parseInterval));
   });
 
   const handleSelectLane = (laneId: string) => {

@@ -1,5 +1,7 @@
 import { For, Show, createEffect } from 'solid-js';
 import { remoteStore } from '../services/RemoteStore';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface RemoteChatViewProps {
   onAction?: (value: string) => void;
@@ -18,6 +20,17 @@ export function RemoteChatView(props: RemoteChatViewProps) {
     remoteStore.messages();
     setTimeout(autoScroll, 50);
   });
+
+  const renderMarkdown = (content: string) => {
+    try {
+      const rawHtml = marked.parse(content, { breaks: true, gfm: true });
+      // marked.parse returns string | Promise<string> depending on async extensions. 
+      // Assuming sync here.
+      return DOMPurify.sanitize(rawHtml as string);
+    } catch (e) {
+      return content;
+    }
+  };
 
   return (
     <div 
@@ -44,7 +57,7 @@ export function RemoteChatView(props: RemoteChatViewProps) {
             }`}
           >
             <div 
-              class={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed flex flex-col gap-2 ${
+              class={`px-4 py-3 rounded-2xl text-sm leading-relaxed flex flex-col gap-2 ${
                 msg.role === 'user' 
                   ? 'bg-zed-accent-blue text-white rounded-br-none shadow-md' 
                   : msg.role === 'system'
@@ -52,9 +65,10 @@ export function RemoteChatView(props: RemoteChatViewProps) {
                   : 'bg-zed-bg-panel text-zed-text-primary rounded-bl-none border border-zed-border-subtle shadow-sm'
               }`}
             >
-              <div class="whitespace-pre-wrap break-words font-sans">
-                {msg.content}
-              </div>
+              <div 
+                class="markdown-body font-sans break-words overflow-x-auto"
+                innerHTML={msg.role === 'user' ? msg.content : renderMarkdown(msg.content)} 
+              />
               
               <Show when={msg.actions && msg.actions.length > 0}>
                 <div class="flex flex-wrap gap-2 mt-2 pt-2 border-t border-zed-border-default/50">
@@ -63,7 +77,6 @@ export function RemoteChatView(props: RemoteChatViewProps) {
                       <button
                         onClick={() => {
                           if (props.onAction) props.onAction(action.value);
-                          // We don't remove the actions here, keeping the history accurate
                         }}
                         class="px-3 py-1.5 bg-zed-bg-surface hover:bg-zed-bg-hover border border-zed-border-default rounded-md text-xs font-medium transition-colors active:bg-zed-accent-blue active:text-white"
                       >

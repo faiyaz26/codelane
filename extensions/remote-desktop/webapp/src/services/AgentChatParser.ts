@@ -1,30 +1,20 @@
 import { remoteStore } from './RemoteStore';
 
 /**
- * AgentChatParser - Parses raw terminal output into high-level chat messages.
+ * AgentChatParser - Parses the rendered terminal screen buffer into chat messages.
  * 
- * Optimized to handle 'spinning' text and status lines common in modern agents.
+ * By parsing the xterm.js buffer (which has already resolved cursor movements and spinners),
+ * we get perfectly clean text without ANSI/redraw noise.
  */
 class AgentChatParser {
-  private buffer = '';
-  private lastMessageTime = Date.now();
-  private messageDebounce = 1500; // ms to group rapid outputs
-  private hasLiveMessage = false;
+  private lastParsedLength = 0;
 
   /**
-   * Strip ANSI escape codes
-   */
-  private stripAnsi(text: string): string {
-    return text.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
-  }
-
-  /**
-   * Extract interactive actions from a prompt line (e.g. [y/n/A/r])
+   * Extract interactive actions from a prompt line
    */
   private extractActions(text: string): { label: string; value: string }[] | undefined {
     const trimmed = text.trim();
     
-    // Pattern: [y/N] or (y/n) or [Y/n/a/c]
     const ynMatch = trimmed.match(/[\[\(]([yYnNaAcCrR\/\s]+)[\]\)]/);
     if (ynMatch) {
       const options = ynMatch[1].split('/').map(s => s.trim().toLowerCase());
@@ -33,12 +23,11 @@ class AgentChatParser {
       if (options.includes('n')) actions.push({ label: 'No', value: 'n\n' });
       if (options.includes('a')) actions.push({ label: 'All', value: 'a\n' });
       if (options.includes('r')) actions.push({ label: 'Reject', value: 'r\n' });
-      if (options.includes('c')) actions.push({ label: 'Cancel', value: '\x03' }); // Ctrl+C
+      if (options.includes('c')) actions.push({ label: 'Cancel', value: '\x03' }); 
       
       if (actions.length > 0) return actions;
     }
 
-    // Pattern: "Press Enter to continue"
     if (/press enter/i.test(trimmed)) {
       return [{ label: 'Enter', value: '\n' }];
     }
@@ -47,87 +36,89 @@ class AgentChatParser {
   }
 
   /**
-   * Process new raw data from the terminal
+   * Parse the full terminal buffer and update the store.
+   * This is called periodically or when data arrives.
    */
-  processData(bytes: Uint8Array) {
-    const text = new TextDecoder().decode(bytes);
-    const clean = this.stripAnsi(text);
+  parseBuffer(fullText: string) {
+    // Clean up terminal artifacts
+    let text = fullText
+      .replace(/\s+$/g, '') // Trim trailing whitespace
+      .replace(/\n{3,}/g, '\n\n'); // Normalize excessive newlines
     
-    // Ignore pure empty space/control noise
-    if (!clean.trim()) return;
+    if (!text.trim()) return;
 
-    const now = Date.now();
-    const isRapid = (now - this.lastMessageTime < this.messageDebounce);
+    // Detect if we have new content
+    if (text.length === this.lastParsedLength) {
+      // It might just be a spinner updating the last few chars, we still want to update the live message
+    }
+    
+    this.lastParsedLength = text.length;
 
-    // If we're receiving data rapidly, append to buffer and update the 'live' message
-    if (isRapid && this.hasLiveMessage) {
-      this.buffer += clean;
-      
-      const content = this.cleanStatusLines(this.buffer);
-      if (content) {
-        remoteStore.updateLastMessage(content);
-        
-        // Live check for prompt actions
-        const actions = this.extractActions(this.buffer);
-        if (actions) {
-          remoteStore.updateLastMessageActions(actions);
-          this.hasLiveMessage = false; // Finalize message since it's a prompt
-          this.buffer = '';
+    // We split the buffer into "Turns". 
+    // This is a heuristic. We look for common user prompts like "$" or "❯" or lines ending in "?"
+    const lines = text.split('\n');
+    const messages: any[] = [];
+    
+    let currentRole = 'agent';
+    let currentContent: string[] = [];
+    let currentActions: any = undefined;
+
+    // Very basic heuristic: 
+    // If a line starts with $ or ❯, it's a prompt/user input.
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Check for User input markers
+      if (trimmed.startsWith('$ ') || trimmed.startsWith('❯ ')) {
+        // Finalize previous agent message
+        if (currentContent.length > 0) {
+          messages.push({ role: currentRole, content: currentContent.join('\n').trim(), actions: currentActions });
+          currentContent = [];
+          currentActions = undefined;
         }
+        
+        // Add user message
+        messages.push({ role: 'user', content: trimmed.replace(/^[\$❯]\s*/, '') });
+        currentRole = 'agent';
+        continue;
       }
-    } else {
-      // New message block started
-      if (this.buffer.trim()) {
-        this.buffer = '';
+
+      // Check for actions on the current line
+      const actions = this.extractActions(trimmed);
+      if (actions) {
+        currentActions = actions;
       }
-      this.buffer = clean;
-      const content = this.cleanStatusLines(this.buffer);
-      const actions = this.extractActions(this.buffer);
-      
-      remoteStore.addMessage({ 
-        role: 'agent', 
-        content,
-        actions 
-      });
-      
-      this.hasLiveMessage = !actions;
-      if (actions) this.buffer = '';
+
+      currentContent.push(line);
     }
 
-    this.lastMessageTime = now;
-  }
-
-  /**
-   * Cleans up common terminal status noise (spinners, memory counts)
-   */
-  private cleanStatusLines(text: string): string {
-    // Split by lines and only take unique-ish lines to avoid spinner trails
-    const lines = text.split(/\r?\n/);
-    const result = [];
-    let lastLine = '';
-
-    for (const line of lines) {
-      let trimmed = line.trim();
-      if (!trimmed) continue;
-      
-      // If line is just a number/unit (common for memory usage), 
-      // or if it's very similar to last line, skip it
-      const isStatusNoise = /^[0-9.]+\s*(MB|GB|KB|%)$/.test(trimmed);
-      if (isStatusNoise) continue;
-
-      if (trimmed !== lastLine) {
-        result.push(line);
-        lastLine = trimmed;
-      }
+    // Add the final pending message (usually the active agent response)
+    if (currentContent.length > 0) {
+      messages.push({ role: currentRole, content: currentContent.join('\n').trim(), actions: currentActions });
     }
 
-    return result.join('\n').trim();
+    // Filter out completely empty messages
+    const validMessages = messages.filter(m => m.content.trim().length > 0 || m.actions);
+
+    // Update the store. For simplicity, we just replace the messages array
+    // since the buffer contains the full history of the active session.
+    // In a production app, we'd map these to unique IDs more carefully.
+    
+    // Convert to ChatMessage format
+    const chatMessages = validMessages.map((m, idx) => ({
+      id: `buf-${idx}`,
+      role: m.role,
+      content: m.content,
+      timestamp: Date.now(),
+      actions: m.actions
+    }));
+
+    remoteStore.setMessages(chatMessages as any);
   }
 
   reset() {
-    this.buffer = '';
-    this.lastMessageTime = 0;
-    this.hasLiveMessage = false;
+    this.lastParsedLength = 0;
   }
 }
 

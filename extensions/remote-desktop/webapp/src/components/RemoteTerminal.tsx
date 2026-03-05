@@ -9,7 +9,11 @@ interface RemoteTerminalProps {
   terminalId: string;
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
-  ref?: (methods: { write: (data: string | Uint8Array) => void }) => void;
+  ref?: (methods: { 
+    write: (data: string | Uint8Array) => void;
+    resize: (cols: number, rows: number) => void;
+    getBuffer: () => string;
+  }) => void;
   initialData?: string;
 }
 
@@ -23,7 +27,22 @@ export function RemoteTerminal(props: RemoteTerminalProps) {
   // Expose methods to parent
   if (props.ref) {
     props.ref({
-      write: (data: string | Uint8Array) => terminal.write(data)
+      write: (data: string | Uint8Array) => terminal.write(data),
+      resize: (cols: number, rows: number) => {
+        terminal.resize(cols, rows);
+        fitAddon.fit();
+      },
+      getBuffer: () => {
+        const buffer = terminal.buffer.active;
+        let text = '';
+        for (let i = 0; i < buffer.length; i++) {
+          const line = buffer.getLine(i);
+          if (line) {
+            text += line.translateToString(true) + '\n';
+          }
+        }
+        return text;
+      }
     });
   }
 

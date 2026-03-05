@@ -60,4 +60,29 @@ body {
     from { transform: translateY(-10px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
+
+  .markdown-body {
+    @apply text-[13px] leading-relaxed;
+  }
+  .markdown-body p {
+    @apply mb-2 last:mb-0;
+  }
+  .markdown-body pre {
+    @apply bg-black/30 rounded-md p-3 my-2 overflow-x-auto text-[11px] font-mono border border-zed-border-default/50;
+  }
+  .markdown-body code {
+    @apply bg-black/20 rounded px-1 py-0.5 font-mono text-[11px];
+  }
+  .markdown-body pre code {
+    @apply bg-transparent p-0 border-none text-[11px];
+  }
+  .markdown-body ul {
+    @apply list-disc list-inside ml-4 mb-2;
+  }
+  .markdown-body ol {
+    @apply list-decimal list-inside ml-4 mb-2;
+  }
+  .markdown-body a {
+    @apply text-zed-accent-blue hover:underline;
+  }
 }
