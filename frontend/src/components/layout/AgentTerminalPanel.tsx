@@ -103,7 +103,10 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
   const handleConfirmReload = () => {
     if (props.activeLaneId && props.onReloadAgentTerminal) {
-      props.onReloadAgentTerminal(props.activeLaneId);
+      const laneId = props.activeLaneId;
+      setTimeout(() => {
+        props.onReloadAgentTerminal?.(laneId);
+      }, 0);
     }
     setShowReloadConfirm(false);
   };
