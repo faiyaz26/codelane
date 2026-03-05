@@ -697,7 +697,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-benchmarks"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "codelane-core",
  "codelane-git",
@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-core"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-git"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "codelane-core",
@@ -747,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-lsp"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "codelane-core",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-tauri"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "codelane-terminal"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "codelane-core",

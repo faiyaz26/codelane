@@ -1,6 +1,6 @@
 {
   "name": "codelane",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "Agentic Development Environment - Build multiple features in parallel with AI agents, human-in-the-loop code review, and intelligent multi-lane project management",
   "scripts": {
