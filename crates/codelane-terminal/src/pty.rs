@@ -8,6 +8,7 @@ use crate::{Error, Result, TerminalSize};
 /// PTY pair wrapper
 pub struct PtyHandle {
     pub master: Box<dyn MasterPty + Send>,
+    pub child: Box<dyn portable_pty::Child + Send + Sync>,
 }
 
 impl PtyHandle {
@@ -38,13 +39,19 @@ impl PtyHandle {
             cmd.env(key, value);
         }
 
-        pair.slave
+        let child = pair.slave
             .spawn_command(cmd)
             .map_err(|e| Error::Pty(e.to_string()))?;
 
         Ok(Self {
             master: pair.master,
+            child,
         })
+    }
+
+    /// Kill the child process
+    pub fn kill(&mut self) -> Result<()> {
+        self.child.kill().map_err(|e| Error::Pty(e.to_string()))
     }
 
     /// Resize the PTY

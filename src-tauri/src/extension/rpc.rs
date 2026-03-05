@@ -40,7 +40,7 @@ pub async fn handle_request(
             permissions.contains(&"terminal:write".to_string())
         }
         
-        "codelane.terminal.create" => {
+        "codelane.terminal.create" | "codelane.terminal.close" => {
             permissions.contains(&"terminal".to_string()) || 
             permissions.contains(&"terminal:control".to_string())
         }
@@ -147,6 +147,21 @@ pub async fn handle_request(
             ).await {
                 Ok(id) => Ok(serde_json::json!(id)),
                 Err(e) => Err(serde_json::json!(e)),
+            }
+        }
+        "codelane.terminal.close" => {
+            if let Some(term_id) = request.params.get("id").and_then(|v| v.as_str()) {
+                let terminal_state = app_handle.state::<crate::terminal::TerminalState>();
+                match crate::terminal::close_terminal(
+                    app_handle.clone(),
+                    terminal_state,
+                    term_id.to_string(),
+                ).await {
+                    Ok(_) => Ok(serde_json::json!(null)),
+                    Err(e) => Err(serde_json::json!(e)),
+                }
+            } else {
+                Err(serde_json::json!("Missing terminal id"))
             }
         }
         "codelane.lane.list" => {

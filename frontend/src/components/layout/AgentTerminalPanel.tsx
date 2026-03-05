@@ -24,6 +24,7 @@ interface AgentTerminalPanelProps {
 function TerminalItem(props: {
   laneId: string;
   lane: Lane;
+  version: number;
   isActive: boolean;
   onTerminalReady?: (terminalId: string) => void;
   onTerminalExit?: () => void;
@@ -43,6 +44,7 @@ function TerminalItem(props: {
     >
       <TerminalView
         laneId={props.laneId}
+        version={props.version}
         cwd={effectiveWorkingDir()}
         onTerminalReady={props.onTerminalReady}
         onTerminalExit={props.onTerminalExit}
@@ -242,8 +244,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
       {/* Terminal Content */}
       <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
-        <For each={Array.from(props.initializedLanes)}>
-          {(laneId) => {
+        <For each={Array.from(props.initializedLanes).map(laneId => ({
+          laneId,
+          version: props.terminalReloadVersions.get(laneId) ?? 0
+        }))}>
+          {({ laneId, version }) => {
             const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
             const isActive = createMemo(() => props.activeLaneId === laneId);
 
@@ -251,9 +256,10 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
               <Show when={lane()}>
                 {(laneData) => (
                   <TerminalItem
-                    key={`${laneId}-${props.terminalReloadVersions.get(laneId) ?? 0}`}
+                    key={`${laneId}-${version}`}
                     laneId={laneId}
                     lane={laneData()}
+                    version={version}
                     isActive={isActive()}
                     onTerminalReady={(terminalId) => props.onTerminalReady?.(laneId, terminalId)}
                     onTerminalExit={() => props.onTerminalExit?.(laneId)}

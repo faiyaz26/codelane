@@ -66,6 +66,9 @@ class TerminalPool {
       return;
     }
 
+    // Remove from pool immediately to prevent race conditions during async cleanup
+    this.handles.delete(terminalId);
+
     // Kill PTY
     try {
       await handle.pty.kill();
@@ -75,9 +78,6 @@ class TerminalPool {
 
     // Dispose terminal
     handle.terminal.dispose();
-
-    // Remove from pool
-    this.handles.delete(terminalId);
   }
 
   /**

@@ -607,11 +607,16 @@ pub async fn close_terminal(
 
     // Remove and drop the terminal instance
     // Dropping the master PTY will close the terminal
-    terminals
-        .remove(&id)
-        .ok_or_else(|| format!("Terminal not found: {}", id))?;
-
-    tracing::info!("Closed terminal {}", id);
+    if let Some(mut instance) = terminals.remove(&id) {
+        // Explicitly kill the child process
+        // portable-pty's Child drop does not kill the process
+        if let Err(e) = instance.child.kill() {
+            tracing::warn!("Failed to kill child process for terminal {}: {}", id, e);
+        }
+        tracing::info!("Closed terminal {}", id);
+    } else {
+        return Err(format!("Terminal not found: {}", id));
+    }
 
     Ok(())
 }

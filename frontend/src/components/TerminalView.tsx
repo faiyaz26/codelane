@@ -11,6 +11,7 @@ import '@xterm/xterm/css/xterm.css';
 interface TerminalViewProps {
   laneId: string;
   cwd?: string;
+  version?: number; // Reload version to ensure unique ID
   useAgent?: boolean; // If false, use plain shell instead of agent
   onTerminalReady?: (terminalId: string) => void;
   onTerminalExit?: () => void;
@@ -27,7 +28,7 @@ export function TerminalView(props: TerminalViewProps) {
   const [showHookOnboarding, setShowHookOnboarding] = createSignal(false);
   const [onboardingAgentType, setOnboardingAgentType] = createSignal<AgentType>('claude');
   
-  const terminalId = () => `${props.laneId}-agent`;
+  const terminalId = () => `${props.laneId}-agent${props.version ? `-${props.version}` : ''}`;
 
   // Acquire terminal on mount
   onMount(async () => {
