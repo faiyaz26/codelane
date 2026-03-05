@@ -21,9 +21,6 @@ interface AgentTerminalPanelProps {
   onReloadAgentTerminal?: (laneId: string) => void;
 }
 
-/**
- * Internal component to isolate reactivity for each terminal instance
- */
 function TerminalItem(props: {
   laneId: string;
   lane: Lane;
@@ -37,7 +34,7 @@ function TerminalItem(props: {
   const effectiveWorkingDir = () => props.lane.worktreePath || props.lane.workingDir;
 
   return (
-    <Show when={!props.isReloading}>
+    <Show when={!props.isReloading} keyed>
       <div
         class="absolute inset-0 transition-opacity duration-150"
         style={{
