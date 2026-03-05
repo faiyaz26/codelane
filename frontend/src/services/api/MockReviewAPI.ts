@@ -115,7 +115,7 @@ Model: ${params.model || 'default'}`,
     await this.wait();
 
     // Mock: all tools available
-    return ['claude', 'aider', 'opencode', 'gemini'];
+    return ['claude', 'copilot', 'aider', 'opencode', 'gemini', 'codex'];
   }
 }
 

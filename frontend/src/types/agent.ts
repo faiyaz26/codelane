@@ -3,7 +3,7 @@ import type { AITool } from '../services/AIReviewService';
 /**
  * Agent type definitions for CLI agents
  */
-export type AgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | 'gemini' | 'shell';
+export type AgentType = 'claude' | 'opencode' | 'codex' | 'gemini' | 'copilot' | 'shell';
 
 /**
  * Configuration for a CLI agent
@@ -22,7 +22,7 @@ export interface AgentConfig {
  */
 export interface AgentMetadata {
   label: string;
-  aiTool: AITool;
+  aiTool: AITool | 'copilot'; // or whatever aiTool type supports
   supportsHooks: boolean;
   preset: AgentConfig;
 }
@@ -70,32 +70,6 @@ export const AGENT_METADATA: Record<AgentType, AgentMetadata> = {
       useLaneCwd: true,
     }
   },
-  aider: {
-    label: 'Aider CLI',
-    aiTool: 'aider',
-    supportsHooks: false,
-    preset: {
-      name: 'Aider',
-      agentType: 'aider',
-      command: 'aider',
-      args: [],
-      env: {},
-      useLaneCwd: true,
-    }
-  },
-  cursor: {
-    label: 'Cursor CLI',
-    aiTool: 'claude',
-    supportsHooks: true,
-    preset: {
-      name: 'Cursor',
-      agentType: 'cursor',
-      command: 'cursor',
-      args: [],
-      env: {},
-      useLaneCwd: true,
-    }
-  },
   opencode: {
     label: 'OpenCode CLI',
     aiTool: 'opencode',
@@ -117,6 +91,19 @@ export const AGENT_METADATA: Record<AgentType, AgentMetadata> = {
       name: 'Codex',
       agentType: 'codex',
       command: 'codex',
+      args: [],
+      env: {},
+      useLaneCwd: true,
+    }
+  },
+  copilot: {
+    label: 'GitHub Copilot CLI',
+    aiTool: 'copilot',
+    supportsHooks: true,
+    preset: {
+      name: 'GitHub Copilot',
+      agentType: 'copilot',
+      command: 'copilot',
       args: [],
       env: {},
       useLaneCwd: true,

@@ -428,18 +428,6 @@ mod tests {
             shell.agent_type,
             codelane_core::config::AgentType::Shell
         ));
-
-        let cursor = AgentConfig::cursor_preset();
-        assert!(matches!(
-            cursor.agent_type,
-            codelane_core::config::AgentType::Cursor
-        ));
-
-        let aider = AgentConfig::aider_preset();
-        assert!(matches!(
-            aider.agent_type,
-            codelane_core::config::AgentType::Aider
-        ));
     }
 
     #[test]
@@ -474,8 +462,6 @@ mod tests {
         let settings = AgentSettings::default();
         assert!(settings.presets.contains_key("shell"));
         assert!(settings.presets.contains_key("claude"));
-        assert!(settings.presets.contains_key("cursor"));
-        assert!(settings.presets.contains_key("aider"));
     }
 
     // ==================== Edge Cases ====================

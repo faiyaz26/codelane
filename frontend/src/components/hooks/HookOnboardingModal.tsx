@@ -118,8 +118,7 @@ function getAgentName(agentType: AgentType): string {
     claude: 'Claude Code',
     codex: 'Codex',
     gemini: 'Gemini',
-    aider: 'Aider',
-    cursor: 'Cursor',
+    copilot: 'GitHub Copilot',
     opencode: 'OpenCode',
     shell: 'Shell',
   };

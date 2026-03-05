@@ -40,7 +40,7 @@ class HookService {
    * Get hook status for all supported agents.
    */
   async getAllStatus(): Promise<Record<AgentType, HookStatus>> {
-    const agents: AgentType[] = ['claude', 'codex', 'gemini', 'aider', 'cursor', 'opencode'];
+    const agents: AgentType[] = ['claude', 'codex', 'gemini', 'copilot', 'opencode'];
     const statuses = await Promise.all(agents.map((agent) => this.checkStatus(agent)));
 
     return Object.fromEntries(statuses.map((status) => [status.agentType, status])) as Record<
@@ -62,14 +62,22 @@ class HookService {
    */
   onHookEvent(callback: (event: HookEvent) => void): () => void {
     let unlisten: (() => void) | null = null;
+    let isCleanedUp = false;
 
     listen<HookEvent>('hook-event', (event) => {
       callback(event.payload);
     }).then((fn) => {
-      unlisten = fn;
+      if (!isCleanedUp) {
+        unlisten = fn;
+      } else {
+        fn();
+      }
+    }).catch((error) => {
+      console.error('Failed to listen for hook events:', error);
     });
 
     return () => {
+      isCleanedUp = true;
       if (unlisten) unlisten();
     };
   }

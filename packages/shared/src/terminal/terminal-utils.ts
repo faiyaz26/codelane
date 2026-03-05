@@ -38,7 +38,11 @@ export function createTerminal(theme: any): Terminal {
 /**
  * Loads rendering and utility addons onto a terminal.
  */
-export function loadAddons(terminal: Terminal, handlers?: TerminalHandlers): { searchAddon: SearchAddon } {
+export function loadAddons(terminal: Terminal | null | undefined, handlers?: TerminalHandlers): { searchAddon: SearchAddon } {
+  if (!terminal) {
+    return { searchAddon: new SearchAddon() };
+  }
+
   // Unicode11 - correct character widths for CJK and emoji
   try {
     const unicode11 = new Unicode11Addon();
@@ -63,7 +67,11 @@ export function loadAddons(terminal: Terminal, handlers?: TerminalHandlers): { s
 
   // Search addon - expose for Ctrl+F terminal search
   const searchAddon = new SearchAddon();
-  terminal.loadAddon(searchAddon);
+  try {
+    terminal.loadAddon(searchAddon);
+  } catch (err) {
+    console.warn('[terminal] Search addon failed to load:', err);
+  }
 
   // Canvas renderer — more reliable than WebGL for TUI apps
   try {
@@ -78,7 +86,8 @@ export function loadAddons(terminal: Terminal, handlers?: TerminalHandlers): { s
 /**
  * Updates a terminal's theme to match the current app theme
  */
-export function updateTerminalTheme(terminal: Terminal): void {
+export function updateTerminalTheme(terminal: Terminal | null | undefined): void {
+  if (!terminal?.options) return;
   const theme = getTerminalTheme();
   terminal.options.theme = theme;
 }

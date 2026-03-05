@@ -7,7 +7,7 @@
 import { reviewAPI } from './api/provider';
 import type { ReviewGenerationParams, FileReviewParams } from './api/types';
 
-export type AITool = 'claude' | 'aider' | 'opencode' | 'gemini';
+export type AITool = 'claude' | 'copilot' | 'opencode' | 'gemini' | 'codex';
 
 export interface AIReviewResult {
   success: boolean;
@@ -32,10 +32,10 @@ export const AI_MODELS: Record<AITool, Array<{ value: string; label: string; des
     { value: 'sonnet', label: 'Claude 3.5 Sonnet', description: 'Balanced performance' },
     { value: 'opus', label: 'Claude 3 Opus', description: 'Most capable' },
   ],
-  aider: [
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast and affordable (Recommended)' },
+  copilot: [
+    { value: 'gpt-5-mini', label: 'GPT-5 Mini', description: 'Free via GitHub Copilot (Recommended)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast and affordable' },
     { value: 'gpt-4o', label: 'GPT-4o', description: 'Most capable OpenAI model' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', description: 'Fastest' },
   ],
   opencode: [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Free via GitHub Copilot (Recommended)' },
@@ -46,14 +46,38 @@ export const AI_MODELS: Record<AITool, Array<{ value: string; label: string; des
     { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Most capable' },
     { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Faster' },
   ],
+  codex: [
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast and affordable (Recommended)' },
+    { value: 'gpt-4o', label: 'GPT-4o', description: 'Most capable' },
+  ],
 };
 
 export class AIReviewService {
+  /**
+   * Get the effective model to use, applying defaults for free Copilot model
+   * For Copilot, defaults to gpt-5-mini (free model) unless explicitly overridden
+   */
+  private getEffectiveModel(tool: AITool, requestedModel?: string): string | null {
+    // If user explicitly provided a model, use it
+    if (requestedModel) {
+      return requestedModel;
+    }
+
+    // For Copilot, default to free gpt-5-mini model
+    if (tool === 'copilot') {
+      return 'gpt-5-mini';
+    }
+
+    // For other tools, no default
+    return null;
+  }
+
   /**
    * Generate a code changes summary with feedback
    */
   async generateReview(request: AIReviewRequest): Promise<AIReviewResult> {
     const prompt = request.customPrompt || this.getDefaultPrompt();
+    const effectiveModel = this.getEffectiveModel(request.tool, request.model);
 
     try {
       const params: ReviewGenerationParams = {
@@ -61,7 +85,7 @@ export class AIReviewService {
         diffContent: request.diffContent,
         prompt,
         workingDir: request.workingDir,
-        model: request.model || null,
+        model: effectiveModel,
         signal: request.signal,
       };
 
@@ -261,6 +285,7 @@ Be very concise — aim for 3-5 bullet points total. No preamble.`;
     signal?: AbortSignal
   ): Promise<AIReviewResult> {
     const prompt = customPrompt || `${this.getDefaultFilePrompt()}\n\nFile: ${filePath}`;
+    const effectiveModel = this.getEffectiveModel(tool, model);
 
     try {
       const params: FileReviewParams = {
@@ -268,7 +293,7 @@ Be very concise — aim for 3-5 bullet points total. No preamble.`;
         filePath,
         diffContent,
         workingDir,
-        model: model || null,
+        model: effectiveModel,
         customPrompt: prompt,
         signal,
       };

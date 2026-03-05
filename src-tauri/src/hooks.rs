@@ -377,9 +377,8 @@ fn parse_agent_type(agent_type: &str) -> Result<AgentType, String> {
         "claude" => Ok(AgentType::Claude),
         "codex" => Ok(AgentType::Codex),
         "gemini" => Ok(AgentType::Gemini),
-        "aider" => Ok(AgentType::Aider),
-        "cursor" => Ok(AgentType::Cursor),
         "opencode" => Ok(AgentType::OpenCode),
+        "copilot" => Ok(AgentType::Copilot),
         "shell" => Ok(AgentType::Shell),
         _ => Err(format!("Unknown agent type: {}", agent_type)),
     }

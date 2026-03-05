@@ -1,25 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { createDetector } from '../index';
 import { ClaudeDetector } from '../ClaudeDetector';
-import { AiderDetector } from '../AiderDetector';
-import { CursorDetector } from '../CursorDetector';
+import { CopilotDetector } from '../CopilotDetector';
 import { CodexDetector } from '../CodexDetector';
 import { OpenCodeDetector } from '../OpenCodeDetector';
 import { GeminiDetector } from '../GeminiDetector';
 import { ShellDetector } from '../ShellDetector';
-import type { DetectableAgentType } from '../../../types/agentStatus';
 
 describe('createDetector factory', () => {
   it('creates ClaudeDetector for claude type', () => {
     expect(createDetector('claude')).toBeInstanceOf(ClaudeDetector);
   });
 
-  it('creates AiderDetector for aider type', () => {
-    expect(createDetector('aider')).toBeInstanceOf(AiderDetector);
-  });
-
-  it('creates CursorDetector for cursor type', () => {
-    expect(createDetector('cursor')).toBeInstanceOf(CursorDetector);
+  it('creates CopilotDetector for copilot type', () => {
+    expect(createDetector('copilot')).toBeInstanceOf(CopilotDetector);
   });
 
   it('creates CodexDetector for codex type', () => {
@@ -38,9 +32,10 @@ describe('createDetector factory', () => {
     expect(createDetector('shell')).toBeInstanceOf(ShellDetector);
   });
 
-  it('falls back to ShellDetector for unknown type', () => {
-    const detector = createDetector('unknown' as DetectableAgentType);
-    expect(detector).toBeInstanceOf(ShellDetector);
+  it('falls back to ShellDetector for unknown types', () => {
+    expect(createDetector('unknown_agent' as any)).toBeInstanceOf(ShellDetector);
+  });
+});
   });
 
   it('creates independent instances', () => {

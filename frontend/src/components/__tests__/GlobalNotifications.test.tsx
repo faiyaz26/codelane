@@ -109,11 +109,10 @@ describe('GlobalNotifications', () => {
     unmount = u;
 
     // Dispatch global event
-    window.dispatchEvent(new CustomEvent('codelane:agent-failed', { 
-      detail: { agentType: 'aider', command: 'aider' } 
+    window.dispatchEvent(new CustomEvent('codelane:agent-failed', {
+      detail: { agentType: 'copilot', command: 'copilot' }
     }));
 
     // Check if notification is shown
-    expect(container.innerHTML).toContain('Agent "aider" (aider) is not installed.');
-  });
+    expect(container.innerHTML).toContain('Agent "copilot" (copilot) is not installed.');  });
 });

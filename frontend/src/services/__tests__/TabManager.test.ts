@@ -8,6 +8,20 @@ vi.mock('../TabStorage', () => ({
   atomicUpdate: (...args: unknown[]) => mockAtomicUpdate(...args),
 }));
 
+// Mock HookService
+vi.mock('../../services/HookService', () => ({
+  hookService: {
+    onHookEvent: vi.fn(() => () => {}),
+  },
+}));
+
+// Mock AgentStatusManager
+vi.mock('../../services/AgentStatusManager', () => ({
+  agentStatusManager: {
+    subscribe: vi.fn(() => () => {}),
+  },
+}));
+
 // Mock uuid
 vi.mock('uuid', () => ({
   v4: () => 'mock-uuid-1234',

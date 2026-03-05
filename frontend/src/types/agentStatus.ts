@@ -6,7 +6,7 @@
 export type AgentStatus = 'idle' | 'working' | 'done' | 'waiting_for_input' | 'error';
 
 /** All supported agent types for detection */
-export type DetectableAgentType = 'claude' | 'cursor' | 'aider' | 'opencode' | 'codex' | 'gemini' | 'shell';
+export type DetectableAgentType = 'claude' | 'copilot' | 'opencode' | 'codex' | 'gemini' | 'shell';
 
 /** Status change event emitted by the status manager */
 export interface AgentStatusChange {

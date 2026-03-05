@@ -83,7 +83,7 @@ describe('AgentStatusManager', () => {
     agentStatusManager.feedOutput('lane-1', data);
     expect(agentStatusManager.getStatus('lane-1')).toBe('working');
 
-    await agentStatusManager.registerLane('lane-1', 'aider');
+    await agentStatusManager.registerLane('lane-1', 'copilot');
     expect(agentStatusManager.getStatus('lane-1')).toBe('idle');
   });
 
@@ -118,13 +118,13 @@ describe('AgentStatusManager', () => {
 
   it('supports multiple lanes independently', async () => {
     await agentStatusManager.registerLane('lane-1', 'claude');
-    await agentStatusManager.registerLane('lane-2', 'aider');
+    await agentStatusManager.registerLane('lane-2', 'copilot');
 
     agentStatusManager.feedOutput('lane-1', new TextEncoder().encode('working'));
     expect(agentStatusManager.getStatus('lane-1')).toBe('working');
     expect(agentStatusManager.getStatus('lane-2')).toBe('idle');
 
-    agentStatusManager.feedOutput('lane-2', new TextEncoder().encode('aider> '));
+    agentStatusManager.feedOutput('lane-2', new TextEncoder().encode('? '));
     expect(agentStatusManager.getStatus('lane-2')).toBe('waiting_for_input');
   });
 

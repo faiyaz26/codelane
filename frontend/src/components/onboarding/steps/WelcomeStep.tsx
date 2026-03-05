@@ -56,7 +56,7 @@ export function WelcomeStep() {
           mounted={mounted()}
           icon={<AIIcon />}
           title="AI Agent Integration"
-          description="Seamlessly collaborate with Claude, Cursor, Aider, and other AI coding assistants"
+          description="Seamlessly collaborate with Claude, GitHub Copilot, Gemini, and other AI coding assistants"
           accentColor="from-purple-500/20 to-pink-500/20"
         />
 

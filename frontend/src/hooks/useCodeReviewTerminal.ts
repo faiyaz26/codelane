@@ -134,7 +134,7 @@ export function useCodeReviewTerminal(
         term.writeln('');
         term.writeln(`  \x1b[36m${agentCmd}\x1b[0m`);
       } catch {
-        term.writeln('\x1b[90mStart an AI agent (claude, aider, etc.) to get assistance.\x1b[0m');
+        term.writeln('\x1b[90mStart an AI agent (claude, copilot, etc.) to get assistance.\x1b[0m');
       }
       term.writeln('');
     }

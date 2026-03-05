@@ -193,16 +193,14 @@ impl Default for ThemeConfig {
 pub enum AgentType {
     /// Claude Code CLI
     Claude,
-    /// Cursor CLI
-    Cursor,
-    /// Aider CLI
-    Aider,
     /// OpenCode CLI
     OpenCode,
     /// Codex CLI
     Codex,
     /// Gemini CLI
     Gemini,
+    /// GitHub Copilot CLI
+    Copilot,
     /// Traditional shell (backward compatibility)
     Shell,
 }
@@ -241,8 +239,6 @@ impl Default for AIConfig {
 pub enum AITool {
     /// Claude Code CLI (claude)
     Claude,
-    /// Aider CLI (aider)
-    Aider,
     /// OpenCode CLI (opencode)
     OpenCode,
     /// Gemini CLI (gemini)
@@ -315,30 +311,6 @@ impl AgentConfig {
         }
     }
 
-    /// Cursor preset
-    pub fn cursor_preset() -> Self {
-        Self {
-            name: Some("Cursor".to_string()),
-            agent_type: AgentType::Cursor,
-            command: "cursor".to_string(),
-            args: vec![],
-            env: HashMap::new(),
-            use_lane_cwd: true,
-        }
-    }
-
-    /// Aider preset
-    pub fn aider_preset() -> Self {
-        Self {
-            name: Some("Aider".to_string()),
-            agent_type: AgentType::Aider,
-            command: "aider".to_string(),
-            args: vec![],
-            env: HashMap::new(),
-            use_lane_cwd: true,
-        }
-    }
-
     /// OpenCode preset
     pub fn opencode_preset() -> Self {
         Self {
@@ -369,6 +341,18 @@ impl AgentConfig {
             name: Some("Gemini".to_string()),
             agent_type: AgentType::Gemini,
             command: "gemini".to_string(),
+            args: vec![],
+            env: HashMap::new(),
+            use_lane_cwd: true,
+        }
+    }
+
+    /// GitHub Copilot CLI preset
+    pub fn copilot_preset() -> Self {
+        Self {
+            name: Some("GitHub Copilot".to_string()),
+            agent_type: AgentType::Copilot,
+            command: "copilot".to_string(),
             args: vec![],
             env: HashMap::new(),
             use_lane_cwd: true,

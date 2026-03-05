@@ -1,6 +1,6 @@
 //! AI code changes summary integration via CLI tools
 //!
-//! Provides commands to invoke local AI CLI tools (claude-code, aider, opencode, gemini)
+//! Provides commands to invoke local AI CLI tools (claude-code, aider, opencode, gemini, copilot)
 //! for code changes summaries and feedback.
 
 use serde::Serialize;
@@ -38,6 +38,7 @@ pub async fn ai_generate_review(
         "aider" => execute_aider(&full_prompt, &working_dir, model.as_deref()),
         "opencode" => execute_opencode(&full_prompt, &working_dir, model.as_deref()),
         "gemini" => execute_gemini(&full_prompt, &working_dir, model.as_deref()),
+        "copilot" => execute_copilot(&full_prompt, &working_dir, model.as_deref()),
         _ => return Err(format!("Unsupported AI tool: {}", tool)),
     };
 
@@ -182,6 +183,23 @@ fn execute_gemini(prompt: &str, working_dir: &str, model: Option<&str>) -> Resul
     run_command("gemini", args, None, working_dir)
 }
 
+/// Execute GitHub Copilot CLI via standalone 'copilot' command
+fn execute_copilot(prompt: &str, working_dir: &str, model: Option<&str>) -> Result<String, String> {
+    let mut args = Vec::new();
+
+    if let Some(model_name) = model {
+        args.push("--model".to_string());
+        args.push(model_name.to_string());
+    }
+
+    // Use -p for non-interactive programmatic mode
+    args.push("-p".to_string());
+    args.push(prompt.to_string());
+
+    // GitHub Copilot CLI uses -p for non-interactive, doesn't strictly need stdin
+    run_command("copilot", args, None, working_dir)
+}
+
 /// Test if an AI tool is available
 #[tauri::command]
 pub async fn ai_test_tool(tool: String) -> Result<bool, String> {
@@ -190,6 +208,7 @@ pub async fn ai_test_tool(tool: String) -> Result<bool, String> {
         "aider" => "aider",
         "opencode" => "opencode",
         "gemini" => "gemini",
+        "copilot" => "copilot",
         _ => return Err(format!("Unknown tool: {}", tool)),
     };
 
@@ -199,12 +218,13 @@ pub async fn ai_test_tool(tool: String) -> Result<bool, String> {
 /// Get available AI tools (those that are installed)
 #[tauri::command]
 pub async fn ai_get_available_tools() -> Result<Vec<String>, String> {
-    let tools = vec!["claude", "aider", "opencode", "gemini"];
+    let tools = vec!["claude", "aider", "opencode", "gemini", "copilot"];
     let mut available = Vec::new();
     
     for tool in tools {
-        if command_exists(tool)?.is_some() {
-            available.push(tool.to_string());
+        match ai_test_tool(tool.to_string()).await {
+            Ok(true) => available.push(tool.to_string()),
+            _ => continue,
         }
     }
 
