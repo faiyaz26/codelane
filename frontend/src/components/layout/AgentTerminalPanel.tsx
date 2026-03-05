@@ -198,8 +198,11 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                 options={props.agentSettings.installedAgents}
                 optionValue="name"
                 optionLabel="name"
-                value={currentAgent()}
-                onChange={(agent) => handleAgentSwitch(agent)}
+                value={currentAgentName()}
+                onChange={(selectedName) => {
+                  const agent = props.agentSettings.installedAgents.find(a => a.name === selectedName);
+                  if (agent) handleAgentSwitch(agent);
+                }}
                 triggerClass="!h-6 !px-2 !bg-transparent !border-none hover:!bg-zed-bg-hover !text-[11px] !font-medium !text-zed-text-tertiary hover:!text-zed-text-primary"
               />
             </div>
