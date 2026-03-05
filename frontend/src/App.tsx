@@ -44,8 +44,6 @@ function App() {
   
   // Track which lanes have had terminals created (to avoid creating all at once)
   const [initializedLanes, setInitializedLanes] = createSignal<Set<string>>(new Set());
-  // Track which lanes are currently reloading their terminal
-  const [agentReloadingLanes, setAgentReloadingLanes] = createSignal<Set<string>>(new Set());
   // Track terminal IDs for process monitoring
   const [terminalIds, setTerminalIds] = createSignal<Map<string, string>>(new Map());
   // Track reload versions per lane to force component remount
@@ -200,13 +198,10 @@ function App() {
   };
 
   const handleReloadAgentTerminal = (laneId: string) => {
-    console.log('[DEBUG] handleReloadAgentTerminal called for laneId:', laneId);
-    
     // Increment reload version to force remount (TerminalView will release PTY in onCleanup)
     setTerminalReloadVersions((prev) => {
       const newMap = new Map(prev);
       newMap.set(laneId, (newMap.get(laneId) ?? 0) + 1);
-      console.log('[DEBUG] terminalReloadVersions:', newMap.get(laneId));
       return newMap;
     });
     
@@ -284,7 +279,6 @@ function App() {
           agentSettings={agentSettings()}
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
-          agentReloadingLanes={agentReloadingLanes()}
           terminalReloadVersions={terminalReloadVersions()}
           onLaneSelect={handleLaneSelect}
           onLaneDeleted={handleLaneDeleted}

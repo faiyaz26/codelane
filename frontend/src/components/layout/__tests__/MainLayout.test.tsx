@@ -113,7 +113,7 @@ describe('MainLayout', () => {
         lanes={mockLanes}
         activeLaneId={activeLaneId()}
         initializedLanes={new Set()}
-        agentReloadingLanes={new Set()}
+        
         onLaneSelect={vi.fn()}
         onLaneDeleted={vi.fn()}
         onLaneRenamed={vi.fn()}
@@ -179,7 +179,7 @@ describe('MainLayout', () => {
         lanes={mockLanes}
         activeLaneId={activeLaneId()}
         initializedLanes={new Set(['lane-1', 'lane-2'])}
-        agentReloadingLanes={new Set()}
+        
         onLaneSelect={vi.fn()}
         onLaneDeleted={vi.fn()}
         onLaneRenamed={vi.fn()}
@@ -205,7 +205,7 @@ describe('MainLayout', () => {
         lanes={mockLanes}
         activeLaneId={null}
         initializedLanes={new Set()}
-        agentReloadingLanes={new Set()}
+        
         onLaneSelect={vi.fn()}
         onLaneDeleted={vi.fn()}
         onLaneRenamed={vi.fn()}

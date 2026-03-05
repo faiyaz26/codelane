@@ -31,7 +31,6 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Acquire terminal on mount
   onMount(async () => {
-    console.log('[DEBUG] TerminalView.onMount called for laneId:', props.laneId);
     setIsLoading(true);
     setError(null);
 
@@ -42,7 +41,6 @@ export function TerminalView(props: TerminalViewProps) {
         cwd: props.cwd,
         useAgent: props.useAgent !== false,
       });
-      console.log('[DEBUG] TerminalView acquired handle:', h.id);
       setHandle(h);
       
       // Notify parent
@@ -100,13 +98,12 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Release PTY when component unmounts
   onCleanup(async () => {
-    console.log('[DEBUG] TerminalView.onCleanup called for laneId:', props.laneId);
     const h = handle();
     if (h) {
       try {
         await terminalPool.release(h.id);
       } catch (error) {
-        console.error('[DEBUG] Failed to release terminal in cleanup:', error);
+        console.error('Failed to release terminal in cleanup:', error);
       }
     }
   });

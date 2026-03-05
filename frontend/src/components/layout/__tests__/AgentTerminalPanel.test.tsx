@@ -91,7 +91,7 @@ describe('AgentTerminalPanel Persistence', () => {
         lanes={mockLanes}
         activeLaneId={activeLaneId()}
         initializedLanes={initializedLanes}
-        agentReloadingLanes={new Set()}
+        
         showEditor={false}
         panelWidth={null}
       />
@@ -135,7 +135,7 @@ describe('AgentTerminalPanel Persistence', () => {
         lanes={mockLanes}
         activeLaneId={activeLaneId()}
         initializedLanes={new Set(['lane-1'])}
-        agentReloadingLanes={new Set()}
+        
         showEditor={false}
         panelWidth={null}
         onReloadAgentTerminal={onReload}

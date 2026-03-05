@@ -11,7 +11,6 @@ interface AgentTerminalPanelProps {
   agentSettings: AgentSettings;
   activeLaneId: string | null;
   initializedLanes: Set<string>;
-  agentReloadingLanes: Set<string>;
   terminalReloadVersions: Map<string, number>;
   showEditor: boolean;
   panelWidth: number | null;
@@ -26,7 +25,6 @@ function TerminalItem(props: {
   laneId: string;
   lane: Lane;
   isActive: boolean;
-  isReloading: boolean;
   onTerminalReady?: (terminalId: string) => void;
   onTerminalExit?: () => void;
   onAgentFailed?: (agentType: string, command: string) => void;
@@ -35,24 +33,22 @@ function TerminalItem(props: {
   const effectiveWorkingDir = () => props.lane.worktreePath || props.lane.workingDir;
 
   return (
-    <Show when={!props.isReloading}>
-      <div
-        class="absolute inset-0 transition-opacity duration-150"
-        style={{
-          opacity: props.isActive ? '1' : '0',
-          'pointer-events': props.isActive ? 'auto' : 'none',
-          'z-index': props.isActive ? '1' : '0',
-        }}
-      >
-        <TerminalView
-          laneId={props.laneId}
-          cwd={effectiveWorkingDir()}
-          onTerminalReady={props.onTerminalReady}
-          onTerminalExit={props.onTerminalExit}
-          onAgentFailed={props.onAgentFailed}
-        />
-      </div>
-    </Show>
+    <div
+      class="absolute inset-0 transition-opacity duration-150"
+      style={{
+        opacity: props.isActive ? '1' : '0',
+        'pointer-events': props.isActive ? 'auto' : 'none',
+        'z-index': props.isActive ? '1' : '0',
+      }}
+    >
+      <TerminalView
+        laneId={props.laneId}
+        cwd={effectiveWorkingDir()}
+        onTerminalReady={props.onTerminalReady}
+        onTerminalExit={props.onTerminalExit}
+        onAgentFailed={props.onAgentFailed}
+      />
+    </div>
   );
 }
 
@@ -236,7 +232,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
           {(laneId) => {
             const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
             const isActive = createMemo(() => props.activeLaneId === laneId);
-            const isReloading = createMemo(() => props.agentReloadingLanes.has(laneId));
 
             return (
               <Show when={lane()}>
@@ -246,7 +241,6 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
                     laneId={laneId}
                     lane={laneData()}
                     isActive={isActive()}
-                    isReloading={isReloading()}
                     onTerminalReady={(terminalId) => props.onTerminalReady?.(laneId, terminalId)}
                     onTerminalExit={() => props.onTerminalExit?.(laneId)}
                     onAgentFailed={props.onAgentFailed}
