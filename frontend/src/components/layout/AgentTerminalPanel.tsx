@@ -97,14 +97,28 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
     }
   };
 
-  const handleConfirmReload = () => {
-    if (props.activeLaneId && props.onReloadAgentTerminal) {
-      const laneId = props.activeLaneId;
-      setTimeout(() => {
-        props.onReloadAgentTerminal?.(laneId);
-      }, 0);
+  const handleConfirmReload = async () => {
+    const lane = activeLane();
+    if (!lane || !props.activeLaneId) return;
+
+    try {
+      // Refresh global lanes state
+      if (props.onLanesUpdated) {
+        await props.onLanesUpdated();
+      }
+      
+      // Reload terminal with current agent
+      if (props.onReloadAgentTerminal) {
+        const laneId = props.activeLaneId;
+        setTimeout(() => {
+          props.onReloadAgentTerminal?.(laneId);
+        }, 0);
+      }
+    } catch (error) {
+      console.error('Failed to reload terminal:', error);
+    } finally {
+      setShowReloadConfirm(false);
     }
-    setShowReloadConfirm(false);
   };
 
   const handleAgentSwitch = (agent: AgentConfig) => {
