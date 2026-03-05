@@ -201,6 +201,13 @@ function App() {
 
   const handleReloadAgentTerminal = (laneId: string) => {
     console.log('[DEBUG] handleReloadAgentTerminal called for laneId:', laneId);
+    
+    // Release the old PTY first
+    const terminalId = `${laneId}-agent`;
+    terminalPool.release(terminalId).catch(err => {
+      console.error('[DEBUG] Failed to release terminal:', err);
+    });
+    
     // Increment reload version to force remount
     setTerminalReloadVersions((prev) => {
       const newMap = new Map(prev);
