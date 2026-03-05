@@ -1,4 +1,5 @@
 import { BaseDetector } from './BaseDetector';
+import type { DetectorPatterns } from './types';
 
 /**
  * Detector for GitHub Copilot CLI.
@@ -6,12 +7,9 @@ import { BaseDetector } from './BaseDetector';
 export class CopilotDetector extends BaseDetector {
   readonly agentType = 'copilot' as const;
 
-  constructor() {
-    super({
-      // Common prompt patterns for copilot cli
-      waitingPatterns: [/\? /i, /> /i],
-      // Common working patterns
-      workingPatterns: [/(thinking|generating|querying).*\.\.\./i, /working/i],
-    });
-  }
+  protected readonly patterns: DetectorPatterns = {
+    waitingPatterns: [/\? /i, /> /i],
+    errorPatterns: [/error:/i, /failed/i],
+    workingPatterns: [/(thinking|generating|querying).*\.\.\./i, /working/i],
+  };
 }
