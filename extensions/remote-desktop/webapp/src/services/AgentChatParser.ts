@@ -36,6 +36,29 @@ class AgentChatParser {
   }
 
   /**
+   * Filters out repetitive TUI noise and scrollback artifacts
+   */
+  private filterNoise(lines: string[]): string[] {
+    return lines.filter(line => {
+      const trimmed = line.trim();
+      
+      // Horizontal dividers (very common in TUIs)
+      if (/^[─━_=\-\u2500-\u257F]{5,}$/.test(trimmed)) return false;
+      
+      // Known Claude Code / Gemini CLI footers
+      if (trimmed === '? for shortcuts') return false;
+      if (trimmed.startsWith('shift+tab to accept')) return false;
+      // Match "X files" or "X GEMINI.md files" footer
+      if (/^\d+\s+.*?files?$/.test(trimmed) && trimmed.length < 40) return false;
+      
+      // Loading spinners stuck in scrollback
+      if (/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/i.test(trimmed) && trimmed.length < 15) return false;
+
+      return true;
+    });
+  }
+
+  /**
    * Parse the full terminal buffer and update the store.
    * This is called periodically or when data arrives.
    */
@@ -54,9 +77,9 @@ class AgentChatParser {
     
     this.lastParsedLength = text.length;
 
-    // We split the buffer into "Turns". 
-    // This is a heuristic. We look for common user prompts like "$" or "❯" or lines ending in "?"
-    const lines = text.split('\n');
+    let lines = text.split('\n');
+    lines = this.filterNoise(lines);
+
     const messages: any[] = [];
     
     let currentRole = 'agent';
