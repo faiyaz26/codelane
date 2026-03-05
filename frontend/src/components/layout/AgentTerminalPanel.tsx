@@ -194,24 +194,16 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
           <Show when={props.agentSettings.installedAgents.length > 1 && props.activeLaneId}>
             <div class="flex items-center">
               <div class="h-4 w-[1px] bg-zed-border-subtle mx-2" />
-              {(() => {
-                const currentName = currentAgentName();
-                const agents = props.agentSettings.installedAgents;
-                // Find the agent object that matches the current name
-                const currentAgentObj = agents.find(a => a.name === currentName);
-                return (
-                  <Select
-                    options={agents}
-                    optionValue="name"
-                    optionLabel="name"
-                    value={currentAgentObj || agents[0]}
-                    onChange={(agent) => {
-                      if (agent) handleAgentSwitch(agent);
-                    }}
-                    triggerClass="!h-6 !px-2 !bg-transparent !border-none hover:!bg-zed-bg-hover !text-[11px] !font-medium !text-zed-text-tertiary hover:!text-zed-text-primary"
-                  />
-                );
-              })()}
+              <Select
+                options={props.agentSettings.installedAgents}
+                optionValue="name"
+                optionLabel="name"
+                value={props.agentSettings.installedAgents.find(a => a.name === currentAgentName()) || props.agentSettings.installedAgents[0]}
+                onChange={(agent) => {
+                  if (agent) handleAgentSwitch(agent);
+                }}
+                triggerClass="!h-6 !px-2 !bg-transparent !border-none hover:!bg-zed-bg-hover !text-[11px] !font-medium !text-zed-text-tertiary hover:!text-zed-text-primary"
+              />
             </div>
           </Show>
         </div>
