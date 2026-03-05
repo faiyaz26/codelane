@@ -59,6 +59,13 @@ pub fn settings_update_agents(
     settings: AgentSettings,
     state: State<SettingsState>,
 ) -> Result<(), String> {
+    eprintln!("[DEBUG] Updating agent settings with {} agents, default: {}", 
+        settings.installed_agents.len(), 
+        settings.default_agent_name
+    );
+    for (i, agent) in settings.installed_agents.iter().enumerate() {
+        eprintln!("[DEBUG]   Agent {}: {:?} - {:?}", i, agent.name, agent.agent_type);
+    }
     state.update_agent_settings(settings)
 }
 

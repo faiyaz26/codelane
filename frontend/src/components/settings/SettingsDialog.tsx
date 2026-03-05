@@ -61,6 +61,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
     props.onOpenChange(open);
   };
 
+  // Wrapper for settings change to support the callback pattern used by AgentsSettings
+  const handleSettingsChange = (fn: (s: AgentSettings | null) => AgentSettings | null) => {
+    setSettings(fn);
+  };
+
   const handleSave = async () => {
     const currentSettings = settings();
     if (!currentSettings) return;
@@ -187,7 +192,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   <Show when={activeTab() === 'agents' && settings()}>
                     <AgentsSettings
                       settings={settings()!}
-                      onSettingsChange={setSettings}
+                      onSettingsChange={handleSettingsChange}
                       onValidationChange={setIsAgentValid}
                     />
                   </Show>
