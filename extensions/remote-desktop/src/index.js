@@ -29,7 +29,7 @@ async function handleRemoteData(data, context, state, conn) {
     } 
     else if (data.type === 'terminal:subscribe' && data.terminalId) {
       if (state.activeTerminalListeners[data.terminalId]) return;
-      
+
       const unlisten = await context.terminal.onData(data.terminalId, (chunk) => {
         // PERF: Send raw ArrayBuffer to avoid freezing the main thread with Array.from()
         conn.send({ 
@@ -38,13 +38,19 @@ async function handleRemoteData(data, context, state, conn) {
           data: chunk.buffer 
         });
       });
-      
+
       if (unlisten) {
         state.activeTerminalListeners[data.terminalId] = unlisten;
-        conn.send({ type: 'terminal:subscribed', terminalId: data.terminalId });
+
+        // Also send current size to client so they can match it
+        const size = context.terminal.getSize(data.terminalId);
+        conn.send({ 
+          type: 'terminal:subscribed', 
+          terminalId: data.terminalId,
+          size 
+        });
       }
-    }
-    else if (data.type === 'terminal:unsubscribe' && data.terminalId) {
+    }    else if (data.type === 'terminal:unsubscribe' && data.terminalId) {
       const unlisten = state.activeTerminalListeners[data.terminalId];
       if (unlisten) {
         unlisten();
@@ -53,6 +59,9 @@ async function handleRemoteData(data, context, state, conn) {
     }
     else if (data.type === 'terminal:write' && data.terminalId && data.data) {
       await context.terminal.write(data.terminalId, data.data);
+    }
+    else if (data.type === 'terminal:resize' && data.terminalId && data.cols && data.rows) {
+      await context.terminal.resize(data.terminalId, data.cols, data.rows);
     }
     else if (data.type === 'lanes:list') {
       const lanes = await context.lanes.list();

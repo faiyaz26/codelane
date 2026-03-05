@@ -23,6 +23,8 @@ export interface ExtensionContext {
   // Data Hooks API
   terminal: {
     write: (terminalId: string, data: string) => Promise<void>;
+    resize: (terminalId: string, cols: number, rows: number) => Promise<void>;
+    getSize: (terminalId: string) => { cols: number; rows: number } | undefined;
     onData: (terminalId: string, callback: (data: Uint8Array) => void) => Promise<UnlistenFn | undefined>;
     getActiveIds: () => string[];
   };
@@ -172,6 +174,22 @@ class ExtensionLoader {
             if (handle) {
               await handle.pty.write(data);
             }
+          },
+          resize: async (terminalId: string, cols: number, rows: number) => {
+            if (!manifest.permissions.includes('terminal:write')) {
+              throw new Error(`Extension ${manifest.id} lacks 'terminal:write' permission`);
+            }
+            const handle = terminalPool.getHandle(terminalId);
+            if (handle) {
+              await handle.pty.resize(cols, rows);
+            }
+          },
+          getSize: (terminalId: string) => {
+            const handle = terminalPool.getHandle(terminalId);
+            if (handle && handle.terminal) {
+              return { cols: handle.terminal.cols, rows: handle.terminal.rows };
+            }
+            return undefined;
           },
           onData: async (terminalId: string, callback: (data: Uint8Array) => void) => {
             if (!manifest.permissions.includes('terminal:read')) {

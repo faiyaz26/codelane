@@ -2,18 +2,20 @@ import { createSignal, Show, onMount, For } from 'solid-js';
 import { Button, TextField } from '@codelane/shared';
 import { Peer } from 'peerjs';
 import { RemoteTerminal } from './components/RemoteTerminal';
+import { RemoteChatView } from './components/RemoteChatView';
 import { TerminalToolbar } from './components/TerminalToolbar';
 import { remoteStore } from './services/RemoteStore';
+import { agentChatParser } from './services/AgentChatParser';
 
 function App() {
-  const [connectionId, setConnectionId] = createSignal('');
-  const [pin, setPin] = createSignal('');
+  const [connectionId, setConnectionId] = createSignal(localStorage.getItem('cl-remote-id') || '');
+  const [pin, setPin] = createSignal(localStorage.getItem('cl-remote-pin') || '');
   const [isConnecting, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [isConnected, setIsConnected] = createSignal(false);
   const [conn, setConn] = createSignal<any>(null);
 
-  // Auto-fill from URL
+  // Auto-fill from URL or LocalStorage
   onMount(() => {
     const params = new URLSearchParams(window.location.search);
     const host = params.get('host');
@@ -25,7 +27,8 @@ function App() {
     }
     if (pinParam) setPin(pinParam);
 
-    if (host && pinParam) {
+    // If we have credentials (URL or LocalStorage), attempt auto-connect
+    if (connectionId() && pin()) {
       handleConnect();
     }
   });
@@ -39,14 +42,27 @@ function App() {
     setIsLoading(true);
     setError(null);
 
+    // Persist for reloads
+    localStorage.setItem('cl-remote-id', rawId);
+    localStorage.setItem('cl-remote-pin', rawPin);
+
     const fullHostId = `codelane-host-${rawId}`;
     console.info(`[Remote] Attempting to connect to host: ${fullHostId}`);
     
     try {
-      const newPeer = new Peer();
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const peerOptions: any = {};
+      
+      // Optimization: bypass external ICE servers for local testing
+      if (isLocal) {
+        console.info('[Remote] Localhost detected. Bypassing ICE servers for instant handshake.');
+        peerOptions.config = { iceServers: [] };
+      }
+
+      const newPeer = new Peer(peerOptions);
 
       newPeer.on('open', (id) => {
-        console.info(`[Remote] Signaling server connected. My Client ID: ${id}`);
+        console.info(`[Remote] Signaling server connected. Client ID: ${id}`);
         const connection = newPeer.connect(fullHostId, {
           reliable: true
         });
@@ -80,6 +96,8 @@ function App() {
         console.error('[Remote] PeerJS Error:', err.type, err.message);
         if (err.type === 'peer-unavailable') {
           setError(`Host "${rawId}" not found. Ensure the Desktop app is hosting.`);
+          // Clear storage on failure so we don't loop on bad IDs
+          localStorage.removeItem('cl-remote-id');
         } else if (err.type === 'network') {
           setError('Network error. Check your internet connection.');
         } else {
@@ -96,12 +114,18 @@ function App() {
     }
   };
 
+  const handleDisconnect = () => {
+    localStorage.removeItem('cl-remote-id');
+    localStorage.removeItem('cl-remote-pin');
+    window.location.reload();
+  };
+
   return (
-    <div class="h-screen w-screen bg-zed-bg-app flex flex-col items-center justify-center p-6 overflow-hidden">
-      <Show when={!isConnected()} fallback={<RemoteDashboard conn={conn()} />}>
+    <div class="h-screen w-screen bg-zed-bg-app flex flex-col items-center justify-center p-6 overflow-hidden text-zed-text-primary">
+      <Show when={!isConnected()} fallback={<RemoteDashboard conn={conn()} onDisconnect={handleDisconnect} />}>
         <div class="w-full max-w-md bg-zed-bg-overlay border border-zed-border-default rounded-xl shadow-2xl p-8 flex flex-col animate-slide-down">
           <div class="flex items-center gap-3 mb-8">
-            <div class="w-10 h-10 bg-zed-accent-blue rounded-lg flex items-center justify-center text-white">
+            <div class="w-10 h-10 bg-zed-accent-blue rounded-lg flex items-center justify-center text-white shadow-lg">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.828a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
               </svg>
@@ -138,9 +162,9 @@ function App() {
               size="lg"
               class="w-full mt-4"
               onClick={handleConnect}
-              disabled={isConnecting() || !connectionId() || !pin()}
+              disabled={isConnecting()}
             >
-              {isConnecting() ? 'Connecting...' : 'Connect to Desktop'}
+              {isConnecting() ? 'Connecting...' : (localStorage.getItem('cl-remote-id') ? 'Reconnect' : 'Connect to Desktop')}
             </Button>
           </div>
 
@@ -153,9 +177,14 @@ function App() {
   );
 }
 
-function RemoteDashboard(props: { conn: any }) {
-  let terminalRef: { write: (data: string | Uint8Array) => void } | undefined;
+function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
+  let terminalRef: { 
+    write: (data: string | Uint8Array) => void 
+  } | undefined;
+  
   const [commandInput, setCommandInput] = createSignal('');
+  const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
+  let lastSubscribedId: string | null = null;
 
   onMount(() => {
     // Request lanes list
@@ -168,19 +197,40 @@ function RemoteDashboard(props: { conn: any }) {
         if (data.lanes.length > 0 && !remoteStore.activeLaneId()) {
           handleSelectLane(data.lanes[0].id);
         }
+      } else if (data.type === 'terminal:subscribed') {
+        if (data.size) {
+          console.info(`[Remote] Subscribed. Matching host size: ${data.size.cols}x${data.size.rows}`);
+          // terminalRef?.resize(data.size.cols, data.size.rows); // Remote terminal sizing is handled via CSS/CSS panning now
+        }
       } else if (data.type === 'terminal:data') {
-        // PERF: Handle raw ArrayBuffer directly from PeerJS
-        const bytes = new Uint8Array(data.data);
-        terminalRef?.write(bytes);
+        if (data.terminalId === `${remoteStore.activeLaneId()}-agent`) {
+          const bytes = new Uint8Array(data.data);
+          // Pass to background terminal for TUI parity
+          terminalRef?.write(bytes);
+          // Pass to Chat Parser for mobile view
+          agentChatParser.processData(bytes);
+        }
       }
     });
   });
 
   const handleSelectLane = (laneId: string) => {
+    const terminalId = `${laneId}-agent`;
+    
+    if (lastSubscribedId && lastSubscribedId !== terminalId) {
+      props.conn.send({ type: 'terminal:unsubscribe', terminalId: lastSubscribedId });
+    }
+
     remoteStore.setActiveLaneId(laneId);
-    // \x1b[2J = clear screen, \x1b[H = move cursor to top-left
-    terminalRef?.write('\x1b[2J\x1b[H');
-    props.conn.send({ type: 'terminal:subscribe', terminalId: `${laneId}-agent` });
+    remoteStore.setMessages([]); // Clear chat for new lane
+    agentChatParser.reset();
+    lastSubscribedId = terminalId;
+
+    props.conn.send({ type: 'terminal:subscribe', terminalId });
+  };
+
+  const handleTerminalResize = (_cols: number, _rows: number) => {
+    // Desktop is source of truth
   };
 
   const sendToTerminal = (data: string) => {
@@ -198,6 +248,7 @@ function RemoteDashboard(props: { conn: any }) {
     const cmd = commandInput();
     if (cmd) {
       sendToTerminal(cmd);
+      remoteStore.addMessage({ role: 'user', content: cmd });
       setCommandInput('');
     }
   };
@@ -207,107 +258,202 @@ function RemoteDashboard(props: { conn: any }) {
     const cmd = commandInput();
     if (cmd) {
       sendToTerminal(cmd + '\n');
+      remoteStore.addMessage({ role: 'user', content: cmd });
       setCommandInput('');
     }
   };
 
   return (
-    <div class="h-full w-full flex flex-col overflow-hidden">
+    <div class="h-full w-full flex flex-col overflow-hidden bg-black text-zed-text-primary">
       {/* Mobile Top Bar */}
-      <header class="h-14 border-b border-zed-border-subtle flex items-center justify-between px-4 bg-zed-bg-panel shrink-0">
+      <header class="h-12 border-b border-zed-border-subtle flex items-center justify-between px-3 bg-zed-bg-panel shrink-0 z-20">
         <div class="flex items-center gap-2 overflow-hidden">
-          <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <h1 class="text-sm font-bold truncate">
-            {remoteStore.lanes().find(l => l.id === remoteStore.activeLaneId())?.name || 'CodeLane Remote'}
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            class="p-1.5 hover:bg-zed-bg-hover rounded-md text-zed-text-secondary"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          {/* Mode Toggle */}
+          <div class="flex bg-zed-bg-surface rounded-md p-0.5 border border-zed-border-subtle">
+            <button 
+              onClick={() => remoteStore.setViewMode('chat')}
+              class={`px-2 py-1 text-[9px] font-bold rounded transition-colors ${
+                remoteStore.viewMode() === 'chat' ? 'bg-zed-accent-blue text-white' : 'text-zed-text-tertiary'
+              }`}
+            >CHAT</button>
+            <button 
+              onClick={() => remoteStore.setViewMode('terminal')}
+              class={`px-2 py-1 text-[9px] font-bold rounded transition-colors ${
+                remoteStore.viewMode() === 'terminal' ? 'bg-zed-accent-blue text-white' : 'text-zed-text-tertiary'
+              }`}
+            >TERM</button>
+          </div>
+
+          <h1 class="text-[10px] font-bold truncate ml-1 opacity-60">
+            {remoteStore.lanes().find(l => l.id === remoteStore.activeLaneId())?.name || 'Remote'}
           </h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
-          Disconnect
+        <Button variant="ghost" size="sm" onClick={props.onDisconnect} class="!h-8 !px-2 !text-[10px]">
+          Exit
         </Button>
       </header>
 
-      {/* Content Area */}
-      <main class="flex-1 overflow-hidden relative bg-black text-white font-mono">
-        <Show when={remoteStore.activeLaneId()} fallback={
-          <div class="h-full flex items-center justify-center text-zed-text-tertiary">
-            Select a lane to start
+      {/* Main Container */}
+      <div class="flex-1 flex overflow-hidden relative">
+        {/* Sidebar / Drawer */}
+        <div 
+          class={`absolute inset-y-0 left-0 w-64 bg-zed-bg-panel border-r border-zed-border-subtle z-30 transform transition-transform duration-300 ease-in-out ${
+            isSidebarOpen() ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+          }`}
+        >
+          <div class="p-4 border-b border-zed-border-subtle flex justify-between items-center bg-zed-bg-header">
+            <h2 class="text-sm font-bold text-zed-text-primary">Lanes</h2>
+            <button onClick={() => setIsSidebarOpen(false)} class="text-zed-text-tertiary">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        }>
-          <RemoteTerminal 
-            terminalId={remoteStore.activeLaneId()!} 
-            onData={sendToTerminal}
-            ref={(r) => terminalRef = r}
+          <div class="overflow-y-auto h-full p-2 flex flex-col gap-1">
+            <For each={remoteStore.lanes()}>
+              {(lane) => (
+                <button
+                  onClick={() => {
+                    handleSelectLane(lane.id);
+                    setIsSidebarOpen(false);
+                  }}
+                  class={`w-full px-3 py-2.5 rounded-md text-xs font-medium text-left transition-all ${
+                    remoteStore.activeLaneId() === lane.id
+                      ? 'bg-zed-accent-blue/20 text-zed-accent-blue border-l-2 border-zed-accent-blue'
+                      : 'text-zed-text-secondary hover:bg-zed-bg-hover'
+                  }`}
+                >
+                  <div class="truncate font-sans font-semibold">{lane.name}</div>
+                  <div class="text-[10px] opacity-50 truncate font-mono">
+                    {lane.branch || 'no branch'}
+                  </div>
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
+
+        {/* Backdrop for Sidebar */}
+        <Show when={isSidebarOpen()}>
+          <div 
+            class="absolute inset-0 bg-black/60 backdrop-blur-sm z-20"
+            onClick={() => setIsSidebarOpen(false)}
           />
         </Show>
-      </main>
 
-      {/* Command Input Box */}
-      <Show when={remoteStore.activeLaneId()}>
-        <div class="px-2 py-2 bg-zed-bg-panel border-t border-zed-border-subtle flex flex-col gap-2 shrink-0">
-          <form 
-            onSubmit={handleCommandSubmit}
-            class="flex gap-2 items-center"
-          >
-            <input
-              type="text"
-              value={commandInput()}
-              onInput={(e) => setCommandInput(e.currentTarget.value)}
-              placeholder="Type command..."
-              class="flex-1 bg-zed-bg-surface border border-zed-border-default rounded-md px-3 py-1.5 text-sm text-zed-text-primary focus:outline-none focus:border-zed-accent-blue transition-colors"
-              autocapitalize="none"
-              autocomplete="off"
-              autocorrect="off"
-              spellcheck={false}
-            />
-            
-            <div class="flex gap-1">
-              <button 
-                type="button"
-                onClick={handleSendWithoutEnter}
-                class="p-2 text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded-md transition-colors"
-                title="Add Input (No Enter)"
-              >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        {/* Content Area */}
+        <main class="flex-1 overflow-hidden relative flex flex-col bg-black">
+          {/* Dual-View Content */}
+          <div class="flex-1 overflow-hidden relative">
+            <Show when={remoteStore.activeLaneId()} fallback={
+              <div class="h-full flex flex-col items-center justify-center text-zed-text-tertiary p-8 text-center">
+                <svg class="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-              </button>
-              
-              <button 
-                type="submit"
-                class="p-2 text-zed-accent-blue hover:bg-zed-bg-hover rounded-md transition-colors"
-                title="Execute (With Enter)"
+                <p class="text-sm">Select a lane from the menu to start controlling your desktop.</p>
+                <Button variant="secondary" size="sm" class="mt-4" onClick={() => setIsSidebarOpen(true)}>
+                  Open Lanes Menu
+                </Button>
+              </div>
+            }>
+              {/* Chat View */}
+              <Show when={remoteStore.viewMode() === 'chat'}>
+                <RemoteChatView onAction={(val) => {
+                  sendToTerminal(val);
+                  remoteStore.addMessage({ role: 'user', content: val.trim() || 'Action Selected' });
+                }} />
+              </Show>
+
+              {/* Raw Terminal View (Panning mode) */}
+              <Show when={remoteStore.viewMode() === 'terminal'}>
+                <div class="h-full w-full overflow-auto touch-pan-x touch-pan-y">
+                  <div class="min-w-fit min-h-fit inline-block">
+                    <For each={[remoteStore.activeLaneId()]}>
+                      {(laneId) => (
+                        <RemoteTerminal 
+                          terminalId={laneId!} 
+                          onData={sendToTerminal}
+                          onResize={handleTerminalResize}
+                          ref={(r) => terminalRef = r}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Background terminal for parsing always exists */}
+              <Show when={remoteStore.viewMode() === 'chat'}>
+                <div class="absolute -top-[10000px] left-0 pointer-events-none opacity-0">
+                  <For each={[remoteStore.activeLaneId()]}>
+                    {(laneId) => (
+                      <RemoteTerminal 
+                        terminalId={laneId!} 
+                        onData={sendToTerminal}
+                        onResize={handleTerminalResize}
+                        ref={(r) => terminalRef = r}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
+          </div>
+
+          {/* Input & Toolbar stuck to bottom of main area */}
+          <Show when={remoteStore.activeLaneId()}>
+            <div class="shrink-0">
+              <form 
+                onSubmit={handleCommandSubmit}
+                class="px-2 py-2 bg-zed-bg-panel border-t border-zed-border-subtle flex gap-2 items-center"
               >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
+                <input
+                  type="text"
+                  value={commandInput()}
+                  onInput={(e) => setCommandInput(e.currentTarget.value)}
+                  placeholder="Type command..."
+                  class="flex-1 bg-zed-bg-surface border border-zed-border-default rounded-md px-3 py-1.5 text-sm text-zed-text-primary focus:outline-none focus:border-zed-accent-blue transition-all shadow-inner"
+                  autocapitalize="none"
+                  autocomplete="off"
+                  autocorrect="off"
+                  spellcheck={false}
+                />
+                
+                <div class="flex gap-1">
+                  <button 
+                    type="button"
+                    onClick={handleSendWithoutEnter}
+                    class="p-2 text-zed-text-secondary hover:text-zed-text-primary hover:bg-zed-bg-hover rounded-md transition-colors"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                  
+                  <button 
+                    type="submit"
+                    class="p-2 text-zed-accent-blue hover:bg-zed-bg-hover rounded-md transition-colors"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                </div>
+              </form>
+              <TerminalToolbar onKeyPress={sendToTerminal} />
             </div>
-          </form>
-        </div>
-      </Show>
-
-      {/* Mobile Developer Toolbar */}
-      <Show when={remoteStore.activeLaneId()}>
-        <TerminalToolbar onKeyPress={sendToTerminal} />
-      </Show>
-
-      {/* Mobile Bottom Navigation / Lane Switcher */}
-      <nav class="h-16 border-t border-zed-border-subtle bg-zed-bg-panel flex items-center px-4 gap-3 overflow-x-auto no-scrollbar shrink-0">
-        <For each={remoteStore.lanes()}>
-          {(lane) => (
-            <button
-              onClick={() => handleSelectLane(lane.id)}
-              class={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                remoteStore.activeLaneId() === lane.id
-                  ? 'bg-zed-accent-blue text-white shadow-lg'
-                  : 'bg-zed-bg-surface text-zed-text-secondary hover:text-zed-text-primary border border-zed-border-default'
-              }`}
-            >
-              {lane.name}
-            </button>
-          )}
-        </For>
-      </nav>
+          </Show>
+        </main>
+      </div>
     </div>
   );
 }

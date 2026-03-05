@@ -8,6 +8,7 @@ import {
 interface RemoteTerminalProps {
   terminalId: string;
   onData: (data: string) => void;
+  onResize: (cols: number, rows: number) => void;
   ref?: (methods: { write: (data: string | Uint8Array) => void }) => void;
   initialData?: string;
 }
@@ -31,10 +32,7 @@ export function RemoteTerminal(props: RemoteTerminalProps) {
       terminal={terminal}
       fitAddon={fitAddon}
       onWritePty={props.onData}
-      onResizePty={(cols, rows) => {
-        // In the future, we might want to send resize events back to the desktop
-        console.debug(`[RemoteTerminal] Resized to ${cols}x${rows}`);
-      }}
+      onResizePty={props.onResize}
       class="bg-black p-2"
     />
   );

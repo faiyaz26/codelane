@@ -8,6 +8,7 @@ import { CanvasAddon } from '@xterm/addon-canvas';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { SearchAddon } from '@xterm/addon-search';
+import { getTerminalTheme } from '../theme/theme';
 
 export interface TerminalHandlers {
   onOpenLink?: (uri: string) => void;
@@ -72,6 +73,14 @@ export function loadAddons(terminal: Terminal, handlers?: TerminalHandlers): { s
   }
 
   return { searchAddon };
+}
+
+/**
+ * Updates a terminal's theme to match the current app theme
+ */
+export function updateTerminalTheme(terminal: Terminal): void {
+  const theme = getTerminalTheme();
+  terminal.options.theme = theme;
 }
 
 /**
