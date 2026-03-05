@@ -98,11 +98,17 @@ export function TerminalView(props: TerminalViewProps) {
     }
   });
 
-  // No longer kill PTY on unmount!
-  // Cleanup only for component-local resources
-  onCleanup(() => {
+  // Release PTY when component unmounts
+  onCleanup(async () => {
     console.log('[DEBUG] TerminalView.onCleanup called for laneId:', props.laneId);
-    // agentStatusManager.unregisterLane is NOT called here because we want to keep status across unmounts
+    const h = handle();
+    if (h) {
+      try {
+        await terminalPool.release(h.id);
+      } catch (error) {
+        console.error('[DEBUG] Failed to release terminal in cleanup:', error);
+      }
+    }
   });
 
   const handleEnableNotification = (type: 'done' | 'input' | 'both') => {
