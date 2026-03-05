@@ -48,6 +48,8 @@ function App() {
   const [agentReloadingLanes, setAgentReloadingLanes] = createSignal<Set<string>>(new Set());
   // Track terminal IDs for process monitoring
   const [terminalIds, setTerminalIds] = createSignal<Map<string, string>>(new Map());
+  // Track reload versions per lane to force component remount
+  const [terminalReloadVersions, setTerminalReloadVersions] = createSignal<Map<string, number>>(new Map());
 
   // Apply global DOM fixes and behaviors
   useGlobalContextMenuFix();
@@ -198,8 +200,14 @@ function App() {
   };
 
   const handleReloadAgentTerminal = (laneId: string) => {
-    // Add to reloading set first to trigger unmount in UI
-    setAgentReloadingLanes((prev) => new Set(prev).add(laneId));
+    console.log('[DEBUG] handleReloadAgentTerminal called for laneId:', laneId);
+    // Increment reload version to force remount
+    setTerminalReloadVersions((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(laneId, (newMap.get(laneId) ?? 0) + 1);
+      console.log('[DEBUG] terminalReloadVersions:', newMap.get(laneId));
+      return newMap;
+    });
     
     // Clear terminal ID
     setTerminalIds((prev) => {
@@ -207,15 +215,6 @@ function App() {
       newMap.delete(laneId);
       return newMap;
     });
-
-    // Re-add after a short delay to allow unmount
-    setTimeout(() => {
-      setAgentReloadingLanes((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(laneId);
-        return newSet;
-      });
-    }, 100);
   };
 
   const handleOnboardingComplete = async (data: WizardData) => {
@@ -285,6 +284,7 @@ function App() {
           activeLaneId={activeLaneId()}
           initializedLanes={initializedLanes()}
           agentReloadingLanes={agentReloadingLanes()}
+          terminalReloadVersions={terminalReloadVersions()}
           onLaneSelect={handleLaneSelect}
           onLaneDeleted={handleLaneDeleted}
           onLaneRenamed={handleLaneRenamed}

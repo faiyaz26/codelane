@@ -12,6 +12,7 @@ interface AgentTerminalPanelProps {
   activeLaneId: string | null;
   initializedLanes: Set<string>;
   agentReloadingLanes: Set<string>;
+  terminalReloadVersions: Map<string, number>;
   showEditor: boolean;
   panelWidth: number | null;
   onLanesUpdated?: () => Promise<void>;
@@ -34,7 +35,7 @@ function TerminalItem(props: {
   const effectiveWorkingDir = () => props.lane.worktreePath || props.lane.workingDir;
 
   return (
-    <Show when={!props.isReloading} keyed>
+    <Show when={!props.isReloading}>
       <div
         class="absolute inset-0 transition-opacity duration-150"
         style={{
@@ -238,6 +239,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
               <Show when={lane()}>
                 {(laneData) => (
                   <TerminalItem
+                    key={`${laneId}-${props.terminalReloadVersions.get(laneId) ?? 0}`}
                     laneId={laneId}
                     lane={laneData()}
                     isActive={isActive()}

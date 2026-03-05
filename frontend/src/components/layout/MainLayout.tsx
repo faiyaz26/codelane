@@ -22,6 +22,7 @@ interface MainLayoutProps {
   activeLaneId: string | null;
   initializedLanes: Set<string>;
   agentReloadingLanes: Set<string>;
+  terminalReloadVersions: Map<string, number>;
   onLaneSelect: (laneId: string) => void;
   onLaneDeleted: (laneId: string) => void;
   onLaneRenamed: (lane: Lane) => void;
@@ -215,6 +216,7 @@ export function MainLayout(props: MainLayoutProps) {
                       activeLaneId={props.activeLaneId}
                       initializedLanes={props.initializedLanes}
                       agentReloadingLanes={props.agentReloadingLanes}
+                      terminalReloadVersions={props.terminalReloadVersions}
                       showEditor={showEditor()}
                       panelWidth={agentPanelWidth()}
                       onLanesUpdated={props.onLanesUpdated}

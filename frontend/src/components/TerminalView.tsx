@@ -31,6 +31,7 @@ export function TerminalView(props: TerminalViewProps) {
 
   // Acquire terminal on mount
   onMount(async () => {
+    console.log('[DEBUG] TerminalView.onMount called for laneId:', props.laneId);
     setIsLoading(true);
     setError(null);
 
@@ -41,6 +42,7 @@ export function TerminalView(props: TerminalViewProps) {
         cwd: props.cwd,
         useAgent: props.useAgent !== false,
       });
+      console.log('[DEBUG] TerminalView acquired handle:', h.id);
       setHandle(h);
       
       // Notify parent
@@ -99,6 +101,7 @@ export function TerminalView(props: TerminalViewProps) {
   // No longer kill PTY on unmount!
   // Cleanup only for component-local resources
   onCleanup(() => {
+    console.log('[DEBUG] TerminalView.onCleanup called for laneId:', props.laneId);
     // agentStatusManager.unregisterLane is NOT called here because we want to keep status across unmounts
   });
 
