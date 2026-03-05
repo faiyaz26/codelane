@@ -63,7 +63,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
 
   // Wrapper for settings change to support the callback pattern used by AgentsSettings
   const handleSettingsChange = (fn: (s: AgentSettings | null) => AgentSettings | null) => {
-    setSettings(fn);
+    const current = settings();
+    const updated = fn(current);
+    setSettings(updated);
   };
 
   const handleSave = async () => {

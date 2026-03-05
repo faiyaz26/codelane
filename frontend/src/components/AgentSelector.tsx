@@ -40,18 +40,20 @@ export function AgentSelector(props: AgentSelectorProps) {
 
   const handleAgentTypeChange = (type: AgentType) => {
     const metadata = AGENT_METADATA[type];
-    if (!metadata) return;
+    if (!metadata) {
+      return;
+    }
 
     // Only overwrite the name if it's empty or matches the previous default name
     const currentName = props.value.name;
     const oldMetadata = AGENT_METADATA[props.value.agentType];
     const shouldOverwriteName = !currentName || (oldMetadata && currentName === oldMetadata.preset.name);
 
-    props.onChange({ 
+    const newConfig = { 
       ...metadata.preset,
       name: shouldOverwriteName ? metadata.preset.name : currentName,
-      // Preserve other custom settings if applicable, but usually we want presets for new types
-    });
+    };
+    props.onChange(newConfig);
   };
 
   const handleAddEnvVar = () => {

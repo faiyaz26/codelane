@@ -16,6 +16,7 @@ interface AgentsSettingsProps {
   onValidationChange: (valid: boolean) => void;
 }
 
+
 export function AgentsSettings(props: AgentsSettingsProps) {
   const [hookStatuses, setHookStatuses] = createSignal<Record<string, HookStatus>>({});
   const [loadingHook, setLoadingHook] = createSignal<string | null>(null);
@@ -31,6 +32,11 @@ export function AgentsSettings(props: AgentsSettingsProps) {
     args: [],
     env: {},
     useLaneCwd: true,
+  });
+
+  // Track newAgent changes
+  createEffect(() => {
+    const agent = newAgent();
   });
 
   onMount(async () => {
@@ -109,11 +115,14 @@ export function AgentsSettings(props: AgentsSettingsProps) {
 
   const handleAddAgent = () => {
     const agent = newAgent();
-    if (!agent.name || !agent.command) return;
-
+    if (!agent.name || !agent.command) {
+      return;
+    }
+    
     props.onSettingsChange((s) => {
       if (!s) return null;
       const agents = [...(s.installedAgents || [])];
+      
       if (editingIndex() !== null) {
         agents[editingIndex()!] = agent;
       } else {
@@ -202,7 +211,9 @@ export function AgentsSettings(props: AgentsSettingsProps) {
               />
               <AgentSelector
                 value={newAgent()}
-                onChange={(config) => setNewAgent({ ...newAgent(), ...config })}
+                onChange={(config) => {
+                   setNewAgent({ ...newAgent(), ...config });
+                 }}
               />
               <div class="flex justify-end gap-2 pt-2">
                 <Button variant="secondary" size="sm" onClick={() => { setShowAddForm(false); setEditingIndex(null); }}>
