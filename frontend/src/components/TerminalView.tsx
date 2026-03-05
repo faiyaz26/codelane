@@ -161,6 +161,7 @@ export function TerminalView(props: TerminalViewProps) {
       <Show when={handle() && !handle()!.autoScroll}>
         <button
           onClick={scrollToBottom}
+          data-testid="scroll-to-bottom-button"
           class="absolute bottom-10 right-10 px-4 py-2 bg-zed-accent-blue text-white rounded-full shadow-xl flex items-center gap-2 text-sm font-semibold hover:bg-zed-accent-blue-hover transition-all animate-bounce-in z-20 cursor-pointer"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">

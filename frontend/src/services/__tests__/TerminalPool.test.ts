@@ -3,6 +3,12 @@ import type { TerminalHandle } from '../../types/terminal';
 
 // --- Mocks ---
 
+// Mock Tauri APIs
+const mockInvoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
 // Mock PtyHandle
 const mockPtyWrite = vi.fn();
 const mockPtyResize = vi.fn();
@@ -42,6 +48,7 @@ function createMockTerminal() {
   const scrollToBottom = vi.fn();
   const write = vi.fn();
   const onData = vi.fn((_cb: (data: string) => void) => ({ dispose: vi.fn() }));
+  const onTitleChange = vi.fn((_cb: (title: string) => void) => ({ dispose: vi.fn() }));
   const dispose = vi.fn();
   const loadAddon = vi.fn();
   const attachCustomKeyEventHandler = vi.fn();
@@ -54,6 +61,7 @@ function createMockTerminal() {
       write,
       scrollToBottom,
       onData,
+      onTitleChange,
       dispose,
       loadAddon,
       attachCustomKeyEventHandler,
@@ -92,6 +100,7 @@ vi.mock('../../theme', () => ({
 let terminalPool: typeof import('../TerminalPool')['terminalPool'];
 
 beforeEach(async () => {
+  mockInvoke.mockReset();
   mockSpawn.mockClear();
   mockPtyWrite.mockClear();
   mockPtyResize.mockClear();
@@ -106,6 +115,14 @@ beforeEach(async () => {
   mockGetLaneAgentConfig.mockResolvedValue({
     agentType: 'shell',
     command: 'zsh',
+  });
+  
+  // Mock hook check status
+  mockInvoke.mockImplementation(async (cmd) => {
+    if (cmd === 'hooks_check_status') {
+      return { isInstalled: false };
+    }
+    return null;
   });
 
   vi.resetModules();

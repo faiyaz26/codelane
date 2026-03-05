@@ -35,8 +35,6 @@ describe('createDetector factory', () => {
   it('falls back to ShellDetector for unknown types', () => {
     expect(createDetector('unknown_agent' as any)).toBeInstanceOf(ShellDetector);
   });
-});
-  });
 
   it('creates independent instances', () => {
     const d1 = createDetector('claude');

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@solidjs/testing-library';
 import { AgentTerminalPanel } from '../AgentTerminalPanel';
 import type { Lane } from '../../../types/lane';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import type { AgentSettings } from '../../../types/agent';
 
 // Mock the sub-components
 const TerminalViewSpy = vi.fn((props: any) => (
@@ -20,25 +21,15 @@ vi.mock('../../ui', () => ({
   Dialog: (props: any) => {
     return (
       <Show when={props.open}>
-        <div data-testid="dialog">
+        <div 
+          data-testid={`dialog-${props.title?.toLowerCase().replace(/\s+/g, '-') || 'default'}`}
+        >
           {typeof props.children === 'function' ? props.children(() => props.onOpenChange(false)) : props.children}
         </div>
       </Show>
     );
   },
   Button: (props: any) => <button onClick={props.onClick}>{props.children}</button>,
-  Select: (props: any) => (
-    <div data-testid="agent-select-container">
-      {props.options.map((o: any) => (
-        <button 
-          data-testid={`select-option-${o.name}`}
-          onClick={() => props.onChange(o)}
-        >
-          {o.name}
-        </button>
-      ))}
-    </div>
-  )
 }));
 
 // Mock API and settings
@@ -76,6 +67,14 @@ const mockLanes: Lane[] = [
   },
 ];
 
+const mockAgentSettings: AgentSettings = {
+  defaultAgentName: 'Shell',
+  installedAgents: [
+    { name: 'Shell', agentType: 'shell', command: 'zsh', args: [], env: {}, useLaneCwd: true },
+    { name: 'Gemini', agentType: 'gemini', command: 'gemini', args: [], env: {}, useLaneCwd: true }
+  ]
+};
+
 describe('AgentTerminalPanel Persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,13 +84,15 @@ describe('AgentTerminalPanel Persistence', () => {
   it('preserves terminal instances when switching between lanes', async () => {
     const [activeLaneId, setActiveLaneId] = createSignal<string | null>('lane-1');
     const initializedLanes = new Set(['lane-1', 'lane-2']);
+    const terminalReloadVersions = new Map<string, number>();
 
     render(() => (
       <AgentTerminalPanel
         lanes={mockLanes}
+        agentSettings={mockAgentSettings}
         activeLaneId={activeLaneId()}
         initializedLanes={initializedLanes}
-        
+        terminalReloadVersions={terminalReloadVersions}
         showEditor={false}
         panelWidth={null}
       />
@@ -129,13 +130,15 @@ describe('AgentTerminalPanel Persistence', () => {
   it('reloads the terminal when an agent is switched and confirmed', async () => {
     const [activeLaneId, setActiveLaneId] = createSignal<string | null>('lane-1');
     const onReload = vi.fn();
+    const terminalReloadVersions = new Map<string, number>();
 
     render(() => (
       <AgentTerminalPanel
         lanes={mockLanes}
+        agentSettings={mockAgentSettings}
         activeLaneId={activeLaneId()}
         initializedLanes={new Set(['lane-1'])}
-        
+        terminalReloadVersions={terminalReloadVersions}
         showEditor={false}
         panelWidth={null}
         onReloadAgentTerminal={onReload}
@@ -146,12 +149,12 @@ describe('AgentTerminalPanel Persistence', () => {
     const initialMounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-1').length;
     expect(initialMounts).toBe(1);
 
-    // Change agent to Gemini using the button
-    const geminiOption = screen.getByTestId('select-option-Gemini');
-    fireEvent.click(geminiOption);
+    // Change agent to Gemini using the select
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'Gemini' } });
 
     // Dialog should appear
-    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('dialog-switch-ai-agent')).toBeInTheDocument());
     expect(screen.getByText(/Switching to/)).toBeInTheDocument();
 
     // Confirm switch

@@ -912,6 +912,7 @@ mod tests {
 
         let config = LaneConfig {
             agent_override: Some(AgentConfig {
+                name: None,
                 agent_type: AgentType::Claude,
                 command: "claude".to_string(),
                 args: vec!["--verbose".to_string()],
@@ -936,6 +937,7 @@ mod tests {
 
         let config = LaneConfig {
             agent_override: Some(AgentConfig {
+                name: None,
                 agent_type: AgentType::Shell,
                 command: "/bin/zsh".to_string(),
                 args: vec!["-l".to_string()],

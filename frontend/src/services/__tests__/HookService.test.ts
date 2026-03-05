@@ -81,33 +81,6 @@ describe('HookService', () => {
       expect(result).toEqual(status);
     });
 
-    it('returns not installed status', async () => {
-      const status: HookStatus = {
-        agentType: 'aider',
-        installed: false,
-        supported: true,
-      };
-      mockInvoke.mockResolvedValue(status);
-
-      const result = await hookService.checkStatus('aider');
-
-      expect(result.installed).toBe(false);
-      expect(result.supported).toBe(true);
-    });
-
-    it('returns unsupported status', async () => {
-      const status: HookStatus = {
-        agentType: 'cursor',
-        installed: false,
-        supported: false,
-      };
-      mockInvoke.mockResolvedValue(status);
-
-      const result = await hookService.checkStatus('cursor');
-
-      expect(result.supported).toBe(false);
-    });
-
     it('propagates errors', async () => {
       mockInvoke.mockRejectedValue(new Error('Check failed'));
 
@@ -116,8 +89,8 @@ describe('HookService', () => {
   });
 
   describe('getAllStatus', () => {
-    it('checks status for all 6 supported agents', async () => {
-      const agents = ['claude', 'codex', 'gemini', 'aider', 'cursor', 'opencode'];
+    it('checks status for all 5 supported agents', async () => {
+      const agents = ['claude', 'codex', 'gemini', 'copilot', 'opencode'];
       mockInvoke.mockImplementation(async (_cmd: string, args: { agentType: string }) => ({
         agentType: args.agentType,
         installed: false,
@@ -127,7 +100,7 @@ describe('HookService', () => {
       await hookService.getAllStatus();
 
       const calls = mockInvoke.mock.calls.filter((c) => c[0] === 'hooks_check_status');
-      expect(calls).toHaveLength(6);
+      expect(calls).toHaveLength(5);
       const calledAgents = calls.map((c) => c[1].agentType);
       expect(calledAgents).toEqual(agents);
     });
@@ -144,7 +117,7 @@ describe('HookService', () => {
       expect(result.claude.installed).toBe(true);
       expect(result.codex.installed).toBe(false);
       expect(result.gemini.installed).toBe(false);
-      expect(Object.keys(result)).toHaveLength(6);
+      expect(Object.keys(result)).toHaveLength(5);
     });
 
     it('propagates errors if any checkStatus fails', async () => {

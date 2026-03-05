@@ -50,20 +50,21 @@ beforeEach(async () => {
 
 describe('settings-api', () => {
   describe('getAgentSettings', () => {
-    it('returns saved settings', async () => {
+    it('returns settings from backend', async () => {
       const settings: AgentSettings = {
         defaultAgentName: 'Claude Code',
         installedAgents: [{ agentType: 'claude', command: 'claude', name: 'Claude Code', args: [], env: {}, useLaneCwd: true }],
       };
-      mockStoreGet.mockResolvedValue(settings);
+      mockInvoke.mockResolvedValue(settings);
 
       const result = await getAgentSettings();
 
       expect(result).toEqual(settings);
-      expect(mockStoreGet).toHaveBeenCalledWith('agent_settings');
+      expect(mockInvoke).toHaveBeenCalledWith('settings_get_agents');
     });
 
-    it('returns defaults when no settings saved', async () => {
+    it('returns defaults when backend fails', async () => {
+      mockInvoke.mockRejectedValue(new Error('Backend error'));
       mockStoreGet.mockResolvedValue(null);
 
       const result = await getAgentSettings();
@@ -72,10 +73,35 @@ describe('settings-api', () => {
       expect(result.defaultAgentName).toBeDefined();
       expect(result.installedAgents).toBeDefined();
     });
+
+    it('migrates from legacy store if backend returns default', async () => {
+      // Backend returns default (only Shell)
+      const defaultSettings: AgentSettings = {
+        defaultAgentName: 'Shell',
+        installedAgents: [{ agentType: 'shell', command: 'zsh', name: 'Shell', args: [], env: {}, useLaneCwd: true }],
+      };
+      mockInvoke.mockResolvedValue(defaultSettings);
+
+      // Store has old settings
+      const oldSettings = {
+        defaultAgentName: 'Claude Code',
+        installedAgents: [
+          { agentType: 'shell', command: 'zsh', name: 'Shell', args: [], env: {}, useLaneCwd: true },
+          { agentType: 'claude', command: 'claude', name: 'Claude Code', args: [], env: {}, useLaneCwd: true }
+        ],
+      };
+      mockStoreGet.mockResolvedValue(oldSettings);
+
+      const result = await getAgentSettings();
+
+      expect(result.defaultAgentName).toBe('Claude Code');
+      expect(result.installedAgents).toHaveLength(2);
+      expect(mockInvoke).toHaveBeenCalledWith('settings_update_agents', expect.any(Object));
+    });
   });
 
   describe('updateAgentSettings', () => {
-    it('saves settings to store', async () => {
+    it('saves settings to backend and legacy store', async () => {
       const settings: AgentSettings = {
         defaultAgentName: 'Codex',
         installedAgents: [{ agentType: 'codex', command: 'codex', name: 'Codex', args: [], env: {}, useLaneCwd: true }],
@@ -83,6 +109,7 @@ describe('settings-api', () => {
 
       await updateAgentSettings(settings);
 
+      expect(mockInvoke).toHaveBeenCalledWith('settings_update_agents', { settings });
       expect(mockStoreSet).toHaveBeenCalledWith('agent_settings', settings);
       expect(mockStoreSave).toHaveBeenCalled();
     });
@@ -111,7 +138,7 @@ describe('settings-api', () => {
         defaultAgentName: 'Claude Code',
         installedAgents: [{ agentType: 'claude', command: 'claude', args: [], env: {}, useLaneCwd: true, name: 'Claude Code' }]
       };
-      mockStoreGet.mockResolvedValue(globalSettings);
+      mockInvoke.mockResolvedValue(globalSettings);
 
       const result = await getLaneAgentConfig('lane-1');
 

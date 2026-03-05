@@ -273,8 +273,8 @@ mod tests {
         let state = SettingsState::new();
         let settings = state.get_agent_settings().expect("Should get settings");
 
-        // AgentSettings should have a default_agent
-        let _ = settings.default_agent;
+        // AgentSettings should have a default_agent_name
+        assert!(!settings.default_agent_name.is_empty());
     }
 
     #[test]
@@ -312,8 +312,8 @@ mod tests {
         // Verify we can still get settings
         let after_update = state.get_agent_settings().expect("Should get settings");
         assert_eq!(
-            after_update.default_agent.agent_type,
-            original.default_agent.agent_type
+            after_update.default_agent_name,
+            original.default_agent_name
         );
     }
 
@@ -389,6 +389,7 @@ mod tests {
         use std::collections::HashMap;
 
         let config = AgentConfig {
+            name: Some("Test Agent".to_string()),
             agent_type: codelane_core::config::AgentType::Claude,
             command: "claude".to_string(),
             args: vec!["--config".to_string(), "test".to_string()],
@@ -441,34 +442,38 @@ mod tests {
     fn test_agent_settings_serialization() {
         let settings = AgentSettings::default();
         let json = serde_json::to_string(&settings).expect("Should serialize");
-        assert!(json.contains("defaultAgent"));
+        assert!(json.contains("defaultAgentName"));
     }
 
     #[test]
     fn test_agent_settings_deserialization() {
         let json = r#"{
-            "defaultAgent": {
-                "agentType": "shell",
-                "command": "/bin/bash",
-                "args": [],
-                "env": {},
-                "useLaneCwd": true
-            },
-            "presets": {}
+            "defaultAgentName": "Shell",
+            "installedAgents": [
+                {
+                    "agentType": "shell",
+                    "command": "/bin/bash",
+                    "args": [],
+                    "env": {},
+                    "useLaneCwd": true
+                }
+            ],
+            "enabledExtensions": []
         }"#;
 
         let settings: AgentSettings = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(settings.default_agent_name, "Shell");
+        assert_eq!(settings.installed_agents.len(), 1);
         assert!(matches!(
-            settings.default_agent.agent_type,
+            settings.installed_agents[0].agent_type,
             codelane_core::config::AgentType::Shell
         ));
     }
 
     #[test]
-    fn test_agent_settings_default_has_presets() {
+    fn test_agent_settings_default_has_shell() {
         let settings = AgentSettings::default();
-        assert!(settings.presets.contains_key("shell"));
-        assert!(settings.presets.contains_key("claude"));
+        assert!(settings.installed_agents.iter().any(|a| a.name.as_deref() == Some("Shell")));
     }
 
     // ==================== Edge Cases ====================
