@@ -22,7 +22,9 @@ pub fn worktree_path(project_name: &str, branch: &str) -> PathBuf {
 }
 
 pub fn extensions_dir() -> PathBuf {
-    data_dir().join("extensions")
+    let dir = data_dir().join("extensions");
+    std::fs::create_dir_all(&dir).expect("Failed to create extensions directory");
+    dir
 }
 
 #[cfg(test)]
