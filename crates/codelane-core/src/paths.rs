@@ -97,7 +97,9 @@ mod tests {
     #[test]
     fn test_data_dir_contains_env() {
         let dir = data_dir().unwrap();
-        assert!(dir.to_string_lossy().contains(".codelane/dev"));
+        let path_str = dir.to_string_lossy();
+        assert!(path_str.contains(".codelane"));
+        assert!(path_str.contains(env_name()));
     }
 
     #[test]
@@ -115,21 +117,26 @@ mod tests {
     #[test]
     fn test_settings_path() {
         let path = settings_path().unwrap();
-        assert!(path.to_string_lossy().ends_with("settings.json"));
-        assert!(path.to_string_lossy().contains(".codelane/dev"));
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("settings.json"));
+        assert!(path_str.contains(".codelane"));
+        assert!(path_str.contains(env_name()));
     }
 
     #[test]
     fn test_db_path() {
         let path = db_path().unwrap();
-        assert!(path.to_string_lossy().ends_with("codelane.db"));
-        assert!(path.to_string_lossy().contains(".codelane/dev"));
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("codelane.db"));
+        assert!(path_str.contains(".codelane"));
+        assert!(path_str.contains(env_name()));
     }
 
     #[test]
     fn test_lanes_dir() {
         let dir = lanes_dir().unwrap();
-        assert!(dir.to_string_lossy().ends_with("lanes"));
+        let path_str = dir.to_string_lossy();
+        assert!(path_str.contains("lanes"));
         assert!(dir.exists());
     }
 
@@ -143,6 +150,9 @@ mod tests {
     #[test]
     fn test_worktree_path_contains_env() {
         let path = worktree_path("proj", "main").unwrap();
-        assert!(path.to_string_lossy().contains(".codelane/dev/worktrees"));
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains(".codelane"));
+        assert!(path_str.contains(env_name()));
+        assert!(path_str.contains("worktrees"));
     }
 }

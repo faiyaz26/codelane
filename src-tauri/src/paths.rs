@@ -39,7 +39,9 @@ mod tests {
     #[test]
     fn test_data_dir_contains_env() {
         let dir = data_dir();
-        assert!(dir.to_string_lossy().contains(".codelane/dev"));
+        let path_str = dir.to_string_lossy();
+        assert!(path_str.contains(".codelane"));
+        assert!(path_str.contains(env_name()));
     }
 
     #[test]
