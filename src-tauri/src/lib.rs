@@ -43,7 +43,7 @@ pub fn run() {
 
     builder
         // Register custom URI scheme for extension assets
-        .register_uri_scheme_protocol("codelane-assets", |_app, request| {
+        .register_uri_scheme_protocol("codelane-assets", |app, request| {
             let uri = request.uri().to_string();
             
             // Flexible prefix stripping (handles codelane-assets:// or codelane-assets:)
@@ -64,7 +64,15 @@ pub fn run() {
                     let extension_id = parts[0];
                     let relative_path = parts[1].split('?').next().unwrap_or(parts[1]); // Strip query params
                     
-                    let extension_dir = paths::extensions_dir().join(extension_id);
+                    // Look up actual extension path from state
+                    let extension_state = app.app_handle().state::<extension::ExtensionState>();
+                    
+                    let extension_path = tauri::async_runtime::block_on(async {
+                        let exts = extension_state.extensions.lock().await;
+                        exts.get(extension_id).map(|e| e.path.clone())
+                    });
+
+                    let extension_dir = extension_path.unwrap_or_else(|| paths::extensions_dir().join(extension_id));
                     let file_path = extension_dir.join(relative_path);
                     
                     // Security: ensure the file is within the extensions directory
