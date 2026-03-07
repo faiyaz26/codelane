@@ -4,6 +4,7 @@ import { Peer } from 'peerjs';
 import { RemoteTerminal } from './components/RemoteTerminal';
 import { RemoteChatView } from './components/RemoteChatView';
 import { TerminalToolbar } from './components/TerminalToolbar';
+import { TerminalViewport } from './components/TerminalViewport';
 import { remoteStore } from './services/RemoteStore';
 import { agentChatParser } from './services/AgentChatParser';
 
@@ -186,6 +187,7 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
   
   const [commandInput, setCommandInput] = createSignal('');
   const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
+  const [hostTermSize, setHostTermSize] = createSignal<{ cols: number; rows: number } | undefined>();
   let lastSubscribedId: string | null = null;
 
   onMount(() => {
@@ -211,8 +213,8 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
         }
       } else if (data.type === 'terminal:subscribed') {
         if (data.size) {
-          console.info(`[Remote] Subscribed. Matching host size: ${data.size.cols}x${data.size.rows}`);
-          // terminalRef?.resize(data.size.cols, data.size.rows); // Remote terminal sizing is handled via CSS/CSS panning now
+          console.info(`[Remote] Subscribed. Locking to host size: ${data.size.cols}x${data.size.rows}`);
+          setHostTermSize({ cols: data.size.cols, rows: data.size.rows });
         }
       } else if (data.type === 'terminal:data') {
         if (data.terminalId === `${remoteStore.activeLaneId()}-agent`) {
@@ -385,22 +387,21 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
                 }} />
               </Show>
 
-              {/* Raw Terminal View (Panning mode) */}
+              {/* Raw Terminal View — locked to host dimensions, CSS-scaled to fit mobile */}
               <Show when={remoteStore.viewMode() === 'terminal'}>
-                <div class="h-full w-full overflow-auto touch-pan-x touch-pan-y">
-                  <div class="min-w-fit min-h-fit inline-block">
-                    <For each={[remoteStore.activeLaneId()]}>
-                      {(laneId) => (
-                        <RemoteTerminal 
-                          terminalId={laneId!} 
-                          onData={sendToTerminal}
-                          onResize={handleTerminalResize}
-                          ref={(r) => terminalRef = r}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </div>
+                <TerminalViewport hostSize={hostTermSize()}>
+                  <For each={[remoteStore.activeLaneId()]}>
+                    {(laneId) => (
+                      <RemoteTerminal 
+                        terminalId={laneId!} 
+                        onData={sendToTerminal}
+                        onResize={handleTerminalResize}
+                        hostSize={hostTermSize()}
+                        ref={(r) => terminalRef = r}
+                      />
+                    )}
+                  </For>
+                </TerminalViewport>
               </Show>
 
               {/* Background terminal for parsing always exists */}
@@ -412,6 +413,7 @@ function RemoteDashboard(props: { conn: any, onDisconnect: () => void }) {
                         terminalId={laneId!} 
                         onData={sendToTerminal}
                         onResize={handleTerminalResize}
+                        hostSize={hostTermSize()}
                         ref={(r) => terminalRef = r}
                       />
                     )}

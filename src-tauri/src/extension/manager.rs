@@ -33,9 +33,32 @@ impl ExtensionState {
         
         // In development, also look in the local extensions directory
         if cfg!(debug_assertions) {
+            // Try searching up from current executable to find workspace root extensions
+            if let Ok(exe_path) = std::env::current_exe() {
+                let mut current = exe_path.parent();
+                while let Some(path) = current {
+                    let local_exts = path.join("extensions");
+                    if local_exts.exists() && local_exts.is_dir() {
+                        // Check if it contains a subdirectory with a manifest.json
+                        // to avoid matching random 'extensions' folders
+                        if let Ok(entries) = std::fs::read_dir(&local_exts) {
+                            if entries.into_iter().any(|e| {
+                                e.map(|entry| entry.path().join("manifest.json").exists()).unwrap_or(false)
+                            }) {
+                                tracing::info!("Found workspace extensions directory at {:?}", local_exts);
+                                extensions_dirs.push(local_exts);
+                                break;
+                            }
+                        }
+                    }
+                    current = path.parent();
+                }
+            }
+
+            // Also check relative to CWD as fallback
             if let Ok(cwd) = std::env::current_dir() {
                 let local_exts = cwd.join("extensions");
-                if local_exts.exists() && local_exts.is_dir() {
+                if local_exts.exists() && local_exts.is_dir() && !extensions_dirs.contains(&local_exts) {
                     extensions_dirs.push(local_exts);
                 }
             }

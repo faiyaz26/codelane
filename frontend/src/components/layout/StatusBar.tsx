@@ -1,9 +1,9 @@
-import { Show, createMemo, createSignal, onMount, onCleanup, For } from 'solid-js';
+import { Show, createMemo, createSignal, onMount, onCleanup, For, createEffect } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { invoke } from '@tauri-apps/api/core';
 import { codeReviewStore } from '../../services/CodeReviewStore';
 import { ActivityView } from './ActivityBar';
-import { statusBarManager } from '../../services/StatusBarManager';
+import { statusBarManager, type StatusBarItem } from '../../services/StatusBarManager';
 
 interface AppResourceUsage {
   cpuPercent: number;
@@ -14,6 +14,49 @@ interface AppResourceUsage {
 interface StatusBarProps {
   activeView?: ActivityView;
   activeLaneId?: string | null;
+}
+
+function SafeStatusBarItem(props: { item: StatusBarItem }) {
+  let containerRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (!containerRef) return;
+    
+    // Clear previous
+    containerRef.innerHTML = '';
+    
+    const component = props.item.component;
+    
+    if (typeof component === 'function') {
+      try {
+        // Try calling it as a function that might return an element
+        // (common for simple JS extensions)
+        const result = component({});
+        
+        if (result instanceof HTMLElement) {
+          containerRef.appendChild(result);
+        } else {
+          // If it's not an element, it might be a Solid component
+          // Solid components should be rendered via <Dynamic />
+          // but we are already inside a function. 
+          // ExtensionLoader uses Dynamic, so we should too if it's not a DOM element.
+        }
+      } catch (e) {
+        console.error(`[StatusBar] Error rendering item ${props.item.id}:`, e);
+      }
+    }
+  });
+
+  return (
+    <div class="flex items-center">
+      <Show 
+        when={typeof props.item.component === 'function' && !(props.item.component({}) instanceof HTMLElement)}
+        fallback={<div ref={containerRef} class="flex items-center" />}
+      >
+        <Dynamic component={props.item.component} />
+      </Show>
+    </div>
+  );
 }
 
 export function StatusBar(props: StatusBarProps) {
@@ -69,14 +112,14 @@ export function StatusBar(props: StatusBarProps) {
           </div>
         </Show>
         <For each={leftItems()}>
-          {(item) => <Dynamic component={item.component} />}
+          {(item) => <SafeStatusBarItem item={item} />}
         </For>
       </div>
 
       {/* Right Section - Resource Usage & Extensions */}
       <div class="flex items-center gap-3 flex-1 justify-end">
         <For each={rightItems()}>
-          {(item) => <Dynamic component={item.component} />}
+          {(item) => <SafeStatusBarItem item={item} />}
         </For>
         
         {/* Resource Usage */}

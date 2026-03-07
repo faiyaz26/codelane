@@ -9,6 +9,8 @@ interface RemoteTerminalProps {
   terminalId: string;
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
+  /** Lock to host terminal dimensions for correct rendering */
+  hostSize?: { cols: number; rows: number };
   ref?: (methods: { 
     write: (data: string | Uint8Array) => void;
     resize: (cols: number, rows: number) => void;
@@ -52,6 +54,7 @@ export function RemoteTerminal(props: RemoteTerminalProps) {
       fitAddon={fitAddon}
       onWritePty={props.onData}
       onResizePty={props.onResize}
+      lockDimensions={props.hostSize}
       class="bg-black p-2"
     />
   );

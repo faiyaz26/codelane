@@ -379,7 +379,7 @@ impl Default for AgentSettings {
         Self {
             default_agent_name: "Shell".to_string(),
             installed_agents: vec![AgentConfig::shell_default()],
-            enabled_extensions: Vec::new(),
+            enabled_extensions: vec!["remote-desktop".to_string()],
         }
     }
 }
