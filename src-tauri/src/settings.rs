@@ -476,6 +476,16 @@ mod tests {
         assert!(settings.installed_agents.iter().any(|a| a.name.as_deref() == Some("Shell")));
     }
 
+    #[test]
+    fn test_agent_settings_default_extensions_in_debug() {
+        let settings = AgentSettings::default();
+        if cfg!(debug_assertions) {
+            assert!(settings.enabled_extensions.contains(&"remote-desktop".to_string()));
+        } else {
+            assert!(settings.enabled_extensions.is_empty());
+        }
+    }
+
     // ==================== Edge Cases ====================
 
     #[test]
