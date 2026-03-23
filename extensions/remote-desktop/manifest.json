@@ -1,8 +1,0 @@
-{
-  "id": "remote-desktop",
-  "name": "Remote Desktop",
-  "version": "1.0.0",
-  "description": "Remote access for CodeLane",
-  "main_frontend": "dist/bundle.js",
-  "permissions": ["terminal:read", "terminal:write"]
-}

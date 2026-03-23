@@ -2,7 +2,6 @@ packages:
   - 'frontend'
   - 'website'
   - 'packages/*'
-  - 'extensions/remote-desktop/webapp'
 
 ignoredBuiltDependencies:
   - esbuild

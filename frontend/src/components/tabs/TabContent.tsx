@@ -6,10 +6,8 @@
  */
 
 import { createSignal, createEffect, For, Show, ErrorBoundary } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import type { Tab } from '../../types/lane';
 import { TerminalContainer } from '../terminal/TerminalContainer';
-import { extensionLoader } from '../../services/ExtensionLoader';
 
 interface TabContentProps {
   laneId: string;
@@ -60,38 +58,14 @@ export function TabContent(props: TabContentProps) {
                   fallback={(err) => (
                     <div class="w-full h-full flex items-center justify-center text-zed-accent-red">
                       <div>
-                        <div class="font-semibold">{tab.type === 'extension' ? 'Extension Error' : 'Terminal Error'}</div>
+                        <div class="font-semibold">Terminal Error</div>
                         <div class="text-sm mt-1">{err.toString()}</div>
                       </div>
                     </div>
                   )}
                 >
                   <Show 
-                    when={tab.type === 'terminal'} 
-                    fallback={
-                      <Show when={tab.type === 'extension'}>
-                        {(() => {
-                          const extensionType = tab.metadata?.extensionType || 'default';
-                          const component = extensionLoader.getTabComponent(`${tab.extensionId}:${extensionType}`);
-                          if (!component) {
-                            return (
-                              <div class="w-full h-full flex items-center justify-center text-zed-text-tertiary">
-                                Extension tab component not found: {tab.extensionId}:{extensionType}
-                              </div>
-                            );
-                          }
-                          return (
-                            <Dynamic
-                              component={component}
-                              laneId={props.laneId}
-                              tabId={tab.id}
-                              metadata={tab.metadata}
-                              isActive={isActive()}
-                            />
-                          );
-                        })()}
-                      </Show>
-                    }
+                    when={tab.type === 'terminal'}
                   >
                     <TerminalContainer
                       laneId={props.laneId}

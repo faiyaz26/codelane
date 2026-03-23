@@ -7,8 +7,6 @@ import { AboutDialog } from './components/AboutDialog';
 import { OnboardingWizard, type WizardData } from './components/onboarding';
 import { UpdateToast } from './components/UpdateToast';
 import { GlobalNotifications } from './components/GlobalNotifications';
-import { DynamicExtensionDialog } from './components/DynamicExtensionDialog';
-
 import { listLanes } from './lib/lane-api';
 import { getActiveLaneId, setActiveLaneId } from './lib/storage';
 import { getAgentSettings, updateAgentSettings } from './lib/settings-api';
@@ -16,7 +14,6 @@ import { initPlatform } from './lib/platform';
 
 import { tabManager } from './services/TabManager';
 import { terminalPool } from './services/TerminalPool';
-import { extensionLoader } from './services/ExtensionLoader';
 import { agentNotificationService } from './services/AgentNotificationService';
 import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
@@ -70,9 +67,6 @@ function App() {
   onMount(async () => {
     // Initialize platform detection (static, only done once)
     await initPlatform();
-
-    // Initialize extension system
-    await extensionLoader.initialize();
 
     // Load agent settings
     try {
@@ -302,7 +296,6 @@ function App() {
       <SettingsDialog open={settingsOpen()} onOpenChange={setSettingsOpen} onSettingsSaved={handleSettingsSaved} />
       <AboutDialog open={aboutOpen()} onOpenChange={setAboutOpen} />
       <OnboardingWizard open={onboardingOpen()} onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />
-      <DynamicExtensionDialog />
 
       {/* Toasts */}
       <UpdateToast />

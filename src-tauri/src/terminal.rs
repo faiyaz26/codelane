@@ -21,9 +21,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::sync::broadcast;
+
+/// Broadcast channel capacity — allows the tunnel WS server to subscribe
+/// to terminal output alongside the Tauri frontend.
+const TERMINAL_BROADCAST_CAPACITY: usize = 1024;
 
 /// State for managing active terminal instances
 ///
@@ -31,13 +36,18 @@ use tauri::{AppHandle, Emitter, Manager, State};
 /// to all active terminal sessions.
 pub struct TerminalState {
     terminals: Mutex<HashMap<String, TerminalInstance>>,
+    /// Broadcast channel for terminal output — (terminal_id, raw_bytes).
+    /// The remote tunnel server subscribes to this to stream output over WS.
+    pub output_broadcast: Arc<broadcast::Sender<(String, Vec<u8>)>>,
 }
 
 impl TerminalState {
     /// Create a new terminal state manager
     pub fn new() -> Self {
+        let (tx, _) = broadcast::channel(TERMINAL_BROADCAST_CAPACITY);
         Self {
             terminals: Mutex::new(HashMap::new()),
+            output_broadcast: Arc::new(tx),
         }
     }
 
@@ -45,6 +55,18 @@ impl TerminalState {
     pub fn list_terminals_with_pids(&self) -> Result<Vec<(String, u32)>, String> {
         let terminals = self.terminals.lock().map_err(|e| e.to_string())?;
         Ok(terminals.iter().map(|(id, t)| (id.clone(), t.pid)).collect())
+    }
+
+    /// Returns the current (cols, rows) for a terminal, if it exists.
+    pub fn get_size(&self, terminal_id: &str) -> Option<(u16, u16)> {
+        let terminals = self.terminals.lock().ok()?;
+        let inst = terminals.get(terminal_id)?;
+        Some((inst.cols, inst.rows))
+    }
+
+    /// Subscribe to the terminal output broadcast channel.
+    pub fn subscribe_output(&self) -> broadcast::Receiver<(String, Vec<u8>)> {
+        self.output_broadcast.subscribe()
     }
 }
 
@@ -288,14 +310,13 @@ pub async fn create_terminal(
 
     let id_clone = terminal_id.clone();
     let app_clone = app.clone();
-    let extension_state = app.state::<crate::extension::ExtensionState>();
-    let ext_state_inner = extension_state.inner().clone();
+    let broadcast_sender = state.output_broadcast.clone();
 
     // Spawn a background thread to read PTY output and emit events
     thread::Builder::new()
         .name(format!("pty-read-{}", &terminal_id[..8]))
         .spawn(move || {
-            read_pty_output(reader, id_clone, app_clone, ext_state_inner);
+            read_pty_output(reader, id_clone, app_clone, broadcast_sender);
         })
         .map_err(|e| format!("Failed to spawn PTY reader thread: {}", e))?;
 
@@ -341,7 +362,7 @@ fn read_pty_output(
     mut reader: Box<dyn Read + Send>,
     terminal_id: String,
     app: AppHandle,
-    extension_state: crate::extension::ExtensionState,
+    output_broadcast: Arc<broadcast::Sender<(String, Vec<u8>)>>,
 ) {
     let mut buf = [0u8; 4096];
     let mut consecutive_errors = 0;
@@ -384,22 +405,10 @@ fn read_pty_output(
                     consecutive_errors = 0;
                 }
 
-                // Broadcast to extensions
-                let topic = format!("terminal.output.{}", terminal_id);
-                let ext_state = extension_state.clone();
-                let tid = terminal_id.clone();
-                
-                // Use Tauri's async runtime to spawn the broadcast task
-                tauri::async_runtime::spawn(async move {
-                    ext_state.broadcast(
-                        &topic,
-                        "codelane.terminal.onOutput",
-                        serde_json::json!({
-                            "id": tid,
-                            "data": String::from_utf8_lossy(&data)
-                        })
-                    ).await;
-                });
+                // Broadcast to the tunnel WS server (if active)
+                let _ = output_broadcast.send((terminal_id.clone(), data.clone()));
+
+
             }
             Err(e) => {
                 // Check if it's a would-block error (non-blocking I/O)

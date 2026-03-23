@@ -3,7 +3,7 @@ import { AgentConfig } from './agent';
 /**
  * Tab type - what kind of content the tab displays
  */
-export type TabType = 'terminal' | 'extension';
+export type TabType = 'terminal';
 
 /**
  * Tab configuration
@@ -14,7 +14,6 @@ export interface Tab {
   title: string;
   sortOrder: number;
   createdAt: number;
-  extensionId?: string;
   metadata?: Record<string, any>;
 }
 

@@ -369,9 +369,6 @@ pub struct AgentSettings {
     /// List of installed agent configurations
     #[serde(default)]
     pub installed_agents: Vec<AgentConfig>,
-    /// List of extension IDs that should be automatically started
-    #[serde(default)]
-    pub enabled_extensions: Vec<String>,
 }
 
 impl Default for AgentSettings {
@@ -379,11 +376,6 @@ impl Default for AgentSettings {
         Self {
             default_agent_name: "Shell".to_string(),
             installed_agents: vec![AgentConfig::shell_default()],
-            enabled_extensions: if cfg!(debug_assertions) {
-                vec!["remote-desktop".to_string()]
-            } else {
-                Vec::new()
-            },
         }
     }
 }
