@@ -34,7 +34,14 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_store::Builder::default().build())  // JSON store
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        // Managed application state
+        .manage(lane::LaneState::new())
+        .manage(settings::SettingsState::new())
+        .manage(search::SearchState::new())
+        .manage(fs::FileWatchState::new())
+        .manage(hook_monitor::HookMonitorState::new())
+        .manage(terminal::TerminalState::new());
 
     // Add updater plugin on desktop platforms
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -158,6 +165,93 @@ pub fn run() {
             tracing::info!("Codelane window initialized with menu");
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            // Lane commands
+            lane::lane_create,
+            lane::lane_list,
+            lane::lane_batch_create,
+            lane::lane_get,
+            lane::lane_update,
+            lane::lane_update_type,
+            lane::lane_update_config,
+            lane::lane_touch,
+            lane::lane_delete,
+            // Settings commands
+            settings::settings_get_agents,
+            settings::settings_update_agents,
+            settings::lane_get_agent_config,
+            settings::lane_update_agent_config,
+            settings::check_command_exists,
+            // Store commands
+            store::get_store_path,
+            // Process commands
+            process::find_process_by_lane,
+            process::get_app_resource_usage,
+            // Terminal commands
+            terminal::create_terminal,
+            terminal::write_terminal,
+            terminal::read_terminal,
+            terminal::resize_terminal,
+            terminal::close_terminal,
+            terminal::get_terminal_info,
+            terminal::list_terminals,
+            terminal::get_terminal_pid_by_lane,
+            terminal::get_terminal_id_by_lane,
+            // File system commands
+            fs::read_file,
+            fs::write_file,
+            fs::list_directory,
+            fs::get_file_stats,
+            fs::watch_path,
+            fs::unwatch_path,
+            // Search commands
+            search::search_start,
+            search::search_cancel,
+            // Git commands
+            git::git_status,
+            git::git_diff,
+            git::git_show_file,
+            git::git_changes_with_stats,
+            git::git_commit_changes,
+            git::git_commit_file_diff,
+            git::git_sort_files,
+            git::git_log,
+            git::git_branch,
+            git::git_stage,
+            git::git_unstage,
+            git::git_commit,
+            git::git_discard,
+            git::git_init,
+            git::git_clone,
+            git::git_get_remote_url,
+            git::git_is_repo,
+            git::git_branch_exists,
+            git::git_create_branch,
+            git::git_default_branch,
+            git::git_worktree_add,
+            git::git_worktree_list,
+            git::git_worktree_remove,
+            git::git_fetch_branch,
+            git::git_fetch_pr_branch,
+            git::git_diff_branch,
+            git::git_branch_changes_with_stats,
+            // Hook commands
+            hooks::hooks_install,
+            hooks::hooks_uninstall,
+            hooks::hooks_check_status,
+            hooks::hooks_test,
+            // GitHub commands
+            github::github_check_status,
+            github::github_fetch_pr,
+            github::github_submit_review,
+            github::github_fetch_pr_review_comments,
+            github::github_fetch_pr_conversation,
+            github::github_submit_review_with_comments,
+            // AI commands
+            ai::ai_generate_review,
+            ai::ai_test_tool,
+            ai::ai_get_available_tools,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

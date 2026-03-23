@@ -60,6 +60,7 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
   const [pendingAgent, setPendingAgent] = createSignal<AgentConfig | null>(null);
 
   const activeLane = createMemo(() => props.lanes.find(l => l.id === props.activeLaneId));
+  const initializedLaneIds = createMemo(() => Array.from(props.initializedLanes));
 
   const currentAgent = createMemo(() => {
     const lane = activeLane();
@@ -244,27 +245,29 @@ export function AgentTerminalPanel(props: AgentTerminalPanelProps) {
 
       {/* Terminal Content */}
       <div class="flex-1 overflow-hidden bg-zed-bg-surface relative">
-        <For each={Array.from(props.initializedLanes).map(laneId => ({
-          laneId,
-          version: props.terminalReloadVersions.get(laneId) ?? 0
-        }))}>
-          {({ laneId, version }) => {
+        <For each={initializedLaneIds()}>
+          {(laneId) => {
             const lane = createMemo(() => props.lanes.find((l) => l.id === laneId));
+            const version = createMemo(() => props.terminalReloadVersions.get(laneId) ?? 0);
+            const reloadKey = createMemo(() => `${version()}`);
             const isActive = createMemo(() => props.activeLaneId === laneId);
 
             return (
               <Show when={lane()}>
                 {(laneData) => (
-                  <TerminalItem
-                    key={`${laneId}-${version}`}
-                    laneId={laneId}
-                    lane={laneData()}
-                    version={version}
-                    isActive={isActive()}
-                    onTerminalReady={(terminalId) => props.onTerminalReady?.(laneId, terminalId)}
-                    onTerminalExit={() => props.onTerminalExit?.(laneId)}
-                    onAgentFailed={props.onAgentFailed}
-                  />
+                  <Show when={reloadKey()} keyed>
+                    {(currentVersion) => (
+                      <TerminalItem
+                        laneId={laneId}
+                        lane={laneData()}
+                        version={Number(currentVersion)}
+                        isActive={isActive()}
+                        onTerminalReady={(terminalId) => props.onTerminalReady?.(laneId, terminalId)}
+                        onTerminalExit={() => props.onTerminalExit?.(laneId)}
+                        onAgentFailed={props.onAgentFailed}
+                      />
+                    )}
+                  </Show>
                 )}
               </Show>
             );

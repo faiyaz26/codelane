@@ -136,7 +136,15 @@ function App() {
     }
 
     // THEN mark this lane as initialized so its components render
-    setInitializedLanes((prev) => new Set(prev).add(laneId));
+    setInitializedLanes((prev) => {
+      if (prev.has(laneId)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.add(laneId);
+      return next;
+    });
   };
 
   const handleLaneDeleted = async (laneId: string) => {

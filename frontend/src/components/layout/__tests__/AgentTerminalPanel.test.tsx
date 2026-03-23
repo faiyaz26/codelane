@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@solidjs/testing-library';
 import { AgentTerminalPanel } from '../AgentTerminalPanel';
 import type { Lane } from '../../../types/lane';
-import { createSignal, Show } from 'solid-js';
+import { batch, createSignal, Show } from 'solid-js';
 import type { AgentSettings } from '../../../types/agent';
 
 // Mock the sub-components
@@ -83,16 +83,16 @@ describe('AgentTerminalPanel Persistence', () => {
 
   it('preserves terminal instances when switching between lanes', async () => {
     const [activeLaneId, setActiveLaneId] = createSignal<string | null>('lane-1');
-    const initializedLanes = new Set(['lane-1', 'lane-2']);
-    const terminalReloadVersions = new Map<string, number>();
+    const [initializedLanes, setInitializedLanes] = createSignal(new Set(['lane-1', 'lane-2']));
+    const [terminalReloadVersions] = createSignal(new Map<string, number>());
 
     render(() => (
       <AgentTerminalPanel
         lanes={mockLanes}
         agentSettings={mockAgentSettings}
         activeLaneId={activeLaneId()}
-        initializedLanes={initializedLanes}
-        terminalReloadVersions={terminalReloadVersions}
+        initializedLanes={initializedLanes()}
+        terminalReloadVersions={terminalReloadVersions()}
         showEditor={false}
         panelWidth={null}
       />
@@ -112,12 +112,20 @@ describe('AgentTerminalPanel Persistence', () => {
     expect(initialLane1Mounts).toBe(1);
     expect(initialLane2Mounts).toBe(1);
 
-    // Switch to lane 2
-    setActiveLaneId('lane-2');
+    const lane1Terminal = screen.getByTestId('terminal-lane-1');
+    const lane2Terminal = screen.getByTestId('terminal-lane-2');
+
+    // Switch to lane 2 while recreating the initialized set, matching App.handleLaneSelect.
+    batch(() => {
+      setActiveLaneId('lane-2');
+      setInitializedLanes(prev => new Set(prev));
+    });
 
     // Terminals should still be in the document
     expect(screen.getByTestId('terminal-lane-1')).toBeInTheDocument();
     expect(screen.getByTestId('terminal-lane-2')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-lane-1')).toBe(lane1Terminal);
+    expect(screen.getByTestId('terminal-lane-2')).toBe(lane2Terminal);
 
     // CRITICAL: TerminalView should NOT have been re-mounted/re-called for either lane
     const afterSwitchLane1Mounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-1').length;
@@ -125,6 +133,43 @@ describe('AgentTerminalPanel Persistence', () => {
 
     expect(afterSwitchLane1Mounts).toBe(initialLane1Mounts);
     expect(afterSwitchLane2Mounts).toBe(initialLane2Mounts);
+  });
+
+  it('reloads only the requested lane when its version changes', async () => {
+    const [activeLaneId] = createSignal<string | null>('lane-1');
+    const [initializedLanes] = createSignal(new Set(['lane-1', 'lane-2']));
+    const [terminalReloadVersions, setTerminalReloadVersions] = createSignal(new Map<string, number>());
+
+    render(() => (
+      <AgentTerminalPanel
+        lanes={mockLanes}
+        agentSettings={mockAgentSettings}
+        activeLaneId={activeLaneId()}
+        initializedLanes={initializedLanes()}
+        terminalReloadVersions={terminalReloadVersions()}
+        showEditor={false}
+        panelWidth={null}
+      />
+    ));
+
+    await waitFor(() => expect(screen.getByTestId('terminal-lane-1')).toBeInTheDocument());
+
+    const initialLane1Mounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-1').length;
+    const initialLane2Mounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-2').length;
+
+    setTerminalReloadVersions(prev => {
+      const next = new Map(prev);
+      next.set('lane-1', 1);
+      return next;
+    });
+
+    await waitFor(() => {
+      const lane1Mounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-1').length;
+      expect(lane1Mounts).toBe(initialLane1Mounts + 1);
+    });
+
+    const lane2Mounts = TerminalViewSpy.mock.calls.filter(call => call[0].laneId === 'lane-2').length;
+    expect(lane2Mounts).toBe(initialLane2Mounts);
   });
 
   it('reloads the terminal when an agent is switched and confirmed', async () => {
