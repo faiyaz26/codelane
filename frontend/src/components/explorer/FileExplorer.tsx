@@ -4,6 +4,7 @@ import { createSignal, createEffect, Show } from 'solid-js';
 import { useFileTree, useFileWatcher } from './hooks';
 import { FileTree } from './FileTree';
 import { ChangesView } from './ChangesView';
+import { OpenFileDialog } from './OpenFileDialog';
 
 interface FileExplorerProps {
   laneId: string;
@@ -13,6 +14,7 @@ interface FileExplorerProps {
 
 export function FileExplorer(props: FileExplorerProps) {
   const [activeTab, setActiveTab] = createSignal<'files' | 'changes'>('files');
+  const [openFileDialogOpen, setOpenFileDialogOpen] = createSignal(false);
 
   const tree = useFileTree();
 
@@ -78,6 +80,27 @@ export function FileExplorer(props: FileExplorerProps) {
           />
         </Show>
       </div>
+
+      {/* Open File button — always visible at the bottom of the Files tab panel */}
+      <div class="shrink-0 border-t border-zed-border-subtle p-2">
+        <button
+          class="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zed-text-secondary hover:text-zed-text-primary bg-zed-bg-hover hover:bg-zed-bg-surface border border-zed-border-subtle rounded transition-colors cursor-pointer select-none"
+          onClick={() => setOpenFileDialogOpen(true)}
+          title="Open a file by path"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+          </svg>
+          Open File
+        </button>
+      </div>
+
+      <OpenFileDialog
+        open={openFileDialogOpen()}
+        onOpenChange={setOpenFileDialogOpen}
+        onFileOpen={(path) => props.onFileSelect?.(path)}
+      />
     </div>
   );
 }

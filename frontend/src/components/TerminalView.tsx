@@ -147,7 +147,7 @@ export function TerminalView(props: TerminalViewProps) {
           </div>
         }
       >
-        {(h) => <TerminalInstance handle={h()} />}
+        {(h) => <TerminalInstance handle={h()} laneId={props.laneId} workingDir={props.cwd} />}
       </Show>
 
       <Show when={showNotificationPrompt()}>

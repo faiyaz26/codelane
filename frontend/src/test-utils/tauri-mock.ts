@@ -138,6 +138,12 @@ export function setupTauriMocks(): void {
     getVersion: mockGetVersion,
   }));
 
+  vi.mock('@tauri-apps/api/path', () => ({
+    homeDir: vi.fn(async () => '/home/user'),
+    join: vi.fn(async (...parts: string[]) => parts.join('/')),
+    resolve: vi.fn(async (...parts: string[]) => parts.join('/')),
+  }));
+
   vi.mock('@tauri-apps/plugin-notification', () => ({
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => 'granted'),

@@ -2,7 +2,7 @@
  * Shared terminal utilities and configuration
  */
 
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ILinkProvider, type ILink } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -12,7 +12,72 @@ import { getTerminalTheme } from '../theme/theme';
 
 export interface TerminalHandlers {
   onOpenLink?: (uri: string) => void;
+  onOpenFile?: (path: string, line?: number, column?: number) => void;
   onWriteClipboard?: (text: string) => Promise<void>;
+}
+
+// Matches Unix absolute paths (/foo/bar) and home-relative paths (~/foo/bar),
+// optionally suffixed with :line or :line:col. Excludes URLs (// prefix handled
+// by WebLinksAddon) and common shell non-path patterns.
+const FILE_PATH_REGEX =
+  /((?:~\/|\/(?!\/))[\w.\-/][\w.\-/ ]*?\.[a-zA-Z0-9]{1,15})(:\d+)?(:\d+)?(?=[^\w.\-/]|$)/g;
+
+class FilePathLinkProvider implements ILinkProvider {
+  constructor(
+    private readonly terminal: Terminal,
+    private readonly onOpenFile: NonNullable<TerminalHandlers['onOpenFile']>
+  ) {}
+
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
+    const line = this.terminal.buffer.active.getLine(bufferLineNumber - 1);
+    if (!line) {
+      callback(undefined);
+      return;
+    }
+
+    // Use the full line string; positions stay accurate since we don't trim.
+    const lineText = line.translateToString(false);
+
+    FILE_PATH_REGEX.lastIndex = 0;
+    const links: ILink[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = FILE_PATH_REGEX.exec(lineText)) !== null) {
+      const fullMatch = match[0];
+      const filePath = match[1];
+      const lineStr = match[2]; // ":42" or undefined
+      const colStr = match[3];  // ":5" or undefined
+
+      // Skip matches that look like they're part of a URL (e.g. after "://")
+      const before = lineText.slice(0, match.index);
+      if (before.endsWith(':') || before.endsWith('//')) continue;
+
+      const lineNum = lineStr ? parseInt(lineStr.slice(1), 10) - 1 : undefined;
+      const colNum = colStr ? parseInt(colStr.slice(1), 10) - 1 : undefined;
+
+      const startX = match.index + 1; // IBufferCellPosition x is 1-based
+      const endX = match.index + fullMatch.length;
+
+      const handler = this.onOpenFile;
+      const capturedPath = filePath;
+      const capturedLine = lineNum;
+      const capturedCol = colNum;
+
+      links.push({
+        range: {
+          start: { x: startX, y: bufferLineNumber },
+          end: { x: endX, y: bufferLineNumber },
+        },
+        text: fullMatch,
+        decorations: { pointerCursor: true, underline: true },
+        activate(_event: MouseEvent, _text: string) {
+          handler(capturedPath, capturedLine, capturedCol);
+        },
+      });
+    }
+
+    callback(links.length > 0 ? links : undefined);
+  }
 }
 
 export function isTerminalViewportAtBottom(
@@ -79,6 +144,15 @@ export function loadAddons(terminal: Terminal | null | undefined, handlers?: Ter
     terminal.loadAddon(searchAddon);
   } catch (err) {
     console.warn('[terminal] Search addon failed to load:', err);
+  }
+
+  // File path links — clickable file paths in agent/shell output
+  if (handlers?.onOpenFile) {
+    try {
+      terminal.registerLinkProvider(new FilePathLinkProvider(terminal, handlers.onOpenFile));
+    } catch (err) {
+      console.warn('[terminal] FilePathLinkProvider failed to register:', err);
+    }
   }
 
   // Canvas renderer — more reliable than WebGL for TUI apps

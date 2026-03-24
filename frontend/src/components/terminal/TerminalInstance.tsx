@@ -13,10 +13,18 @@ import {
 } from '@codelane/shared';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { homeDir } from '@tauri-apps/api/path';
 import type { TerminalHandle } from '../../types/terminal';
+import { editorStateManager } from '../../services/EditorStateManager';
+
+// Cache the home directory path so we can expand "~" in file links
+let cachedHomeDir: string | null = null;
+homeDir().then((d) => { cachedHomeDir = d; }).catch(() => {});
 
 interface TerminalInstanceProps {
   handle: TerminalHandle;
+  laneId?: string;
+  workingDir?: string;
 }
 
 export function TerminalInstance(props: TerminalInstanceProps) {
@@ -31,6 +39,21 @@ export function TerminalInstance(props: TerminalInstanceProps) {
   const terminalHandlers = {
     onOpenLink: (uri: string) => {
       shellOpen(uri).catch(console.error);
+    },
+    onOpenFile: (path: string, line?: number, column?: number) => {
+      const laneId = props.laneId;
+      if (!laneId) return;
+      // Expand ~ to the cached home directory if available
+      const resolvedPath =
+        path.startsWith('~/') && cachedHomeDir
+          ? cachedHomeDir.replace(/\/$/, '') + path.slice(1)
+          : path;
+      if (line !== undefined) {
+        editorStateManager.openFileAtLine(laneId, resolvedPath, line, undefined).catch(console.error);
+      } else {
+        editorStateManager.openFile(laneId, resolvedPath).catch(console.error);
+      }
+      void column; // column reserved for future use (scroll-to-col)
     },
     onWriteClipboard: async (text: string) => {
       await writeText(text);
