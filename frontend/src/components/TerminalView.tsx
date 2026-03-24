@@ -1,4 +1,4 @@
-import { onCleanup, onMount, createEffect, createSignal, Show, untrack } from 'solid-js';
+import { onCleanup, onMount, createSignal, Show } from 'solid-js';
 import { useTerminalPool } from '../hooks/useTerminalPool';
 import { TerminalInstance } from './terminal/TerminalInstance';
 import type { TerminalHandle } from '../types/terminal';
@@ -124,14 +124,6 @@ export function TerminalView(props: TerminalViewProps) {
     setShowNotificationPrompt(false);
   };
 
-  const scrollToBottom = () => {
-    const h = handle();
-    if (h) {
-      h.terminal.scrollToBottom();
-      h.autoScroll = true;
-    }
-  };
-
   return (
     <div class="relative w-full h-full group">
       <Show
@@ -156,19 +148,6 @@ export function TerminalView(props: TerminalViewProps) {
         }
       >
         {(h) => <TerminalInstance handle={h()} />}
-      </Show>
-
-      <Show when={handle() && !handle()!.autoScroll}>
-        <button
-          onClick={scrollToBottom}
-          data-testid="scroll-to-bottom-button"
-          class="absolute bottom-10 right-10 px-4 py-2 bg-zed-accent-blue text-white rounded-full shadow-xl flex items-center gap-2 text-sm font-semibold hover:bg-zed-accent-blue-hover transition-all animate-bounce-in z-20 cursor-pointer"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
-          </svg>
-          Scroll to Bottom
-        </button>
       </Show>
 
       <Show when={showNotificationPrompt()}>

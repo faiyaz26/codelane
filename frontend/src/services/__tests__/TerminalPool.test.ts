@@ -68,7 +68,7 @@ function createMockTerminal() {
       focus,
       element: null,
       buffer: {
-        active: { baseY: 0, length: 24 },
+        active: { baseY: 0, viewportY: 0, length: 24 },
       },
       hasSelection: () => false,
       options: {},
@@ -88,6 +88,8 @@ vi.mock('../../lib/terminal-utils', () => ({
   },
   createFitAddon: () => ({ fit: vi.fn() }),
   attachKeyHandlers: vi.fn(() => () => {}),
+  isTerminalViewportAtBottom: (terminal: any, viewportY = terminal.buffer.active.viewportY) =>
+    viewportY >= terminal.buffer.active.baseY,
   loadAddons: vi.fn(),
   updateTerminalTheme: vi.fn(),
 }));
@@ -188,10 +190,11 @@ describe('TerminalPool', () => {
 
       expect(handle.autoScroll).toBe(true);
 
-      // Simulate user being scrolled up (baseY is 0, length is 100)
-      terminal.buffer.active.baseY = 0;
+      // Simulate user being scrolled up. `baseY` marks the viewport position when
+      // fully scrolled down, while `viewportY` is where the user currently is.
+      terminal.buffer.active.baseY = 76;
+      terminal.buffer.active.viewportY = 0;
       terminal.buffer.active.length = 100;
-      // 0 + 24 < 100, so we're scrolled up
 
       // Simulate PTY output
       const data = new TextEncoder().encode('new output');
@@ -203,19 +206,18 @@ describe('TerminalPool', () => {
   });
 
   describe('scroll position detection', () => {
-    it('detects at-bottom when baseY + rows >= length', () => {
-      // This tests the logic: buffer.baseY + terminal.rows >= buffer.length
+    it('detects at-bottom when viewportY reaches baseY', () => {
       const cases = [
-        { baseY: 0, rows: 24, length: 24, expected: true },   // exactly at bottom
-        { baseY: 10, rows: 24, length: 34, expected: true },   // scrollback, at bottom
-        { baseY: 10, rows: 24, length: 35, expected: false },  // 1 line scrolled up
-        { baseY: 0, rows: 24, length: 50, expected: false },   // scrolled to top
-        { baseY: 100, rows: 24, length: 124, expected: true }, // large buffer, at bottom
-        { baseY: 100, rows: 24, length: 125, expected: false }, // large buffer, 1 line up
+        { baseY: 0, viewportY: 0, expected: true },     // no scrollback
+        { baseY: 10, viewportY: 10, expected: true },   // scrolled to bottom
+        { baseY: 10, viewportY: 9, expected: false },   // 1 line above bottom
+        { baseY: 76, viewportY: 0, expected: false },   // top of long scrollback
+        { baseY: 100, viewportY: 100, expected: true }, // large buffer, at bottom
+        { baseY: 100, viewportY: 50, expected: false }, // large buffer, midway up
       ];
 
-      for (const { baseY, rows, length, expected } of cases) {
-        const isAtBottom = baseY + rows >= length;
+      for (const { baseY, viewportY, expected } of cases) {
+        const isAtBottom = viewportY >= baseY;
         expect(isAtBottom).toBe(expected);
       }
     });

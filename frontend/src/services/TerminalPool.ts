@@ -10,7 +10,7 @@
 
 import { spawn, type PtyHandle } from './PortablePty';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
-import { createTerminal, createFitAddon, attachKeyHandlers } from '../lib/terminal-utils';
+import { createTerminal, createFitAddon, attachKeyHandlers, isTerminalViewportAtBottom } from '../lib/terminal-utils';
 import { agentStatusManager } from './AgentStatusManager';
 import type { DetectableAgentType } from '../types/agentStatus';
 import type {
@@ -232,8 +232,7 @@ class TerminalPool {
     await pty.onData((data) => {
       // Check if we're at the bottom BEFORE writing. If the user has scrolled up,
       // we should respect that and not force a scroll to bottom.
-      const buffer = terminal.buffer.active;
-      const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
+      const isAtBottom = isTerminalViewportAtBottom(terminal);
 
       terminal.write(data);
 

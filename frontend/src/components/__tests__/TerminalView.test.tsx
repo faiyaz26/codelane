@@ -25,7 +25,8 @@ vi.stubGlobal('ResizeObserver', class {
 });
 
 // Mock terminal and fit addon
-let scrollCallback: (() => void) | null = null;
+let scrollCallback: ((viewportY: number) => void) | null = null;
+let wheelCallback: ((event: WheelEvent) => boolean) | null = null;
 const mockTerminalInstance = {
   open: vi.fn(),
   focus: vi.fn(),
@@ -37,6 +38,9 @@ const mockTerminalInstance = {
   onData: vi.fn(() => ({ dispose: vi.fn() })),
   onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
   attachCustomKeyEventHandler: vi.fn(),
+  attachCustomWheelEventHandler: vi.fn((cb) => {
+    wheelCallback = cb;
+  }),
   loadAddon: vi.fn(),
   write: vi.fn(),
   scrollToBottom: vi.fn(),
@@ -95,6 +99,8 @@ vi.mock('../../lib/terminal-utils', () => ({
   createFitAddon: () => ({ fit: vi.fn() }),
   loadAddons: vi.fn(),
   attachKeyHandlers: vi.fn(),
+  isTerminalViewportAtBottom: (terminal: any, viewportY = terminal.buffer.active.viewportY) =>
+    viewportY >= terminal.buffer.active.baseY,
   updateTerminalTheme: vi.fn(),
 }));
 
@@ -107,6 +113,7 @@ describe('TerminalView Scrolling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     scrollCallback = null;
+    wheelCallback = null;
     mockTerminalInstance.buffer.active.viewportY = 0;
     mockTerminalInstance.buffer.active.baseY = 0;
     mockTerminalInstance.buffer.active.length = 24;
@@ -131,27 +138,55 @@ describe('TerminalView Scrolling', () => {
     setMockHandle = s;
   });
 
-  it('shows "Scroll to Bottom" button when user scrolls up', async () => {
-    // Start with autoScroll false so button can show
-    const current = { ...mockHandle() };
-    current.autoScroll = false;
-    setMockHandle(current);
-    
+  it('keeps the scroll-to-bottom button hidden when the terminal is manually scrolled up', async () => {
     render(() => <TerminalView laneId="lane-1" />);
 
-    // Wait for handle to be set
     await waitFor(() => expect(mockTerminalPool.acquire).toHaveBeenCalled());
+    await waitFor(() => expect(scrollCallback).not.toBeNull());
+
+    expect(screen.queryByTestId('scroll-to-bottom-button')).not.toBeInTheDocument();
 
     // Simulate user scrolling up
-    mockTerminalInstance.buffer.active.baseY = 76; 
+    mockTerminalInstance.buffer.active.baseY = 76;
     mockTerminalInstance.buffer.active.viewportY = 0;
     mockTerminalInstance.buffer.active.length = 100;
-    
-    // Trigger the scroll callback
-    if (scrollCallback) scrollCallback();
 
-    // The button should now be visible
-    const button = await screen.findByTestId('scroll-to-bottom-button');
-    expect(button).toBeDefined();
+    scrollCallback?.(0);
+
+    expect(mockHandle().autoScroll).toBe(false);
+    expect(screen.queryByTestId('scroll-to-bottom-button')).not.toBeInTheDocument();
+  });
+
+  it('still disables auto-scroll from xterm scroll events before buffer viewport state catches up', async () => {
+    render(() => <TerminalView laneId="lane-1" />);
+
+    await waitFor(() => expect(mockTerminalPool.acquire).toHaveBeenCalled());
+    await waitFor(() => expect(scrollCallback).not.toBeNull());
+
+    mockTerminalInstance.buffer.active.baseY = 76;
+    mockTerminalInstance.buffer.active.viewportY = 76;
+    mockTerminalInstance.buffer.active.length = 100;
+
+    scrollCallback?.(0);
+
+    expect(mockHandle().autoScroll).toBe(false);
+    expect(screen.queryByTestId('scroll-to-bottom-button')).not.toBeInTheDocument();
+  });
+
+  it('pauses auto-scroll as soon as the user wheels upward', async () => {
+    render(() => <TerminalView laneId="lane-1" />);
+
+    await waitFor(() => expect(mockTerminalPool.acquire).toHaveBeenCalled());
+    await waitFor(() => expect(wheelCallback).not.toBeNull());
+
+    expect(screen.queryByTestId('scroll-to-bottom-button')).not.toBeInTheDocument();
+
+    const shouldContinue = wheelCallback?.({
+      deltaY: -1,
+    } as WheelEvent);
+
+    expect(shouldContinue).toBe(true);
+    expect(mockHandle().autoScroll).toBe(false);
+    expect(screen.queryByTestId('scroll-to-bottom-button')).not.toBeInTheDocument();
   });
 });

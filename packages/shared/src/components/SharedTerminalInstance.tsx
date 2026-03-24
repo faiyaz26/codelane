@@ -5,7 +5,12 @@
  */
 
 import { onMount, onCleanup } from 'solid-js';
-import { loadAddons, attachKeyHandlers, type TerminalHandlers } from '../terminal/terminal-utils';
+import {
+  loadAddons,
+  attachKeyHandlers,
+  isTerminalViewportAtBottom,
+  type TerminalHandlers,
+} from '../terminal/terminal-utils';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 
@@ -60,8 +65,7 @@ export function SharedTerminalInstance(props: SharedTerminalInstanceProps) {
         const r = containerRef.getBoundingClientRect();
         if (r.width < 1 || r.height < 1) return;
 
-        const buffer = terminal.buffer.active;
-        const isAtBottom = buffer.baseY + terminal.rows >= buffer.length;
+        const isAtBottom = isTerminalViewportAtBottom(terminal);
 
         fitAddon.fit();
         props.onResizePty(terminal.cols, terminal.rows);
@@ -77,7 +81,6 @@ export function SharedTerminalInstance(props: SharedTerminalInstanceProps) {
       // Initial resize
       setTimeout(() => {
         safeFitAndResize();
-        terminal.scrollToBottom();
       }, 100);
 
       // Handle resize events

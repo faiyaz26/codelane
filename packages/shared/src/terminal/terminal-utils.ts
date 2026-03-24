@@ -15,6 +15,14 @@ export interface TerminalHandlers {
   onWriteClipboard?: (text: string) => Promise<void>;
 }
 
+export function isTerminalViewportAtBottom(
+  terminal: Pick<Terminal, 'buffer'>,
+  viewportY = terminal.buffer.active.viewportY
+): boolean {
+  const buffer = terminal.buffer.active;
+  return viewportY >= buffer.baseY;
+}
+
 /**
  * Creates a pre-configured xterm.js Terminal instance with current theme
  */

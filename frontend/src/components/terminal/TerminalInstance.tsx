@@ -7,6 +7,7 @@
 import { onMount, onCleanup, createEffect } from 'solid-js';
 import { 
   SharedTerminalInstance, 
+  isTerminalViewportAtBottom,
   updateTerminalTheme, 
   themeManager 
 } from '@codelane/shared';
@@ -40,12 +41,28 @@ export function TerminalInstance(props: TerminalInstanceProps) {
     if (!props.handle) return;
     const { terminal } = props.handle;
 
-    // Sticky scroll detection
-    const updateAutoScroll = () => {
-      const buffer = terminal.buffer.active;
-      props.handle.autoScroll = buffer.baseY + terminal.rows >= buffer.length;
+    const setAutoScroll = (autoScroll: boolean) => {
+      props.handle.autoScroll = autoScroll;
     };
-    terminal.onScroll(updateAutoScroll);
+
+    // Sticky scroll detection
+    const updateAutoScroll = (viewportY = terminal.buffer.active.viewportY) => {
+      const autoScroll = isTerminalViewportAtBottom(terminal, viewportY);
+      setAutoScroll(autoScroll);
+    };
+
+    // Pause follow-mode as soon as the user starts scrolling up so live output
+    // cannot race the viewport back to the bottom before xterm emits onScroll.
+    terminal.attachCustomWheelEventHandler((event) => {
+      if (event.deltaY < 0 && props.handle.autoScroll) {
+        setAutoScroll(false);
+      }
+      return true;
+    });
+
+    const scrollDisposable = terminal.onScroll((viewportY) => updateAutoScroll(viewportY));
+    updateAutoScroll();
+    onCleanup(() => scrollDisposable.dispose());
   });
 
   return (
