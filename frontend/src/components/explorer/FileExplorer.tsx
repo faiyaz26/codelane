@@ -8,7 +8,8 @@ import { OpenFileDialog } from './OpenFileDialog';
 
 interface FileExplorerProps {
   laneId: string;
-  workingDir: string;
+  baseWorkingDir: string;  // Base project directory (for the header)
+  workingDir: string;      // Effective working directory (for file browsing - might be a worktree)
   onFileSelect?: (path: string) => void;
 }
 
@@ -39,7 +40,7 @@ export function FileExplorer(props: FileExplorerProps) {
   };
 
   const getProjectName = () => {
-    const parts = props.workingDir.split('/');
+    const parts = props.baseWorkingDir.split('/');
     return parts[parts.length - 1] || 'Project';
   };
 
