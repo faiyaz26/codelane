@@ -51,5 +51,8 @@ jobs:
       - name: Run frontend tests
         run: cd frontend && pnpm test
 
+      - name: Build frontend
+        run: cd frontend && pnpm build
+
       - name: Run Rust workspace tests
         run: cargo test --workspace
