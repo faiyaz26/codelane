@@ -202,3 +202,24 @@ export async function getBranchChangesWithStats(
 ): Promise<FileChangeStats[]> {
   return invoke<FileChangeStats[]>('git_branch_changes_with_stats', { path, baseBranch });
 }
+
+/**
+ * Per-line blame information returned by git blame --porcelain
+ */
+export interface BlameEntry {
+  line: number;
+  commit_hash: string;
+  author: string;
+  author_email: string;
+  timestamp: number;
+  summary: string;
+}
+
+/**
+ * Get git blame for a file.
+ * @param repoPath - Path to the repository root (or any path within the repo)
+ * @param filePath - File path relative to the repo root
+ */
+export async function getGitBlame(repoPath: string, filePath: string): Promise<BlameEntry[]> {
+  return invoke<BlameEntry[]>('git_blame', { path: repoPath, file: filePath });
+}

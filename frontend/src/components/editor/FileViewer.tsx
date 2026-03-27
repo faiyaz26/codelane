@@ -8,6 +8,9 @@ import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/T
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
 import { editorStateManager } from '../../services/EditorStateManager';
 import { customLanguageManager } from '../../services/CustomLanguageManager';
+import { getGitBlame, getRemoteUrl, getGitBranch, getDefaultBranch, type BlameEntry } from '../../lib/git-api';
+import { buildRemoteFileUrl } from '../../utils/remote-url';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 
 // Lazy load MarkdownEditor to avoid circular dependency issues at startup
 const MarkdownEditor = lazy(() => import('./markdown').then(m => ({ default: m.MarkdownEditor })));
@@ -438,6 +441,41 @@ const OVERSCAN = 20; // extra lines to render above/below viewport
 interface FileViewerProps {
   file: OpenFile | null;
   laneId?: string;
+  workingDir?: string;
+}
+
+interface LineContextMenu {
+  x: number;
+  y: number;
+  lineIdx: number;
+  endLineIdx?: number;
+}
+
+/** Format a unix timestamp as a short relative string, e.g. "2d", "3mo", "1y" */
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() / 1000 - timestamp;
+  if (diff < 60) return 'now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d`;
+  if (diff < 86400 * 365) return `${Math.floor(diff / (86400 * 30))}mo`;
+  return `${Math.floor(diff / (86400 * 365))}y`;
+}
+
+/** Format a unix timestamp as a full human-readable date string */
+function formatFullDate(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+/** Abbreviate an author name to fit in the blame gutter (~10 chars) */
+function abbreviateAuthor(name: string): string {
+  if (name.length <= 12) return name;
+  const parts = name.split(' ');
+  if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  return name.slice(0, 12);
 }
 
 export function FileViewer(props: FileViewerProps) {
@@ -446,6 +484,23 @@ export function FileViewer(props: FileViewerProps) {
   const [isHighlighting, setIsHighlighting] = createSignal(false);
   const [foldRegions, setFoldRegions] = createSignal<FoldRegion[]>([]);
   const [foldedLines, setFoldedLines] = createSignal<Set<number>>(new Set());
+
+  // Git blame state
+  const [blameEnabled, setBlameEnabled] = createSignal(false);
+  const [blameWidth, setBlameWidth] = createSignal(140);
+  const [blameData, setBlameData] = createSignal<BlameEntry[]>([]);
+  const [isBlameLoading, setIsBlameLoading] = createSignal(false);
+  let blameResizeCleanup: (() => void) | null = null;
+
+  // Line context menu state (for "Open on Remote")
+  const [lineContextMenu, setLineContextMenu] = createSignal<LineContextMenu | null>(null);
+  let lineContextMenuRef: HTMLDivElement | undefined;
+
+  // Remote info cache (lazy-fetched when context menu first opens)
+  let cachedRemoteUrl: string | null = null;
+  let cachedCurrentBranch: string | null = null;
+  let cachedDefaultBranch: string | null = null;
+  let remoteInfoFetched = false;
 
   // Search state
   const [searchOpen, setSearchOpen] = createSignal(false);
@@ -767,7 +822,202 @@ export function FileViewer(props: FileViewerProps) {
     })();
   });
 
-  // Calculate all displayable lines (not hidden by folds)
+  // Reset blame when file changes
+  createEffect(() => {
+    props.file?.path; // track file changes
+    setBlameEnabled(false);
+    setBlameData([]);
+  });
+
+  // Fetch git blame when blame is enabled for this file
+  createEffect(() => {
+    const file = props.file;
+    const workingDir = props.workingDir;
+
+    if (!blameEnabled() || !workingDir || !file || file.isLoading || file.isTemporary || file.isDiffView || file.error || file.content === null) {
+      setBlameData([]);
+      return;
+    }
+
+    // Derive relative file path from workingDir
+    let relPath = file.path;
+    if (relPath.startsWith(workingDir)) {
+      relPath = relPath.slice(workingDir.length).replace(/^\/+/, '');
+    }
+    if (!relPath) return;
+
+    setIsBlameLoading(true);
+    setBlameData([]);
+
+    (async () => {
+      try {
+        const entries = await getGitBlame(workingDir, relPath);
+        setBlameData(entries);
+      } catch (err) {
+        console.warn('[FileViewer] git blame failed:', err);
+        setBlameData([]);
+      } finally {
+        setIsBlameLoading(false);
+      }
+    })();
+  });
+
+  // Build a map from 1-indexed line number to blame entry for O(1) lookup
+  const blameByLine = createMemo((): Map<number, BlameEntry> => {
+    const map = new Map<number, BlameEntry>();
+    for (const entry of blameData()) {
+      map.set(entry.line, entry);
+    }
+    return map;
+  });
+
+  // Detect runs of the same commit to suppress duplicate blame annotations
+  const blameRunStarts = createMemo((): Set<number> => {
+    const starts = new Set<number>();
+    let prevHash = '';
+    const sorted = [...blameData()].sort((a, b) => a.line - b.line);
+    for (const entry of sorted) {
+      if (entry.commit_hash !== prevHash) {
+        starts.add(entry.line);
+        prevHash = entry.commit_hash;
+      }
+    }
+    return starts;
+  });
+
+  // Fetch remote info lazily (once per workingDir change)
+  const fetchRemoteInfo = async () => {
+    const workingDir = props.workingDir;
+    if (!workingDir || remoteInfoFetched) return;
+    remoteInfoFetched = true;
+    try {
+      const [remoteUrl, branchInfo, defaultBranchName] = await Promise.all([
+        getRemoteUrl(workingDir, 'origin').catch(() => null),
+        getGitBranch(workingDir).catch(() => null),
+        getDefaultBranch(workingDir).catch(() => null),
+      ]);
+      cachedRemoteUrl = remoteUrl;
+      cachedCurrentBranch = branchInfo?.current ?? null;
+      cachedDefaultBranch = defaultBranchName;
+    } catch {
+      // ignore
+    }
+  };
+
+  // Reset remote cache when workingDir changes
+  createEffect(() => {
+    const _dir = props.workingDir;
+    cachedRemoteUrl = null;
+    cachedCurrentBranch = null;
+    cachedDefaultBranch = null;
+    remoteInfoFetched = false;
+  });
+
+  // Compute relative path for remote URL construction
+  const getRelativeFilePath = () => {
+    const file = props.file;
+    const workingDir = props.workingDir;
+    if (!file || !workingDir) return null;
+    let rel = file.path;
+    if (rel.startsWith(workingDir)) {
+      rel = rel.slice(workingDir.length).replace(/^\/+/, '');
+    }
+    return rel || null;
+  };
+
+  // Handle right-click on a code line
+  const handleLineContextMenu = async (e: MouseEvent, lineIdx: number) => {
+    if (!props.workingDir) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Detect selection range
+    const selection = window.getSelection();
+    let endLineIdx: number | undefined;
+    if (selection && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      // Walk up from endContainer to find its .code-line ancestor
+      let endNode: Node | null = range.endContainer;
+      while (endNode && !(endNode as Element).classList?.contains('code-line')) {
+        endNode = endNode.parentNode;
+      }
+      if (endNode) {
+        const endLineData = parseInt((endNode as Element).getAttribute('data-line') ?? '', 10);
+        if (!isNaN(endLineData) && endLineData > lineIdx) {
+          endLineIdx = endLineData;
+        }
+      }
+    }
+
+    setLineContextMenu({ x: e.clientX, y: e.clientY, lineIdx, endLineIdx });
+    await fetchRemoteInfo();
+  };
+
+  const closeLineContextMenu = () => setLineContextMenu(null);
+
+  const openOnRemote = async (useDefault: boolean) => {
+    const menu = lineContextMenu();
+    if (!menu) return;
+    closeLineContextMenu();
+
+    const relPath = getRelativeFilePath();
+    if (!relPath || !cachedRemoteUrl) return;
+
+    const branch = useDefault ? (cachedDefaultBranch ?? cachedCurrentBranch) : cachedCurrentBranch;
+    if (!branch) return;
+
+    // lines are 0-indexed in our state; git blame / URLs are 1-indexed
+    const startLine = menu.lineIdx + 1;
+    const endLine = menu.endLineIdx !== undefined ? menu.endLineIdx + 1 : undefined;
+
+    const url = buildRemoteFileUrl(cachedRemoteUrl, relPath, branch, startLine, endLine);
+    if (url) {
+      try {
+        await shellOpen(url);
+      } catch (err) {
+        console.error('[FileViewer] Failed to open URL:', err);
+      }
+    }
+  };
+
+  // Close line context menu on outside click
+  const handleLineContextMenuOutsideClick = (e: MouseEvent) => {
+    if (lineContextMenuRef && !lineContextMenuRef.contains(e.target as Node)) {
+      closeLineContextMenu();
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('mousedown', handleLineContextMenuOutsideClick);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('mousedown', handleLineContextMenuOutsideClick);
+    blameResizeCleanup?.();
+  });
+
+  const startBlameResize = (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = blameWidth();
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(80, Math.min(400, startWidth + (ev.clientX - startX)));
+      setBlameWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      blameResizeCleanup = null;
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    blameResizeCleanup = onMouseUp;
+  };
   const allDisplayableLines = createMemo(() => {
     const lines = highlightedLines();
     const result: { lineIdx: number; displayIdx: number; html: string; isFoldStart: boolean; isFolded: boolean }[] = [];
@@ -1078,6 +1328,23 @@ export function FileViewer(props: FileViewerProps) {
         <div class="h-7 px-4 border-b border-zed-border-subtle flex items-center justify-end text-xs bg-zed-bg-panel">
           <div class="flex items-center gap-4 text-zed-text-disabled flex-shrink-0">
             <span>{props.file!.content?.split('\n').length || 0} lines</span>
+            {/* Git blame toggle — only shown for git-tracked files in a repo */}
+            <Show when={props.workingDir && !props.file!.isDiffView && !props.file!.isTemporary}>
+              <button
+                class="flex items-center gap-1 transition-colors"
+                classList={{
+                  'text-zed-accent-blue': blameEnabled(),
+                  'hover:text-zed-text-primary': !blameEnabled(),
+                }}
+                onClick={() => setBlameEnabled(!blameEnabled())}
+                title={blameEnabled() ? 'Hide git blame' : 'Show git blame'}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Blame
+              </button>
+            </Show>
             <button
               class="hover:text-zed-text-primary transition-colors"
               onClick={openSearch}
@@ -1110,6 +1377,14 @@ export function FileViewer(props: FileViewerProps) {
           >
             {/* Virtual scroll container */}
             <div class="shiki-container-custom relative" style={{ height: `${totalHeight()}px` }}>
+              {/* Blame column resize handle */}
+              <Show when={blameEnabled() && (blameData().length > 0 || isBlameLoading())}>
+                <div
+                  class="blame-resize-handle"
+                  style={{ left: `${blameWidth() - 2}px`, height: `${totalHeight()}px` }}
+                  onMouseDown={startBlameResize}
+                />
+              </Show>
               <For each={visibleLines()}>
                 {(line) => (
                   <div
@@ -1117,7 +1392,32 @@ export function FileViewer(props: FileViewerProps) {
                     classList={{ 'folded': line.isFolded }}
                     data-line={line.lineIdx}
                     style={{ top: `${line.displayIdx * LINE_HEIGHT}px`, height: `${LINE_HEIGHT}px` }}
+                    onContextMenu={(e) => handleLineContextMenu(e, line.lineIdx)}
                   >
+                    {/* Git blame gutter — shown only when blame is enabled for this file and data is loaded */}
+                    <Show when={blameEnabled() && blameData().length > 0}>
+                      {() => {
+                        const lineNum = line.lineIdx + 1; // blame uses 1-indexed lines
+                        const entry = blameByLine().get(lineNum);
+                        const isRunStart = blameRunStarts().has(lineNum);
+                        return (
+                          <span
+                            class="blame-gutter"
+                            style={{ width: `${blameWidth()}px` }}
+                            title={entry ? `${entry.author} <${entry.author_email}>\n${formatFullDate(entry.timestamp)}\n${entry.commit_hash.slice(0, 7)} — ${entry.summary}` : ''}
+                          >
+                            <Show when={entry && isRunStart}>
+                              <span class="blame-author">{abbreviateAuthor(entry!.author)}</span>
+                              <span class="blame-date">{formatRelativeTime(entry!.timestamp)}</span>
+                            </Show>
+                          </span>
+                        );
+                      }}
+                    </Show>
+                    {/* Loading state for blame gutter */}
+                    <Show when={blameEnabled() && isBlameLoading() && blameData().length === 0}>
+                      <span class="blame-gutter blame-gutter-loading" style={{ width: `${blameWidth()}px` }} />
+                    </Show>
                     {/* Fold gutter */}
                     <span class="fold-gutter">
                       <Show when={line.isFoldStart}>
@@ -1151,6 +1451,39 @@ export function FileViewer(props: FileViewerProps) {
             </div>
           </Show>
         </div>
+      </Show>
+
+      {/* Line context menu — Open on Remote */}
+      <Show when={lineContextMenu()}>
+        {(menu) => (
+          <div
+            ref={lineContextMenuRef}
+            class="fixed z-50 bg-zed-bg-panel border border-zed-border-default rounded-md shadow-lg py-1 min-w-[220px]"
+            style={{ left: `${menu().x}px`, top: `${menu().y}px` }}
+          >
+            <div class="px-3 py-1 text-xs text-zed-text-tertiary font-medium">
+              Open on Remote
+            </div>
+            <button
+              class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover flex items-center gap-2"
+              onClick={() => openOnRemote(false)}
+            >
+              <svg class="w-4 h-4 text-zed-text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Current Branch
+            </button>
+            <button
+              class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover flex items-center gap-2"
+              onClick={() => openOnRemote(true)}
+            >
+              <svg class="w-4 h-4 text-zed-text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Main Branch
+            </button>
+          </div>
+        )}
       </Show>
     </div>
   );

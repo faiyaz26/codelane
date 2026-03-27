@@ -235,6 +235,7 @@ pub fn run() {
             git::git_fetch_pr_branch,
             git::git_diff_branch,
             git::git_branch_changes_with_stats,
+            git::git_blame,
             // Hook commands
             hooks::hooks_install,
             hooks::hooks_uninstall,

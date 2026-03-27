@@ -1157,6 +1157,88 @@ pub async fn git_branch_changes_with_stats(
     Ok(changes)
 }
 
+/// A single line's blame entry from git blame --porcelain
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct BlameEntry {
+    pub line: u32,
+    pub commit_hash: String,
+    pub author: String,
+    pub author_email: String,
+    pub timestamp: i64,
+    pub summary: String,
+}
+
+/// Get git blame for a file, returning per-line blame information.
+/// `path` is the repo root (or any path within the repo), `file` is the file path
+/// relative to the repo root.
+#[tauri::command]
+pub async fn git_blame(path: String, file: String) -> Result<Vec<BlameEntry>, String> {
+    let git_path = validate_git_path(&path)?;
+    let work_dir = Path::new(&git_path);
+
+    let output = run_git_simple(&["blame", "--porcelain", "--", &file], Some(work_dir))
+        .map_err(|e| format!("git blame failed: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git blame error: {}", stderr.trim()));
+    }
+
+    let mut entries: Vec<BlameEntry> = Vec::new();
+    // Track per-commit metadata as we parse; re-used for lines in the same commit group
+    let mut current_hash = String::new();
+    let mut current_author = String::new();
+    let mut current_email = String::new();
+    let mut current_timestamp: i64 = 0;
+    let mut current_summary = String::new();
+    // commit hashes we've already seen (metadata was already parsed)
+    let mut seen_commits = std::collections::HashMap::<String, (String, String, i64, String)>::new();
+    let mut final_line: u32 = 0;
+
+    for raw_line in stdout.lines() {
+        // Header line: 40-char hex hash + original_line + final_line + num_lines
+        if raw_line.len() >= 40 && raw_line.chars().take(40).all(|c| c.is_ascii_hexdigit()) {
+            let parts: Vec<&str> = raw_line.splitn(4, ' ').collect();
+            current_hash = parts[0].to_string();
+            final_line = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+
+            // If we've seen this commit before, reuse cached metadata
+            if let Some((auth, email, ts, summ)) = seen_commits.get(&current_hash) {
+                current_author = auth.clone();
+                current_email = email.clone();
+                current_timestamp = *ts;
+                current_summary = summ.clone();
+            }
+        } else if let Some(rest) = raw_line.strip_prefix("author ") {
+            current_author = rest.to_string();
+        } else if let Some(rest) = raw_line.strip_prefix("author-mail ") {
+            current_email = rest.trim_matches(|c| c == '<' || c == '>').to_string();
+        } else if let Some(rest) = raw_line.strip_prefix("author-time ") {
+            current_timestamp = rest.parse().unwrap_or(0);
+        } else if let Some(rest) = raw_line.strip_prefix("summary ") {
+            current_summary = rest.to_string();
+            // Cache this commit's metadata now that we have the summary
+            seen_commits.insert(
+                current_hash.clone(),
+                (current_author.clone(), current_email.clone(), current_timestamp, current_summary.clone()),
+            );
+        } else if raw_line.starts_with('\t') {
+            // Tab-prefixed line = the actual source line content; emit the entry
+            entries.push(BlameEntry {
+                line: final_line,
+                commit_hash: current_hash.clone(),
+                author: current_author.clone(),
+                author_email: current_email.clone(),
+                timestamp: current_timestamp,
+                summary: current_summary.clone(),
+            });
+        }
+    }
+
+    Ok(entries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

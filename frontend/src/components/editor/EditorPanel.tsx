@@ -248,7 +248,7 @@ export function EditorPanel(props: EditorPanelProps) {
                     {/* Show DiffViewer for diff mode, otherwise show regular FileViewer */}
                     <Show
                       when={file()!.isDiffView && file()!.diffContent !== undefined}
-                      fallback={<FileViewer file={file()!} laneId={props.laneId} />}
+                      fallback={<FileViewer file={file()!} laneId={props.laneId} workingDir={props.basePath} />}
                     >
                       <DiffViewer
                         diff={file()!.diffContent!}

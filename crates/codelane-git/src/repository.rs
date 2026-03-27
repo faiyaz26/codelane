@@ -126,7 +126,16 @@ impl Repository {
         // Try origin/HEAD first
         if let Ok(origin_head) = self.repo.find_reference("origin/HEAD") {
             if let Some(target) = origin_head.target().try_name() {
-                return Ok(target.shorten().to_string());
+                let shortened = target.shorten().to_string();
+                // shorten() yields "origin/main" for refs/remotes/origin/main;
+                // strip the remote prefix to get just the branch name.
+                let branch_name = shortened
+                    .find('/')
+                    .map(|pos| shortened[pos + 1..].to_string())
+                    .unwrap_or(shortened);
+                if !branch_name.is_empty() {
+                    return Ok(branch_name);
+                }
             }
         }
 

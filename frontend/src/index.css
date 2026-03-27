@@ -493,6 +493,72 @@
   user-select: none;
 }
 
+/* Git blame gutter */
+.shiki-container-custom .blame-gutter {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  overflow: hidden;
+  padding-right: 0.5em;
+  font-size: 0.7rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: rgb(var(--zed-text-disabled));
+  user-select: none;
+  cursor: default;
+  border-right: 1px solid rgb(var(--zed-border-subtle));
+  margin-right: 0.5em;
+}
+
+.shiki-container-custom .blame-gutter:hover {
+  color: rgb(var(--zed-text-tertiary));
+}
+
+.shiki-container-custom .blame-gutter-loading {
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(var(--zed-bg-active)) 0,
+    rgb(var(--zed-bg-hover)) 50%,
+    rgb(var(--zed-bg-active)) 100%
+  );
+  background-size: 200% 100%;
+  animation: blame-shimmer 1.5s infinite;
+  border-radius: 2px;
+}
+
+@keyframes blame-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.shiki-container-custom .blame-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.shiki-container-custom .blame-date {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Blame column resize handle */
+.blame-resize-handle {
+  position: absolute;
+  top: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.blame-resize-handle:hover {
+  background: rgb(var(--zed-accent-blue) / 0.35);
+}
+
 /* Search match highlighting */
 .search-match {
   background-color: rgb(var(--zed-accent-yellow) / 0.3);

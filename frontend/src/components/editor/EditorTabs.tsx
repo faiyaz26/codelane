@@ -11,6 +11,9 @@ import {
 } from '@thisbeyond/solid-dnd';
 import { FileIcon } from './FileIcon';
 import type { EditorTab } from './types';
+import { getRemoteUrl, getGitBranch, getDefaultBranch } from '../../lib/git-api';
+import { buildRemoteFileUrl } from '../../utils/remote-url';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 
 interface ContextMenuState {
   x: number;
@@ -162,6 +165,34 @@ export function EditorTabs(props: EditorTabsProps) {
     closeContextMenu();
   };
 
+  // Open file on a remote git provider
+  const openTabOnRemote = async (useDefaultBranch: boolean) => {
+    const menu = contextMenu();
+    if (!menu || !props.basePath) return;
+    closeContextMenu();
+
+    try {
+      const [remoteUrl, branchInfo, defaultBranchName] = await Promise.all([
+        getRemoteUrl(props.basePath, 'origin').catch(() => null),
+        getGitBranch(props.basePath).catch(() => null),
+        useDefaultBranch ? getDefaultBranch(props.basePath).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      if (!remoteUrl) return;
+
+      const branch = useDefaultBranch
+        ? (defaultBranchName ?? branchInfo?.current ?? null)
+        : (branchInfo?.current ?? null);
+      if (!branch) return;
+
+      const relPath = getRelativePath(menu.tab.path);
+      const url = buildRemoteFileUrl(remoteUrl, relPath, branch);
+      if (url) await shellOpen(url);
+    } catch (err) {
+      console.error('[EditorTabs] Failed to open on remote:', err);
+    }
+  };
+
   // Close context menu on click outside
   const handleClickOutside = (e: MouseEvent) => {
     if (contextMenuRef && !contextMenuRef.contains(e.target as Node)) {
@@ -286,6 +317,27 @@ export function EditorTabs(props: EditorTabsProps) {
                 </svg>
                 Copy Absolute Path
               </button>
+              <Show when={props.basePath}>
+                <div class="border-t border-zed-border-subtle my-1" />
+                <button
+                  class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover flex items-center gap-2"
+                  onClick={() => openTabOnRemote(false)}
+                >
+                  <svg class="w-4 h-4 text-zed-text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open on Remote (Current Branch)
+                </button>
+                <button
+                  class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover flex items-center gap-2"
+                  onClick={() => openTabOnRemote(true)}
+                >
+                  <svg class="w-4 h-4 text-zed-text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open on Remote (Main Branch)
+                </button>
+              </Show>
               <div class="border-t border-zed-border-subtle my-1" />
               <button
                 class="w-full px-3 py-1.5 text-left text-sm text-zed-text-primary hover:bg-zed-bg-hover flex items-center gap-2"

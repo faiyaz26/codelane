@@ -79,7 +79,7 @@ export function GeneralSettings() {
           </div>
         </div>
 
-        {/* Diff Viewer Settings */}
+          {/* Diff Viewer Settings */}
         <div>
           <h3 class="text-sm font-medium text-zed-text-primary mb-4">Diff Viewer</h3>
 
