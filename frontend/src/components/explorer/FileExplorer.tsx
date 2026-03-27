@@ -1,6 +1,10 @@
 // File Explorer - Main component for browsing project files
 
 import { createSignal, createEffect, Show } from 'solid-js';
+
+// Per-lane tab selection — persists across lane switches within the session.
+// Defaults to 'changes' for any lane that hasn't been visited yet.
+const laneTabCache = new Map<string, 'files' | 'changes'>();
 import { useFileTree, useFileWatcher } from './hooks';
 import { FileTree } from './FileTree';
 import { ChangesView } from './ChangesView';
@@ -14,8 +18,20 @@ interface FileExplorerProps {
 }
 
 export function FileExplorer(props: FileExplorerProps) {
-  const [activeTab, setActiveTab] = createSignal<'files' | 'changes'>('files');
+  const [activeTab, setActiveTab] = createSignal<'files' | 'changes'>(
+    laneTabCache.get(props.laneId) ?? 'changes'
+  );
   const [openFileDialogOpen, setOpenFileDialogOpen] = createSignal(false);
+
+  // Restore the correct tab whenever the active lane changes
+  createEffect(() => {
+    setActiveTab(laneTabCache.get(props.laneId) ?? 'changes');
+  });
+
+  const handleTabChange = (tab: 'files' | 'changes') => {
+    laneTabCache.set(props.laneId, tab);
+    setActiveTab(tab);
+  };
 
   const tree = useFileTree();
 
@@ -47,7 +63,7 @@ export function FileExplorer(props: FileExplorerProps) {
   return (
     <div class="h-full flex flex-col bg-zed-bg-panel">
       {/* Tabs */}
-      <Tabs activeTab={activeTab()} onTabChange={setActiveTab} />
+      <Tabs activeTab={activeTab()} onTabChange={handleTabChange} />
 
       {/* Content */}
       <div class="flex-1 overflow-auto">

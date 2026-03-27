@@ -77,9 +77,15 @@ export function ChangesView(props: ChangesViewProps) {
     return files;
   });
 
-  const stagedFiles = createMemo(() => allFiles().filter((f) => f.category === 'staged'));
-  const unstagedFiles = createMemo(() => allFiles().filter((f) => f.category === 'unstaged'));
-  const untrackedFiles = createMemo(() => allFiles().filter((f) => f.category === 'untracked'));
+  const stagedFiles = createMemo(() =>
+    allFiles().filter((f) => f.category === 'staged').sort((a, b) => a.path.localeCompare(b.path))
+  );
+  const unstagedFiles = createMemo(() =>
+    allFiles().filter((f) => f.category === 'unstaged').sort((a, b) => a.path.localeCompare(b.path))
+  );
+  const untrackedFiles = createMemo(() =>
+    allFiles().filter((f) => f.category === 'untracked').sort((a, b) => a.path.localeCompare(b.path))
+  );
 
   const totalChanges = createMemo(() => allFiles().length);
 

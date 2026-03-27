@@ -118,11 +118,55 @@ fn find_repo_root(path: &str) -> Result<String, String> {
     }
 }
 
+/// Build an enhanced PATH that includes common binary locations.
+///
+/// In macOS app bundles and some Linux environments, the process PATH is minimal.
+/// Git subprocesses like `git-lfs filter-process` inherit this limited PATH,
+/// causing "command not found" errors even when the tool is installed.
+fn enhanced_path() -> String {
+    let current_path = std::env::var("PATH").unwrap_or_default();
+
+    #[cfg(unix)]
+    {
+        let home = dirs::home_dir().unwrap_or_default();
+        let home_str = home.to_string_lossy();
+        let extra = [
+            "/usr/local/bin",
+            "/opt/homebrew/bin", // Homebrew on Apple Silicon
+            "/opt/homebrew/sbin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .chain([
+            format!("{}/.cargo/bin", home_str),
+            format!("{}/.local/bin", home_str),
+            format!("{}/bin", home_str),
+        ])
+        .collect::<Vec<_>>()
+        .join(":");
+
+        if current_path.is_empty() {
+            extra
+        } else {
+            format!("{}:{}", current_path, extra)
+        }
+    }
+
+    #[cfg(not(unix))]
+    current_path
+}
+
 /// Run a git command and return the output
 fn run_git(work_dir: &Path, args: &[&str]) -> Result<String, String> {
     let mut command = Command::new("git");
     command.args(args);
     command.current_dir(work_dir);
+    // Augment PATH so git subprocesses (e.g. git-lfs filter-process) can be found
+    command.env("PATH", enhanced_path());
 
     let output = command
         .output()
