@@ -1,6 +1,7 @@
 // Editor Settings Manager - handles editor preferences and persistence
 
 import { createSignal, createRoot, type Accessor } from 'solid-js';
+import type { CustomLanguageConfig } from '../components/editor/types';
 
 export type MarkdownDefaultMode = 'preview' | 'source';
 export type DiffViewDefaultMode = 'unified' | 'split';
@@ -8,11 +9,13 @@ export type DiffViewDefaultMode = 'unified' | 'split';
 export interface EditorSettings {
   markdownDefaultMode: MarkdownDefaultMode;
   diffViewDefaultMode: DiffViewDefaultMode;
+  customLanguages: CustomLanguageConfig[];
 }
 
 const DEFAULT_SETTINGS: EditorSettings = {
   markdownDefaultMode: 'preview',
   diffViewDefaultMode: 'unified',
+  customLanguages: [],
 };
 
 const STORAGE_KEY = 'codelane-editor-settings';
@@ -75,5 +78,13 @@ export const editorSettingsManager = {
 
   setDiffViewDefaultMode(mode: DiffViewDefaultMode) {
     updateSettings({ diffViewDefaultMode: mode });
+  },
+
+  getCustomLanguages(): CustomLanguageConfig[] {
+    return settings().customLanguages ?? [];
+  },
+
+  setCustomLanguages(langs: CustomLanguageConfig[]) {
+    updateSettings({ customLanguages: langs });
   },
 };

@@ -7,6 +7,7 @@ import { getLanguageDisplayName, getShikiLanguage, isMarkdownFile } from './type
 import { themeManager, getShikiTheme, getAllShikiThemes } from '../../services/ThemeManager';
 import { keyboardShortcutManager } from '../../services/KeyboardShortcutManager';
 import { editorStateManager } from '../../services/EditorStateManager';
+import { customLanguageManager } from '../../services/CustomLanguageManager';
 
 // Lazy load MarkdownEditor to avoid circular dependency issues at startup
 const MarkdownEditor = lazy(() => import('./markdown').then(m => ({ default: m.MarkdownEditor })));
@@ -26,28 +27,26 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-// Ensure a language is loaded
+// Ensure a language is loaded into the Shiki highlighter.
+// Tries to load any language ID — handles built-in Shiki languages, custom TextMate grammars,
+// and falls back to 'text' if the language can't be loaded.
 async function ensureLanguageLoaded(highlighter: Highlighter, lang: string): Promise<string> {
-  const validLangs = [
-    'javascript', 'jsx', 'typescript', 'tsx', 'html', 'css', 'scss', 'sass', 'less',
-    'json', 'yaml', 'xml', 'toml', 'rust', 'python', 'go', 'java', 'c', 'cpp',
-    'csharp', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'shellscript', 'markdown',
-    'sql', 'dockerfile', 'makefile', 'cmake', 'dotenv', 'text'
-  ];
+  // Load any pending custom TextMate grammars first
+  await customLanguageManager.loadGrammarsIntoHighlighter(highlighter);
 
-  const targetLang = validLangs.includes(lang) ? lang : 'text';
-
-  if (!loadedLanguages.has(targetLang) && targetLang !== 'text') {
-    try {
-      await highlighter.loadLanguage(targetLang as BundledLanguage);
-      loadedLanguages.add(targetLang);
-    } catch (e) {
-      console.warn(`Failed to load language: ${targetLang}, falling back to text`);
-      return 'text';
-    }
+  if (lang === 'text' || loadedLanguages.has(lang)) {
+    return lang;
   }
 
-  return targetLang;
+  try {
+    // Works for BundledLanguage IDs and any custom grammar registered via loadLanguage()
+    await highlighter.loadLanguage(lang as BundledLanguage);
+    loadedLanguages.add(lang);
+    return lang;
+  } catch {
+    console.warn(`[FileViewer] Language not available: ${lang}, falling back to text`);
+    return 'text';
+  }
 }
 
 // ============ FOLDING ============

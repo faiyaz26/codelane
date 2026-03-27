@@ -1,5 +1,30 @@
 // Editor module types
 
+// User-defined custom language configuration for uncommon syntaxes.
+// Stored in EditorSettings.customLanguages (localStorage).
+export interface CustomLanguageConfig {
+  id: string;           // Stable key: preset IDs start with "preset-", user IDs are UUIDs
+  name: string;         // Display name, e.g. "LookML"
+  extensions: string[]; // File extensions without dot, e.g. ["lkml", "lookml"]
+  aliasFor?: string;    // Use an existing Shiki language (e.g. "terraform"). Mutually exclusive with grammar.
+  scopeName?: string;   // TextMate scope name, required when using grammar (e.g. "source.lookml")
+  grammar?: string;     // TextMate grammar JSON string, for languages Shiki doesn't bundle
+}
+
+// Convert a language display name to a stable Shiki-safe slug for grammar-mode languages
+export function customLangSlug(name: string): string {
+  return 'custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Internal registry — updated by CustomLanguageManager when settings change.
+// Using a module-level variable avoids threading the list through every call site.
+let _customLangs: CustomLanguageConfig[] = [];
+
+/** Called by CustomLanguageManager whenever the custom language list changes. */
+export function _setCustomLanguages(langs: CustomLanguageConfig[]): void {
+  _customLangs = langs;
+}
+
 export interface OpenFile {
   id: string;
   path: string;
@@ -43,6 +68,13 @@ export interface EditorTab {
 // Language detection based on file extension
 export function detectLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
+
+  // Check user-defined custom languages before built-in mappings
+  for (const lang of _customLangs) {
+    if (lang.extensions.includes(ext)) {
+      return lang.aliasFor ?? customLangSlug(lang.name);
+    }
+  }
 
   const languageMap: Record<string, string> = {
     // JavaScript/TypeScript
@@ -188,5 +220,5 @@ export function getShikiLanguage(language: string): string {
     'cmake': 'cmake',
   };
 
-  return shikiMap[language] || 'text';
+  return shikiMap[language] || language; // Unknown IDs pass through — Shiki handles them or falls back
 }

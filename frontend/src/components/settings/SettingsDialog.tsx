@@ -12,6 +12,7 @@ import { AgentsSettings } from './AgentsSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { CodeReviewSettings } from './CodeReviewSettings';
+import { LanguagesSettings } from './LanguagesSettings';
 import { SettingsNavIcon } from './SettingsNavIcon';
 import { NAV_ITEMS, type SettingsTab } from './types';
 
@@ -186,6 +187,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   {/* Appearance Tab */}
                   <Show when={activeTab() === 'appearance'}>
                     <AppearanceSettings />
+                  </Show>
+
+                  {/* Languages Tab */}
+                  <Show when={activeTab() === 'languages'}>
+                    <LanguagesSettings />
                   </Show>
                 </Show>
               </div>

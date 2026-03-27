@@ -17,6 +17,8 @@ import { terminalPool } from './services/TerminalPool';
 import { agentNotificationService } from './services/AgentNotificationService';
 import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
+// Eagerly initialize so custom language detection is ready before any file opens
+import './services/CustomLanguageManager';
 
 import { useClipboardFix } from './hooks/useClipboardFix';
 import { useGlobalContextMenuFix } from './hooks/useGlobalContextMenuFix';
