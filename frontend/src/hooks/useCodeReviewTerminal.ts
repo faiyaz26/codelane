@@ -10,6 +10,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { loadAddons } from '../lib/terminal-utils';
 import { spawn, type PtyHandle } from '../services/PortablePty';
+import { getTerminalFontSize, terminalFontSize } from '../services/TerminalFontSize';
 import { getAgentSettings, getDefaultAgent } from '../lib/settings-api';
 
 export interface CodeReviewTerminalOptions {
@@ -55,7 +56,7 @@ export function useCodeReviewTerminal(
         foreground: '#e6e6e6',
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
+      fontSize: getTerminalFontSize(),
       cursorBlink: true,
       allowProposedApi: true, // Required for Unicode11 addon
     });
@@ -139,6 +140,18 @@ export function useCodeReviewTerminal(
       term.writeln('');
     }
   }
+
+  // React to global font size changes
+  createEffect(() => {
+    const size = terminalFontSize();
+    if (terminal) {
+      terminal.options.fontSize = size;
+      fitAddon?.fit();
+      if (pty && terminal.cols > 0 && terminal.rows > 0) {
+        pty.resize(terminal.cols, terminal.rows).catch(() => {});
+      }
+    }
+  });
 
   const fitTerminal = () => {
     fitAddon?.fit();

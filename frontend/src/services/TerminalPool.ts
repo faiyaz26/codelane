@@ -11,6 +11,7 @@
 import { spawn, type PtyHandle } from './PortablePty';
 import { getLaneAgentConfig, checkCommandExists } from '../lib/settings-api';
 import { createTerminal, createFitAddon, attachKeyHandlers, isTerminalViewportAtBottom } from '../lib/terminal-utils';
+import { getTerminalFontSize } from './TerminalFontSize';
 import { agentStatusManager } from './AgentStatusManager';
 import type { DetectableAgentType } from '../types/agentStatus';
 import type {
@@ -127,7 +128,7 @@ class TerminalPool {
    */
   private async createTerminalHandle(config: TerminalConfig): Promise<TerminalHandle> {
     // Create xterm.js instance with shared configuration
-    const terminal = createTerminal();
+    const terminal = createTerminal(undefined, getTerminalFontSize());
     const fitAddon = createFitAddon(terminal);
 
     let status: TerminalStatus = 'initializing';
