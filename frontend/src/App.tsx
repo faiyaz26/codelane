@@ -19,6 +19,8 @@ import { agentStatusManager } from './services/AgentStatusManager';
 import { hookService } from './services/HookService';
 // Eagerly initialize so custom language detection is ready before any file opens
 import './services/CustomLanguageManager';
+// Register terminal font size zoom shortcuts (Cmd+/-)
+import './services/TerminalFontSize';
 
 import { useClipboardFix } from './hooks/useClipboardFix';
 import { useGlobalContextMenuFix } from './hooks/useGlobalContextMenuFix';

@@ -91,12 +91,12 @@ export function isTerminalViewportAtBottom(
 /**
  * Creates a pre-configured xterm.js Terminal instance with current theme
  */
-export function createTerminal(theme: any): Terminal {
+export function createTerminal(theme?: any, fontSize: number = 13): Terminal {
   return new Terminal({
     cursorBlink: false,
     cursorStyle: 'block',
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-    fontSize: 13,
+    fontSize,
     lineHeight: 1.4,
     allowProposedApi: true, // Required for Unicode11 addon
     allowTransparency: false,
@@ -209,6 +209,11 @@ export function attachKeyHandlers(
         }
         terminal.clearSelection();
       }
+      return false;
+    }
+
+    // Cmd/Ctrl+= / Cmd/Ctrl+- / Cmd/Ctrl+0: terminal zoom (handled by KeyboardShortcutManager)
+    if (isMod && (event.key === '=' || event.key === '+' || event.key === '-' || event.key === '0')) {
       return false;
     }
 
